@@ -11,7 +11,7 @@
   import {PDFService, type PDFState, type TocItem} from '../lib/pdf-service';
   import {setOutline} from '../lib/pdf-outliner';
   import {debounce} from '../lib';
-  import {buildTree, convertPdfJsOutlineToTocItems, setNestedValue} from '$lib/utils';
+  import {buildTree, convertPdfJsOutlineToTocItems, setNestedValue, findActiveTocPath} from '$lib/utils';
   import {generateToc} from '$lib/toc-service';
   import {applyCustomPrefix, DEFAULT_PREFIX_CONFIG, type LevelConfig} from '$lib/prefix-service';
 
@@ -135,6 +135,15 @@
       debouncedUpdatePDF();
     }
   }
+
+  $: currentTocPath = findActiveTocPath(
+      $tocItems,
+      pdfState.currentPage,
+      $tocConfig.pageOffset || 0,
+      addPhysicalTocPage,
+      tocPageCount,
+      config.insertAtPage
+  );
 
 
   $: if (showOffsetModal) {
@@ -443,6 +452,16 @@
         const initPage = config.insertAtPage || 2;
         lastInsertAtPage = initPage;
         await $pdfService.initPreview(pdfState.doc);
+
+        const firstPage = pdfState.doc.getPage(1) || pdfState.doc.getPage(0);
+        const {width} = firstPage.getSize();
+        const autoLayout = PDFService.getAutoLayout(width);
+        
+        tocConfig.update(c => ({
+          ...c,
+          firstLevel: { ...c.firstLevel, fontSize: autoLayout.fontSizeL1 },
+          otherLevels: { ...c.otherLevels, fontSize: autoLayout.fontSizeLOther }
+        }));
       }
 
       const loadingTask = pdfjs.getDocument({
@@ -902,7 +921,7 @@
       >
         <PreviewPanel
           {isFileLoading}
-          {pdfState}
+          bind:pdfState
           {originalPdfInstance}
           {previewPdfInstance}
           {isPreviewMode}
@@ -911,6 +930,7 @@
           {activeRangeIndex}
           {addPhysicalTocPage}
           {jumpToTocPage}
+          {currentTocPath}
           bind:isDragging
           on:fileselect={(e) => loadPdfFile(e.detail)}
           on:viewerMessage={handleViewerMessage}

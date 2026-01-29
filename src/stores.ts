@@ -30,17 +30,18 @@ export const tocConfig = writable({
     configs: DEFAULT_PREFIX_CONFIG,
   },
   pageOffset: 0,
+  insertAtPage: 2,
   firstLevel: {
     fontSize: 11,
     dotLeader: '.',
     color: '#000000',
-    lineSpacing: 1.65,
+    lineSpacing: 1.7,
   },
   otherLevels: {
-    fontSize: 9,
+    fontSize: 10,
     dotLeader: '',
     color: '#333333',
-    lineSpacing: 1.5,
+    lineSpacing: 1.6,
   },
 });
 

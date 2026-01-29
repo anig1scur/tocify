@@ -16,6 +16,7 @@
   export let jumpToTocPage: (() => Promise<void>) | undefined = undefined;
   export let addPhysicalTocPage: boolean = false;
   export let hasPreview: boolean = false;
+  export let currentTocPath: TocItem[] = [];
 
   const dispatch = createEventDispatcher();
 
@@ -89,35 +90,6 @@
   $: activeInstance = instance || stateInstance;
   $: activeTotalPages = activeInstance?.numPages || stateTotalPages;
 
-  // Path finding
-  function findActiveTocPath(
-    items: TocItem[],
-    current: number,
-    pageOffset: number,
-    currentPath: TocItem[] = [],
-  ): TocItem[] {
-    let bestPath: TocItem[] = [];
-
-    for (const item of items) {
-      const itemPage = item.to + pageOffset;
-
-      if (itemPage <= current) {
-        const childPath = findActiveTocPath(item.children || [], current, pageOffset, [...currentPath, item]);
-
-        if (childPath.length > 0) {
-          bestPath = childPath;
-        } else {
-          bestPath = [...currentPath, item];
-        }
-      } else {
-        break;
-      }
-    }
-    return bestPath;
-  }
-
-  let currentTocPath: TocItem[] = [];
-  $: currentTocPath = findActiveTocPath($tocItems, currentPage, $tocConfig.pageOffset || 0);
 
   $: if (activeInstance && filename && filename !== loadedFilename) {
     loadedFilename = filename;
@@ -232,20 +204,19 @@
     lastRenderedInstance = activeInstance;
   } else {
     if (activeInstance) {
-       if (gridPages.length > 0) {
-          gridPages = [];
-          cleanupRenderTasks();
-       }
+      if (gridPages.length > 0) {
+        gridPages = [];
+        cleanupRenderTasks();
+      }
     } else {
-       // Full reset when no instance
-       gridPages = [];
-       lastRenderedInstance = null;
-       lastRenderedPage = 0;
-       cleanupRenderTasks();
-       cleanupObservers();
+      // Full reset when no instance
+      gridPages = [];
+      lastRenderedInstance = null;
+      lastRenderedPage = 0;
+      cleanupRenderTasks();
+      cleanupObservers();
     }
   }
-  
 
   async function autoScrollToActiveRange() {
     if (mode !== 'grid' || !scrollContainer) return;
@@ -497,19 +468,19 @@
   on:mouseup={handleMouseUp}
 />
 
-<div class="h-[85vh] rounded-lg relative bg-white">
+<div class="h-[85vh] rounded-lg relative w-full bg-white">
   <div
-    class="flex flex-col h-full absolute inset-0 z-10 bg-white rounded-md"
+    class="flex flex-col h-full absolute w-full inset-0 z-10 bg-white rounded-md"
     class:hidden={mode !== 'single'}
   >
     <div
-      class="flex items-center flex-col justify-start w-full max-w-4xl px-4 py-3 bg-white border-b-2 border-black rounded-t-md"
+      class="flex items-center flex-col justify-start w-full px-2 md:px-4 py-3 bg-white border-b-2 border-black rounded-t-md overflow-x-auto"
     >
-      <div class="flex z-10 items-center justify-between w-full max-w-full overflow-x-auto">
-        <div class="text-gray-600 font-serif flex gap-1 sm:gap-2 items-center text-sm md:text-base md:gap-3">
-          <span class="truncate max-w-20 md:max-w-xs">{filename}</span>
+      <div class="flex z-10 items-center justify-between w-full gap-1">
+        <div class="w-[70%] text-gray-600 font-serif flex gap-1 sm:gap-2 items-center text-sm md:text-base">
+          <span class="truncate">{filename}</span>
           <span class="text-gray-300">|</span>
-          <div class="flex items-center gap-1">
+          <div class="flex items-center gap-1 min-w-24">
             <input
               type="number"
               min="1"
@@ -531,18 +502,18 @@
           {#if addPhysicalTocPage && jumpToTocPage && hasPreview}
             <button
               on:click={jumpToTocPage}
-              class="p-1 rounded-lg hover:bg-gray-100 text-black border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all disabled:opacity-50 disabled:cursor-not-allowed text-xs"
+              class="p-1 w-12 min-w-12 rounded-lg hover:bg-gray-100 text-black border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all disabled:opacity-50 disabled:cursor-not-allowed text-xs"
               title={$t('tooltip.jump_toc')}
             >
               <ListOrdered
-                size={12}
-                class="hidden md:inline-block"
+                size={11}
+                class="inline-block"
               /> ToC
             </button>
           {/if}
         </div>
 
-        <div class="flex items-center gap-1">
+        <div class="flex items-center gap-1 w-[30%] flex-[0]">
           <button
             on:click={zoomOut}
             class="p-1 md:p-2 rounded-lg hover:bg-gray-100 text-gray-600"

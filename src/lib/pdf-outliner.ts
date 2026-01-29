@@ -105,24 +105,19 @@ export const setOutline = async (
 
       const destOrAction = (() => {
         if (typeof outline.to === 'string') {
-          // URL (no change)
           return {A: {S: 'URI', URI: PDFHexString.fromText(outline.to)}};
         } else if (typeof outline.to === 'number') {
-          // <--- MODIFIED: Use helper function
           const finalIndex = getFinalPageIndex(outline.to);
-          return {Dest: [pageRefs[finalIndex], 'Fit']};
-          // --->
+          return { Dest: [pageRefs[finalIndex], 'Fit'] };
         } else if (Array.isArray(outline.to)) {
-          // <--- MODIFIED: Use helper function
           const finalIndex = getFinalPageIndex(outline.to[0]);
           const page = doc.getPage(finalIndex);  // Use correct index
-          // --->
           const width = page.getWidth();
           const height = page.getHeight();
 
           return {
             Dest: [
-              pageRefs[finalIndex],  // <--- MODIFIED: Use correct index
+              pageRefs[finalIndex],
               'XYZ',
               width * outline.to[1],
               height * outline.to[2],

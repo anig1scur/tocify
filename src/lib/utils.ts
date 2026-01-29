@@ -2,6 +2,46 @@ import type {TocItem} from '$lib/pdf-service';
 import type * as PdfjsLibTypes from 'pdfjs-dist';
 import ShortUniqueId from 'short-unique-id';
 
+export function findActiveTocPath(
+  items: TocItem[],
+  current: number,
+  pageOffset: number,
+  addPhysicalTocPage: boolean = false,
+  tocPageCount: number = 0,
+  insertAtPage: number = 2,
+  currentPath: TocItem[] = []
+): TocItem[] {
+  let bestPath: TocItem[] = [];
+
+  for (const item of items) {
+    let itemPage = item.to + pageOffset;
+    if (addPhysicalTocPage && itemPage >= insertAtPage) {
+      itemPage += tocPageCount;
+    }
+
+    if (itemPage <= current) {
+      const childPath = findActiveTocPath(
+        item.children || [],
+        current,
+        pageOffset,
+        addPhysicalTocPage,
+        tocPageCount,
+        insertAtPage,
+        [...currentPath, item]
+      );
+
+      if (childPath.length > 0) {
+        bestPath = childPath;
+      } else {
+        bestPath = [...currentPath, item];
+      }
+    } else {
+      break;
+    }
+  }
+  return bestPath;
+}
+
 
 export function buildTree(
     items: {title: string; level: number; page: number}[]): TocItem[] {

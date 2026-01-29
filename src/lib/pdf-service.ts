@@ -7,28 +7,35 @@ const CJK_REGEX = /[\u4e00-\u9fa5]/;
 
 import {type TocConfig} from '../stores';
 
+// A4 Standards
+const A4_WIDTH = 595.28;
+const A4_HEIGHT = 841.89;
+
+const BASE_FONT_SIZE_L1 = 12;
+const BASE_FONT_SIZE_OTHER = 10;
+
 const TOC_LAYOUT = {
   PAGE: {
-    MARGIN_X: 40,
-    MARGIN_BOTTOM: 50,
+    MARGIN_X_RATIO: 40 / A4_WIDTH,
+    MARGIN_BOTTOM_RATIO: 40 / A4_HEIGHT,
   },
   TITLE: {
-    FONT_SIZE: 23,
-    MARGIN_BOTTOM: 40,
+    FONT_SIZE_RATIO: 23 / A4_WIDTH,
+    MARGIN_BOTTOM_RATIO: 40 / A4_HEIGHT,
   },
   ITEM: {
-    LINE_HEIGHT_ADJUST: 10,
-    INDENT_PER_LEVEL: 20,
-    PAGE_NUM_WIDTH_PAD: 40,
+    LINE_HEIGHT_ADJUST_RATIO: 10 / A4_HEIGHT,
+    INDENT_PER_LEVEL_RATIO: 20 / A4_WIDTH,
+    PAGE_NUM_WIDTH_PAD_RATIO: 40 / A4_WIDTH,
     ANNOT_Y_PADDING: 2,
     DOT_LEADER: {
       GAP_TITLE: 5,
-      RIGHT_PAD: 15,
+      RIGHT_PAD_RATIO: 15 / A4_WIDTH,
       SPACING_STEP: 5,
       SIZE_RATIO: 0.8,
       RESERVE_COUNT: 2,
     },
-    RIGHT_PAD: 100,
+    RIGHT_PAD_RATIO: 100 / A4_WIDTH,
     DEFAULT_TITLE_Y_RATIO: 1 / 3,
   },
 };
@@ -138,6 +145,16 @@ export class PDFService {
     this.sourceDoc = sourceDoc;
   }
 
+  static getAutoLayout(pageWidth: number) {
+    const scaleRef = pageWidth;
+    const scaleFactor = Math.max(0.5, Math.min(3.0, scaleRef / A4_WIDTH));
+
+    return {
+      fontSizeL1: Math.floor(BASE_FONT_SIZE_L1 * scaleFactor),
+      fontSizeLOther: Math.floor(BASE_FONT_SIZE_OTHER * scaleFactor),
+    };
+  }
+
   async updateTocPages(
       items: TocItem[], config: TocConfig, insertAtPage: number = 2):
       Promise<{newDoc: PDFDocument; tocPageCount: number}> {
@@ -178,6 +195,10 @@ export class PDFService {
         insertionStartIndex + currentTocPageIndex.value, [width, height]);
     currentTocPageIndex.value++;
 
+    const marginX = width * TOC_LAYOUT.PAGE.MARGIN_X_RATIO;
+    const titleMarginBottom = height * TOC_LAYOUT.TITLE.MARGIN_BOTTOM_RATIO;
+    const titleFontSize = width * TOC_LAYOUT.TITLE.FONT_SIZE_RATIO;
+
     const titleYRatio =
         typeof config.titleYStart === 'number' ? config.titleYStart : TOC_LAYOUT.ITEM.DEFAULT_TITLE_Y_RATIO;
     let yOffset = height * (1 - titleYRatio);
@@ -186,14 +207,14 @@ export class PDFService {
         'Table of Contents';
 
     firstTocPage.drawText(titleText, {
-      x: TOC_LAYOUT.PAGE.MARGIN_X,
+      x: marginX,
       y: yOffset,
-      size: TOC_LAYOUT.TITLE.FONT_SIZE,
+      size: titleFontSize,
       font: boldFont,
       color: rgb(0, 0, 0),
     });
 
-    yOffset -= TOC_LAYOUT.TITLE.MARGIN_BOTTOM;
+    yOffset -= titleMarginBottom;
 
     const renderContext: TocRenderContext = {
       doc,
@@ -247,27 +268,32 @@ export class PDFService {
               parseInt(color.slice(3, 5), 16) / 255,
               parseInt(color.slice(5, 7), 16) / 255);
 
-      const indentation = level * TOC_LAYOUT.ITEM.INDENT_PER_LEVEL;
+      const indentPerLevel = pageWidth * TOC_LAYOUT.ITEM.INDENT_PER_LEVEL_RATIO;
+      const indentation = level * indentPerLevel;
       const lineHeight = fontSize * lineSpacing;
       const title = `${item.title}`.trim();
-      const titleX = TOC_LAYOUT.PAGE.MARGIN_X + indentation;
-      const maxWidth = pageWidth - TOC_LAYOUT.ITEM.RIGHT_PAD - indentation;
+
+      const marginX = pageWidth * TOC_LAYOUT.PAGE.MARGIN_X_RATIO;
+      const titleX = marginX + indentation;
+      const rightPad = pageWidth * TOC_LAYOUT.ITEM.RIGHT_PAD_RATIO;
+      const maxWidth = pageWidth - rightPad - indentation;
       const currentFont = isFirstLevel ? boldFont : regularFont;
 
       const lines = this.splitTextIntoLines(title, fontSize, currentFont, maxWidth);
       const totalHeadingHeight = lines.length * lineHeight;
 
       // 换页检查
-      if (yOffset - totalHeadingHeight < TOC_LAYOUT.PAGE.MARGIN_BOTTOM) {
+      const marginBottom = pageHeight * TOC_LAYOUT.PAGE.MARGIN_BOTTOM_RATIO;
+      if (yOffset - totalHeadingHeight < marginBottom) {
         currentWorkingPage = doc.insertPage(
           insertionStartIndex + currentTocPageIndex.value,
           [pageWidth, pageHeight]);
         currentTocPageIndex.value++;
-        yOffset = pageHeight - TOC_LAYOUT.PAGE.MARGIN_BOTTOM;
+        yOffset = pageHeight - marginBottom - lineHeight;
       }
 
       if (isFirstLevel) {
-        yOffset -= TOC_LAYOUT.ITEM.LINE_HEIGHT_ADJUST;
+        yOffset -= (pageHeight * TOC_LAYOUT.ITEM.LINE_HEIGHT_ADJUST_RATIO);
       }
 
       const startYAnnot = yOffset + fontSize;
@@ -289,8 +315,9 @@ export class PDFService {
       // 绘制页码
       const pageNumText = String(item.to);
       const pageNumWidth = currentFont.widthOfTextAtSize(pageNumText, fontSize);
+      const pageNumPad = pageWidth * TOC_LAYOUT.ITEM.PAGE_NUM_WIDTH_PAD_RATIO;
       const pageNumX =
-          pageWidth - TOC_LAYOUT.ITEM.PAGE_NUM_WIDTH_PAD - pageNumWidth;
+        pageWidth - pageNumPad - pageNumWidth;
 
       currentWorkingPage.drawText(pageNumText, {
         x: pageNumX,
@@ -306,8 +333,10 @@ export class PDFService {
         const titleWidth = currentFont.widthOfTextAtSize(lastLineTitle || '', fontSize);
         const dotsXStart =
             titleX + titleWidth + TOC_LAYOUT.ITEM.DOT_LEADER.GAP_TITLE;
-        const dotsXEnd = pageWidth - TOC_LAYOUT.PAGE.MARGIN_X -
-            TOC_LAYOUT.ITEM.DOT_LEADER.RIGHT_PAD;
+
+        const dotsRightPad = pageWidth * TOC_LAYOUT.ITEM.DOT_LEADER.RIGHT_PAD_RATIO;
+        const dotsXEnd = pageWidth - marginX -
+          dotsRightPad;
         const maxDotsWidth = dotsXEnd - dotsXStart;
 
         if (maxDotsWidth > 0) {
@@ -335,7 +364,7 @@ export class PDFService {
       const annotRect = [
         titleX,
         yOffset - TOC_LAYOUT.ITEM.ANNOT_Y_PADDING,
-        pageWidth - TOC_LAYOUT.PAGE.MARGIN_X,
+        pageWidth - marginX,
         startYAnnot,
       ];
 

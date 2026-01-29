@@ -20,6 +20,7 @@
   export let tocRanges: {start: number; end: number; id: string}[];
   export let activeRangeIndex: number;
   export let addPhysicalTocPage: boolean;
+  export let currentTocPath: any[] = []; // Type should be TocItem[]
 
   export let jumpToTocPage: () => Promise<void>;
 
@@ -90,6 +91,7 @@
             on:fileloaded={forwardFileLoadedEvent}
             {jumpToTocPage}
             {addPhysicalTocPage}
+            {currentTocPath}
             hasPreview={!!previewPdfInstance}
           />
         </div>
@@ -105,6 +107,7 @@
             on:fileloaded={forwardFileLoadedEvent}
             {jumpToTocPage}
             {addPhysicalTocPage}
+            {currentTocPath}
             hasPreview={!!previewPdfInstance}
           />
         </div>
