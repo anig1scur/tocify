@@ -45,6 +45,7 @@
   let hasShownTocHint = false;
 
   let showGraphDrawer = false;
+  let isGraphEntranceVisible = true;
 
   let showOffsetModal = false;
   let showHelpModal = false;
@@ -101,6 +102,16 @@
       platform: window.__TAURI__ ? 'desktop' : 'web',
       version: '1.0.0',
     });
+
+    const hideUntil = localStorage.getItem('tocify_hide_graph_entrance_until');
+    if (hideUntil) {
+      const expiry = parseInt(hideUntil, 10);
+      if (Date.now() < expiry) {
+        isGraphEntranceVisible = false;
+      } else {
+        localStorage.removeItem('tocify_hide_graph_entrance_until');
+      }
+    }
   });
 
   onDestroy(async () => {
@@ -808,7 +819,7 @@
   });
 </script>
 
-{#if !showGraphDrawer && tocItems}
+{#if !showGraphDrawer && tocItems && isGraphEntranceVisible}
   <button
     transition:fly={{x: -50, duration: 300}}
     class="fixed -left-1 p-1 md:p-2 md:left-0 top-[40vh] z-40 bg-white border-2 border-black border-l-0 rounded-r-lg shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:bg-yellow-200 transition-colors flex flex-col items-center gap-2 group"
@@ -838,6 +849,12 @@
         items={$tocItems}
         onJumpToPage={jumpToPage}
         title={pdfState.filename ? `${pdfState.filename}`.replace('.pdf', '') : 'No file loaded'}
+        onHide={() => {
+          showGraphDrawer = false;
+          isGraphEntranceVisible = false;
+          const expiry = Date.now() + 30 * 24 * 60 * 60 * 1000; // 30 days
+          localStorage.setItem('tocify_hide_graph_entrance_until', expiry.toString());
+        }}
       />
     </div>
   </div>

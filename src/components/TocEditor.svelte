@@ -332,6 +332,14 @@
     $tocItems = deleteItemRecursive($tocItems);
   };
 
+  const TOC_REGEX = /^(\d+(?:\.\d+)*)\s+(.+?)\s+(-?\d+)$/;
+
+  $: hasInvalidLines = text
+    .split('\n')
+    .map(line => line.trim())
+    .filter(Boolean)
+    .some(line => !TOC_REGEX.test(line));
+
   $: promptTooltipText = $t('toc.prompt_intro');
 </script>
 
@@ -339,17 +347,7 @@
 
 <div class="flex flex-col gap-4 mt-3">
   <div class="h-48 relative group">
-    <div class="absolute -left-2 top-0">
-      <Tooltip
-        isTextCopiable
-        width="w-[368px]"
-        text={promptTooltipText}
-        position="right"
-        className="-ml-6"
-      >
-        <CircleHelpIcon size={16} />
-      </Tooltip>
-    </div>
+
 
     <textarea
       bind:value={text}
@@ -357,25 +355,33 @@
       class="w-full h-full border-2 border-black rounded-lg p-2 text-sm myfocus leading-6 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none pr-10"
     ></textarea>
 
-    <div class="absolute bottom-3 right-3">
-      <button
-        on:click={handleAiFormat}
-        disabled={isProcessing || !text.trim()}
-        class="flex items-center gap-1.5 bg-gradient-to-br from-blue-300 to-pink-600 text-white px-3 py-1.5 rounded-md shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:scale-105 active:scale-95"
-        title={$t('tooltip.ai_format') || 'Auto-format with AI'}
-      >
-        {#if isProcessing}
-          <Loader2
-            size={16}
-            class="animate-spin"
-          />
-          <span class="text-xs font-bold">Processing...</span>
-        {:else}
-          <Sparkles size={16} />
-          <span class="text-xs font-bold">AI Format</span>
-        {/if}
-      </button>
-    </div>
+    {#if hasInvalidLines}
+      <div class="absolute bottom-3 right-3">
+        <Tooltip
+          isTextCopiable
+          width="md:w-[350px] w-[250px]"
+          text={promptTooltipText}
+          position="left"
+        >
+          <button
+            on:click={handleAiFormat}
+            disabled={isProcessing || !text.trim()}
+            class="flex items-center gap-1.5 bg-gradient-to-br from-blue-300 to-pink-600 text-white px-3 py-1.5 rounded-md shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:scale-105 active:scale-95"
+          >
+            {#if isProcessing}
+              <Loader2
+                size={16}
+                class="animate-spin"
+              />
+              <span class="text-xs font-bold">Processing...</span>
+            {:else}
+              <Sparkles size={16} />
+              <span class="text-xs font-bold">AI Format</span>
+            {/if}
+          </button>
+        </Tooltip>
+      </div>
+    {/if}
   </div>
 
   <div class="-ml-9">

@@ -33,7 +33,7 @@
     "range_n": "范围 {n}"
   },
   "toc": {
-    "prompt_intro": "右下角的 AI Format 按钮仅当书本没有影印目录，只能找文本内容时使用。将不符合格式的文本粘贴到框内，它将智能处理目录文本为目标格式。\n\n或者，你可以自行通过下列提示词获取目标文本:\n\n1 Food Categories I Love 1\n2 Fruits 2\n2.1 Strawberry 3\n\n将下方的目录整理为目标格式，并移除无用的注释\n${YOUR_TOCS_COPY_FROM_ANYWHERE}",
+    "prompt_intro": "AI Format 仅当书本没有影印目录，只能找文本内容时使用。将不符合格式的文本粘贴到框内，它将智能处理目录文本为目标格式。\n\n或者，你可以自行通过下列提示词获取目标文本:\n\n1 Food Categories I Love 1\n2 Fruits 2\n2.1 Strawberry 3\n\n将下方的目录整理为目标格式，并移除无用的注释\n${YOUR_TOCS_COPY_FROM_ANYWHERE}",
     "new_section_default": "新章节",
     "new_item_default": "新条目"
   },
@@ -74,8 +74,7 @@
     "reset": "重置缩放",
     "upload_new": "上传新的 PDF 文件",
     "switch_edit": "切换到编辑模式（显示原始 PDF）",
-    "switch_preview": "切换到预览模式（显示生成的 PDF）",
-    "ai_format": "智能处理目录文本为目标格式，当只能找到文本内容时使用"
+    "switch_preview": "切换到预览模式（显示生成的 PDF）"
   },
   "dropzone": {
     "drop_here": "将 PDF 文件拖放到此处...",
@@ -89,7 +88,7 @@
     "found_on_prefix": "位于",
     "page_n": "第 {n} 页",
     "instruction": "请选择该章节实际对应的物理页码",
-    "physical_page_label": "物理页码："
+    "physical_page_label": "物理页码"
   },
   "loading": {
     "extracting_pages": "正在从 {ranges} 页提取目录...",
@@ -145,6 +144,7 @@
     "msg_generating": "正在生成知识看板...",
     "error_failed": "生成看板失败",
     "jump_to_page": "跳转到第 {page} 页",
-    "beta": "现在是 beta, 或许永远是 beta"
+    "beta": "现在是 beta，或许永远是 beta",
+    "hide_graph": "隐藏入口"
   }
 }

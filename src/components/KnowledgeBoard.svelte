@@ -3,7 +3,7 @@
   import {t} from 'svelte-i18n';
   import rough from 'roughjs';
   import GraphNode from './GraphNode.svelte';
-  import {Sparkles, Loader2, RefreshCw, Maximize2, Minimize2, BrainCircuit, BookOpen} from 'lucide-svelte';
+  import {Sparkles, Loader2, RefreshCw, Maximize2, Minimize2, BrainCircuit, BookOpen, EyeOff} from 'lucide-svelte';
   import {CARD_W, CARD_H, getRandomPaperColor, computeHierarchicalLayout, getClosestPoints} from '../lib/graph-utils';
   export let items = [];
   export let apiConfig = {apiKey: ''};
@@ -11,6 +11,7 @@
   export let title = 'Untitled Book';
 
   export let onJumpToPage = (pageNumber) => {};
+  export let onHide = () => {};
 
   let graphData = {nodes: [], edges: []};
 
@@ -437,7 +438,20 @@
         </span>
       </div>
     {/if}
+
   </div>
+
+  {#if !isFullscreen}
+    <div class="absolute top-3 right-3 z-50">
+      <button
+        on:click={onHide}
+        class="p-2 backdrop-blur-sm rounded-full transition-transform text-gray-400 hover:scale-110"
+        title={$t('knowledge_board.hide_graph', {default: 'Hide Graph'})}
+      >
+        <EyeOff size={24} />
+      </button>
+    </div>
+  {/if}
 
   {#if items.length > 0}
     <div class="absolute bottom-5 right-24 z-50 flex gap-2">

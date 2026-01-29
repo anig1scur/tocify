@@ -52,7 +52,7 @@
   };
 </script>
 
-<div class={'relative inline-block ' + className}>
+<div class={'relative inline-block font-mono' + className}>
   <div
     role="button"
     tabindex="0"
@@ -70,7 +70,7 @@
       on:mouseleave={delay(setInVisible)}
       on:click={isTextCopiable ? copyText : null}
       class={`
-        absolute z-50 px-4 py-3 font-mono text-sm text-gray-900 border-2 border-black
+        absolute z-50 p-2 md:px-4 md:py-3 font-mono text-sm text-gray-900 border-2 border-black
         shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]  rounded-md
         backdrop-blur-sm break-words
         whitespace-pre-line text-left ${width} ${color}
