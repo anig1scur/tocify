@@ -1,7 +1,7 @@
-<script>
+<script lang="ts">
   import {onDestroy, tick, createEventDispatcher} from 'svelte';
   import ShortUniqueId from 'short-unique-id';
-  import {CircleHelpIcon, Sparkles, Loader2} from 'lucide-svelte';
+  import {Sparkles, Loader2} from 'lucide-svelte';
   import {t} from 'svelte-i18n';
   import TocItem from './TocItem.svelte';
   import Tooltip from './Tooltip.svelte';
@@ -254,7 +254,6 @@
     $dragDisabled = true;
   }
 
-
   function handleDndConsider(e) {
     handleDragStart();
     $tocItems = e.detail.items;
@@ -283,9 +282,9 @@
     saveHistory();
     const currentItems = $tocItems;
     let startPage;
-    
+
     if (currentItems.length > 0) {
-      startPage = Math.max(...currentItems.map(i => i.to)) + 1;
+      startPage = Math.max(...currentItems.map((i) => i.to)) + 1;
     } else {
       startPage = ($maxPage || 0) + 1;
     }
@@ -336,19 +335,23 @@
 
   $: hasInvalidLines = text
     .split('\n')
-    .map(line => line.trim())
+    .map((line) => line.trim())
     .filter(Boolean)
-    .some(line => !TOC_REGEX.test(line));
+    .some((line) => !TOC_REGEX.test(line));
 
   $: promptTooltipText = $t('toc.prompt_intro');
+  let innerWidth: number;
 </script>
 
-<svelte:window on:keydown={handleKeydown} on:mouseup={handleMouseUp} on:touchend={handleMouseUp} />
+<svelte:window
+  on:keydown={handleKeydown}
+  on:mouseup={handleMouseUp}
+  on:touchend={handleMouseUp}
+  bind:innerWidth
+/>
 
 <div class="flex flex-col gap-4 mt-3">
   <div class="h-48 relative group">
-
-
     <textarea
       bind:value={text}
       on:input={handleInput}
@@ -361,7 +364,7 @@
           isTextCopiable
           width="md:w-[350px] w-[250px]"
           text={promptTooltipText}
-          position="left"
+          position={innerWidth < 1024 ? '-200 -500' : '100 -600'}
         >
           <button
             on:click={handleAiFormat}
@@ -412,7 +415,9 @@
               {insertAtPage}
               {tocPageCount}
               on:hoveritem
-              on:jumpToPage={(e) => { dispatch('jumpToPage', e.detail);}}
+              on:jumpToPage={(e) => {
+                dispatch('jumpToPage', e.detail);
+              }}
               index={i + 1}
             />
           </div>

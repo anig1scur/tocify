@@ -4,7 +4,7 @@
   import {t, isLoading} from 'svelte-i18n';
   import {injectAnalytics} from '@vercel/analytics/sveltekit';
   import type * as PdfjsLibTypes from 'pdfjs-dist';
-  import {init, trackEvent} from '@aptabase/web';
+  import {trackEvent} from '@aptabase/web';
 
   import '../lib/i18n';
   import {pdfService, tocItems, curFileFingerprint, tocConfig, autoSaveEnabled, type TocConfig} from '../stores';
@@ -97,9 +97,8 @@
   });
 
   onMount(() => {
-    init('A-US-0422911470');
     trackEvent('app_started', {
-      platform: window.__TAURI__ ? 'desktop' : 'web',
+      platform: 'web',
       version: '1.0.0',
     });
 

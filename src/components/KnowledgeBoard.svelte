@@ -419,7 +419,7 @@
   class="bg-[#f0f0f0] flex flex-col overflow-hidden mx-auto
 {isFullscreen ? ' fixed inset-0 z-[9999] w-screen h-screen rounded-none' : ' relative h-full rounded-xl '}"
 >
-  <div class="absolute top-4 left-5 z-50 pointer-events-none select-none">
+  <div class="absolute top-4 left-4 z-50 pointer-events-none select-none">
     {#if isFullscreen}
       <div class="flex gap-2 text-gray-500 opacity-80">
         <BookOpen size={32} />
@@ -442,13 +442,13 @@
   </div>
 
   {#if !isFullscreen}
-    <div class="absolute top-3 right-3 z-50">
+    <div class="absolute top-4 right-2 z-50">
       <button
         on:click={onHide}
-        class="p-2 backdrop-blur-sm rounded-full transition-transform text-gray-400 hover:scale-110"
+        class="p-1 backdrop-blur-sm rounded-full transition-transform text-gray-400 hover:scale-110"
         title={$t('knowledge_board.hide_graph', {default: 'Hide Graph'})}
       >
-        <EyeOff size={24} />
+        <EyeOff size={22} />
       </button>
     </div>
   {/if}
@@ -517,7 +517,7 @@
         size={64}
         class="mb-6"
       />
-      <span class="text-3xl">{$t('knowledge_board.msg_generate_toc')}</span>
+      <span class="text-3xl text-center">{$t('knowledge_board.msg_generate_toc')}</span>
     </div>
   {:else if !isLoading && items.length > 0 && graphData.nodes.length === 0}
     <div

@@ -87,7 +87,7 @@
                 stroke-linecap="round"
                 stroke-linejoin="round"
                 class="transition-transform duration-200"
-                class:rotate-180={!expandedStates[i]}
+                class:rotate-180={expandedStates[i]}
               >
                 <path d="m6 9 6 6 6-6" />
               </svg>

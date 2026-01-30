@@ -139,49 +139,49 @@
               </div>
             </div>
 
-            <div class="flex flex-col sm:flex-row gap-4">
+            <div class="flex flex-col sm-[400px]:flex-row gap-4">
               <div class="w-full md:w-1/2">
                 <h3 class="my-3 font-bold">{$t('settings.first_level')}</h3>
 
-                <div class="border-gray-600 border-2 rounded-md my-3 p-2 w-full">
+                <div class="border-gray-600 border-2 rounded-md my-3 p-2 w-full flex items-center justify-between">
                   <label for="first_level_font_size">{$t('settings.font_size')}</label>
                   <input
                     type="number"
                     id="first_level_font_size"
                     value={config.firstLevel.fontSize}
                     on:input={(e) => updateField('firstLevel.fontSize', parseInt(e.target.value, 10) || 0)}
-                    class="w-[80%] border-2 border-gray-300 rounded px-1 focus:outline-none focus:bg-gray-50"
+                    class="w-[50%] border-2 border-gray-300 rounded px-1 focus:outline-none focus:bg-gray-50"
                   />
                 </div>
-                <div class="border-gray-600 border-2 rounded-md my-3 p-2 w-full">
+                <div class="border-gray-600 border-2 rounded-md my-3 p-2 w-full flex items-center justify-between">
                   <label for="first_level_dot_leader">{$t('settings.dot_leader')}</label>
                   <input
                     type="text"
                     id="first_level_dot_leader"
                     value={config.firstLevel.dotLeader}
                     on:input={(e) => updateField('firstLevel.dotLeader', e.target.value)}
-                    class="w-[80%] border-2 border-gray-300 rounded px-1 focus:outline-none focus:bg-gray-50"
+                    class="w-[50%] border-2 border-gray-300 rounded px-1 focus:outline-none focus:bg-gray-50"
                   />
                 </div>
-                <div class="border-gray-600 border-2 rounded-md my-3 p-2 w-full">
-                  <label for="first_level_color">{$t('settings.color')}</label>
+                <div class="border-gray-600 border-2 rounded-md my-3 p-2 w-full flex items-center justify-between">
+                  <label for="first_level_color" >{$t('settings.color')}</label>
                   <input
                     type="color"
                     id="first_level_color"
                     value={config.firstLevel.color}
                     on:input={(e) => updateField('firstLevel.color', e.target.value)}
-                    class="w-[80%]"
+                    class="w-[50%]"
                   />
                 </div>
-                <div class="border-gray-600 border-2 rounded-md my-3 p-2 w-full">
-                  <label for="first_level_line_spacing">{$t('settings.spacing')}</label>
+                <div class="border-gray-600 border-2 rounded-md my-3 p-2 w-full flex items-center justify-between">
+                  <label for="first_level_line_spacing" >{$t('settings.spacing')}</label>
                   <input
                     type="number"
                     step="0.1"
                     id="first_level_line_spacing"
                     value={config.firstLevel.lineSpacing}
                     on:input={(e) => updateField('firstLevel.lineSpacing', parseFloat(e.target.value) || 1)}
-                    class="w-[80%] border-2 border-gray-300 rounded px-1 focus:outline-none focus:bg-gray-50"
+                    class="w-[50%] border-2 border-gray-300 rounded px-1 focus:outline-none focus:bg-gray-50"
                   />
                 </div>
               </div>
@@ -189,45 +189,45 @@
               <div class="w-full md:w-1/2">
                 <h3 class="my-3 font-bold">{$t('settings.other_levels')}</h3>
 
-                <div class="border-gray-600 border-2 rounded-md my-3 p-2 w-full">
+                <div class="border-gray-600 border-2 rounded-md my-3 p-2 w-full flex items-center justify-between ">
                   <label for="other_levels_font_size">{$t('settings.font_size')}</label>
                   <input
                     type="number"
                     id="other_levels_font_size"
                     value={config.otherLevels.fontSize}
                     on:input={(e) => updateField('otherLevels.fontSize', parseInt(e.target.value, 10) || 0)}
-                    class="w-[80%] border-2 border-gray-300 rounded px-1 focus:outline-none focus:bg-gray-50"
+                    class="w-[50%] border-2 border-gray-300 rounded px-1 focus:outline-none focus:bg-gray-50"
                   />
                 </div>
-                <div class="border-gray-600 border-2 rounded-md my-3 p-2 w-full">
+                <div class="border-gray-600 border-2 rounded-md my-3 p-2 w-full flex items-center justify-between">
                   <label for="other_levels_dot_leader">{$t('settings.dot_leader')}</label>
                   <input
                     type="text"
                     id="other_levels_dot_leader"
                     value={config.otherLevels.dotLeader}
                     on:input={(e) => updateField('otherLevels.dotLeader', e.target.value)}
-                    class="w-[80%] border-2 border-gray-300 rounded px-1 focus:outline-none focus:bg-gray-50"
+                    class="w-[50%] border-2 border-gray-300 rounded px-1 focus:outline-none focus:bg-gray-50"
                   />
                 </div>
-                <div class="border-gray-600 border-2 rounded-md my-3 p-2 w-full">
-                  <label for="other_levels_color">{$t('settings.color')}</label>
+                <div class="border-gray-600 border-2 rounded-md my-3 p-2 w-full flex items-center justify-between">
+                  <label for="other_levels_color" >{$t('settings.color')}</label>
                   <input
                     type="color"
                     id="other_levels_color"
                     value={config.otherLevels.color}
                     on:input={(e) => updateField('otherLevels.color', e.target.value)}
-                    class="w-[80%]"
+                    class="w-[50%]"
                   />
                 </div>
-                <div class="border-gray-600 border-2 rounded-md my-3 p-2 w-full">
-                  <label for="other_levels_line_spacing">{$t('settings.spacing')}</label>
+                <div class="border-gray-600 border-2 rounded-md my-3 p-2 w-full flex items-center justify-between">
+                  <label for="other_levels_line_spacing" >{$t('settings.spacing')}</label>
                   <input
                     type="number"
                     step="0.1"
                     id="other_levels_line_spacing"
                     value={config.otherLevels.lineSpacing}
                     on:input={(e) => updateField('otherLevels.lineSpacing', parseFloat(e.target.value) || 1)}
-                    class="w-[80%] border-2 border-gray-300 rounded px-1 focus:outline-none focus:bg-gray-50"
+                    class="w-[50%] border-2 border-gray-300 rounded px-1 focus:outline-none focus:bg-gray-50"
                   />
                 </div>
               </div>

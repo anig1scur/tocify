@@ -36,7 +36,26 @@
     setTimeout(() => (isCopied = false), 1500);
   };
 
+  const toUnit = (val) => {
+    if (typeof val === 'number') return `${val * 100}%`;
+    
+    if (!isNaN(val) && !val.includes('%') && !val.includes('px')) {
+       const num = parseFloat(val);
+       if (Math.abs(num) <= 1) {
+         return `${num * 100}%`;
+       }
+       return `${val}%`;
+    }
+    return val;
+  };
+
+  $: isCustomPosition = position.includes(' ');
+  $: customCoords = isCustomPosition ? position.split(' ').map(toUnit) : [];
+  
+  $: customStyle = isCustomPosition  ? `left: ${customCoords[0]}; top: ${customCoords[1]}; margin: 0;` : '';
+
   const getFlyParams = (pos) => {
+    if (isCustomPosition) return { y: 10 };
     switch (pos) {
       case 'top':
         return {y: 10};
@@ -69,6 +88,7 @@
       on:mouseenter={setVisible}
       on:mouseleave={delay(setInVisible)}
       on:click={isTextCopiable ? copyText : null}
+      style={customStyle}
       class={`
         absolute z-50 p-2 md:px-4 md:py-3 font-mono text-sm text-gray-900 border-2 border-black
         shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]  rounded-md
@@ -76,10 +96,10 @@
         whitespace-pre-line text-left ${width} ${color}
         ${isTextCopiable ? 'cursor-copy active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all' : ''}
         
-        ${position === 'top' ? 'bottom-full left-1/2 transform -translate-x-1/2 mb-3' : ''}
-        ${position === 'bottom' ? 'top-full left-1/2 transform -translate-x-1/2 mt-3' : ''}
-        ${position === 'left' ? 'right-full top-1/2 transform -translate-y-1/2 mr-3' : ''}
-        ${position === 'right' ? 'left-full top-1/2 transform -translate-y-1/2 ml-3' : ''}
+        ${!isCustomPosition && position === 'top' ? 'bottom-full left-1/2 transform -translate-x-1/2 mb-3' : ''}
+        ${!isCustomPosition && position === 'bottom' ? 'top-full left-1/2 transform -translate-x-1/2 mt-3' : ''}
+        ${!isCustomPosition && position === 'left' ? 'right-full top-1/2 transform -translate-y-1/2 mr-3' : ''}
+        ${!isCustomPosition && position === 'right' ? 'left-full top-1/2 transform -translate-y-1/2 ml-3' : ''}
       `}
     >
       <div class="relative z-10 drop-shadow-sm">

@@ -124,20 +124,29 @@ export class PDFService {
     this.loadFonts();
   }
 
+  static loadingPromise: Promise<void> | null = null;
+
   async loadFonts() {
     if (!browser) return;
-
     if (PDFService.regularFontBytes && PDFService.boldFontBytes) return;
-    try {
-      const [reg, bold] = await Promise.all([
-        fetch('/fonts/huiwen-mincho.ttf').then((res) => res.arrayBuffer()),
-        fetch('/fonts/huiwen-mincho.ttf').then((res) => res.arrayBuffer()),
-      ]);
-      PDFService.regularFontBytes = reg;
-      PDFService.boldFontBytes = bold;
-    } catch (e) {
-      console.error('Failed to load fonts, fallback to standard', e);
+
+    if (PDFService.loadingPromise) {
+      return PDFService.loadingPromise;
     }
+
+    PDFService.loadingPromise = (async () => {
+      try {
+        const fontData = await fetch('/fonts/huiwen-mincho.ttf').then((res) => res.arrayBuffer());
+        PDFService.regularFontBytes = fontData;
+        PDFService.boldFontBytes = fontData;
+      } catch (e) {
+        console.error('Failed to load fonts, fallback to standard', e);
+      } finally {
+        PDFService.loadingPromise = null;
+      }
+    })();
+
+    return PDFService.loadingPromise;
   }
 
   async initPreview(sourceDoc: PDFDocument) {
