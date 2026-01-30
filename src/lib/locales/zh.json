@@ -49,7 +49,8 @@
     "generate_pdf": "导出 PDF",
     "yes_this_page": "是的！就是这一页！",
     "save": "保存",
-    "saved": "已保存"
+    "saved": "已保存",
+    "close_hint": "关闭提示"
   },
   "status": {
     "loading_rendering": "正在加载 PDF...",

@@ -8,7 +8,7 @@
   import TocSettings from '../settings/TocSetting.svelte';
   import AiPageSelector from '../PageSelector.svelte';
   import TocEditor from '../TocEditor.svelte';
-  import {Sparkles} from 'lucide-svelte';
+  import {Sparkles, X} from 'lucide-svelte';
   import {curFileFingerprint} from '../../stores';
 
   export let pdfState: any;
@@ -51,15 +51,22 @@
 
   {#if showNextStepHint && originalPdfInstance}
     <div
-      class="border-black border-2 rounded-lg p-3 my-4 bg-yellow-200 shadow-[2px_2px_0px_rgba(0,0,0,1)]"
+      class="relative border-black border-2 rounded-lg p-3 my-4 bg-yellow-200 shadow-[2px_2px_0px_rgba(0,0,0,1)]"
       transition:fade={{duration: 200}}
     >
+      <button
+        class="absolute top-1 right-1 p-1 hover:bg-black/10 rounded-full transition-colors"
+        on:click={() => dispatch('closeNextStepHint')}
+        title={$t('btn.close_hint')}
+      >
+        <X size={16} />
+      </button>
       <h3 class="font-bold mb-2">{$t('hint.next_step_title')}:</h3>
       <p class="text-sm text-gray-800">
         1. {$t('hint.step_1_text')} <strong class="text-black">{$t('hint.step_1_bold')}</strong>
       </p>
       <p class="text-sm text-gray-800 mt-1">
-        2. {$t('hint.step_2_text')} <strong class="text-black"> {$t('hint.step_2_bold')}</strong>
+        2. {$t('hint.step_2_text')} <strong class="text-black">{$t('hint.step_2_bold')}</strong>
       </p>
       <p class="text-sm text-gray-800 mt-2">
         {$t('hint.or_text')} <strong class="text-black">{$t('hint.manual_add_bold')}</strong>

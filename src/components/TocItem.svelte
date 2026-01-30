@@ -144,7 +144,7 @@
 {#if item}
   <div>
     <div
-      class="flex items-center gap-1 py-1.5 rounded-md group"
+      class="flex items-center gap-1 py-1.5 rounded-md group -mr-1"
       on:mouseenter={handleMouseEnter}
       class:bg-blue-200={isActive}
       class:font-bold={isActive}
@@ -157,12 +157,12 @@
         <div
           class="cursor-grab active:cursor-grabbing text-gray-400 transition-opacity opacity-100 md:opacity-0 md:group-hover:opacity-100"
         >
-          <GripVertical size={16} />
+          <GripVertical size={14} />
         </div>
 
         <button
           on:click|stopPropagation={handleToggle}
-          class=" hover:bg-gray-200 rounded-md text-gray-500"
+          class=" hover:bg-gray-200 rounded-md text-gray-500 ml-[-4px]"
           class:invisible={!item.children || item.children.length === 0}
           title="Toggle"
         >
@@ -207,7 +207,7 @@
         class="w-14 border-2 border-black rounded ml-1 pl-1.5 py-1 text-sm myfocus focus:outline-none focus:ring-2 focus:ring-blue-500"
       />
 
-      <div class="flex gap-1">
+      <div class="flex">
         <button
           on:click={handleAddChild}
           class="p-1 hover:bg-gray-200 rounded-md"
@@ -217,7 +217,7 @@
         </button>
         <button
           on:click={() => onDelete(item)}
-          class="p-1 hover:bg-gray-200 rounded-md text-black"
+          class="px-1 hover:bg-gray-200 rounded-md text-black"
           title="Delete"
         >
           <Trash size={16} />

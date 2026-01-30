@@ -387,7 +387,7 @@
     {/if}
   </div>
 
-  <div class="-ml-9">
+  <div class="-ml-8">
     {#if $tocItems.length > 0}
       <section
         use:dndzone={{

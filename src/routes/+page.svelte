@@ -533,7 +533,14 @@
       updateViewerInstance();
       await tick();
       isFileLoading = false;
-      showNextStepHint = true;
+      
+      const hideHintUntil = localStorage.getItem('tocify_hide_next_step_hint_until');
+      if (hideHintUntil && Date.now() < parseInt(hideHintUntil, 10)) {
+        showNextStepHint = false;
+      } else {
+        showNextStepHint = true;
+      }
+      
       autoSaveEnabled.set(true);
     }
   };
@@ -778,6 +785,12 @@
     toastProps = {show: true, message: 'API Settings Saved!', type: 'success'};
   }
 
+  const handleCloseNextStepHint = () => {
+    showNextStepHint = false;
+    const expiry = Date.now() + 30 * 24 * 60 * 60 * 1000; // 30 days
+    localStorage.setItem('tocify_hide_next_step_hint_until', expiry.toString());
+  };
+
   const handleViewerMessage = (event: CustomEvent<{message: string; type: 'success' | 'error' | 'info'}>) => {
     toastProps = {show: true, message: event.detail.message, type: event.detail.type};
   };
@@ -911,6 +924,7 @@
           bind:isTocConfigExpanded
           on:prefixChange={handlePrefixChange}
           on:openhelp={() => (showHelpModal = true)}
+          on:closeNextStepHint={handleCloseNextStepHint}
           on:apiConfigChange={handleApiConfigChange}
           on:apiConfigSave={handleApiConfigSave}
           on:updateField={(e) => updateTocField(e.detail.path, e.detail.value)}

@@ -53,7 +53,8 @@
     "generate_pdf": "Generate PDF",
     "yes_this_page": "Yes! This page !",
     "save": "Save",
-    "saved": "Saved"
+    "saved": "Saved",
+    "close_hint": "Close"
   },
   "status": {
     "loading_rendering": "Loading PDF...",
