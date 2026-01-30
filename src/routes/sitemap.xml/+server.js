@@ -24,6 +24,24 @@ export async function GET () {
         <changefreq>monthly</changefreq>
         <priority>1.0</priority>
       </url>
+      <url>
+        <loc>${DOMAIN}?lang=zh</loc>
+        <lastmod>${new Date().toISOString()}</lastmod>
+        <changefreq>monthly</changefreq>
+        <priority>0.8</priority>
+      </url>
+      <url>
+        <loc>${DOMAIN}about</loc>
+        <lastmod>${new Date().toISOString()}</lastmod>
+        <changefreq>monthly</changefreq>
+        <priority>0.8</priority>
+      </url>
+      <url>
+        <loc>${DOMAIN}about?lang=zh</loc>
+        <lastmod>${new Date().toISOString()}</lastmod>
+        <changefreq>monthly</changefreq>
+        <priority>0.6</priority>
+      </url>
       </urlset>
   `.trim();
 

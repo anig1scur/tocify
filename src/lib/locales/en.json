@@ -100,7 +100,7 @@
   },
   "seo": {
     "why_title": "Why Choose Tocify?",
-    "why_desc": "Tocify is the premier free online tool for adding bookmarks / Table of Contents (ToC) to your PDF files. Whether you have scanned documents or eBooks, our AI-powered solution formats and inserts bookmarks in seconds, making your PDFs easy to navigate.",
+    "why_desc": "Tocify is an open-source free online tool for adding bookmarks / Table of Contents (ToC) to your PDF files. Whether you have scanned documents or eBooks, our AI-powered solution formats and inserts bookmarks in minutes, making your PDFs easy to navigate.",
     "features_title": "Key Features",
     "feature_1_title": "AI-Powered Generation",
     "feature_1_desc": "Automatically detect and format ToC structure from scanned pages.",
@@ -117,7 +117,13 @@
     "faq_1_q": "Is Tocify free?",
     "faq_1_a": "Yes, Tocify is completely free to use.",
     "faq_2_q": "Is my data safe?",
-    "faq_2_a": "Yes. We process files locally using your browser's capabilities. Your confidential documents never leave your device."
+    "faq_2_a": "Yes. We process files locally using your browser's capabilities. Your confidential documents never leave your device.",
+    "faq_3_q": "Which models does Tocify support?",
+    "faq_3_a": "Tocify supports multiple models. You need to <b>Bring Your Own API Keys</b>.<br><br>Currently supported:<br>• <b>Gemini</b>: <a href='https://aistudio.google.com/app/apikey' target='_blank' class='text-blue-600 hover:underline'>Get Key</a><br>• <b>Qwen</b>: <a href='https://bailian.console.aliyun.com/?tab=model#/api-key' target='_blank' class='text-blue-600 hover:underline'>Get Key</a><br>• <b>Doubao</b>: <a href='https://www.volcengine.com/docs/82379/1541594?lang=zh' target='_blank' class='text-blue-600 hover:underline'>Get Key</a><br>• <b>Zhipu</b>: <a href='https://open.bigmodel.cn/usercenter/apikeys' target='_blank' class='text-blue-600 hover:underline'>Get Key</a>",
+    "faq_4_q": "Can Tocify run on the client side?",
+    "faq_4_a": "Yes, we provide clients for <b>macOS</b> and <b>Windows</b>.<br>You can download them from the GitHub Releases page:<br><a href='https://github.com/anig1scur/tocify/releases' target='_blank' class='text-blue-600 hover:underline'>Download Releases</a>",
+    "faq_5_q": "Which shortcuts does Tocify support?",
+    "faq_5_a": "• <b>Ctrl + Z</b>: Undo<br>• <b>Ctrl + Shift + Z</b>: Redo<br>• <b>Up/Down Arrows</b>: Quickly switch navigation input<br>• <b>Mouse Drag</b>: Drag TOC items / groups"
   },
   "star_request": {
     "title": "Enjoying Tocify?",

@@ -115,7 +115,10 @@
         <div class="space-y-4 mx-auto">
           {#each [
             { q: $t('seo.faq_1_q'), a: $t('seo.faq_1_a'), delay: 800 },
-            { q: $t('seo.faq_2_q'), a: $t('seo.faq_2_a'), delay: 900 }
+            { q: $t('seo.faq_2_q'), a: $t('seo.faq_2_a'), delay: 900 },
+            { q: $t('seo.faq_3_q'), a: $t('seo.faq_3_a'), delay: 1000 },
+            { q: $t('seo.faq_4_q'), a: $t('seo.faq_4_a'), delay: 1100 },
+            { q: $t('seo.faq_5_q'), a: $t('seo.faq_5_a'), delay: 1200 }
           ] as faq}
             <div 
               in:fly={{ y: 20, duration: 500, delay: faq.delay }}
@@ -124,7 +127,7 @@
               <h3 class="text-lg font-bold mb-3 flex items-start gap-2">
                 <span class="text-blue-500">Q.</span> {faq.q}
               </h3>
-              <p class="text-gray-600 pl-6 leading-relaxed border-l-2 border-gray-100 ml-1.5">{faq.a}</p>
+              <p class="text-gray-600 pl-6 leading-relaxed border-l-2 border-gray-100 ml-1.5">{@html faq.a}</p>
             </div>
           {/each}
         </div>

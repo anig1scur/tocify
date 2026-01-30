@@ -44,6 +44,10 @@
 
 <svelte:head>
   <title>{title}</title>
+
+  <link rel="alternate" hreflang="en" href="{url}" />
+  <link rel="alternate" hreflang="zh" href="{url}?lang=zh" />
+  <link rel="alternate" hreflang="x-default" href="{url}" />
   {#if description}
     <meta name="description" content={description} />
   {/if}

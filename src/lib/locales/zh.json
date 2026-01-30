@@ -108,7 +108,7 @@
   },
   "seo": {
     "why_title": "为什么选择 Tocify?",
-    "why_desc": "Tocify 是首选的免费在线 PDF 目录（书签）添加工具。无论您有扫描文档还是电子书，我们的 AI 驱动解决方案都能在几秒钟内格式化并插入书签，让您的 PDF 易于导航。",
+    "why_desc": "Tocify 是开源/免费/在线的 PDF 目录或书签添加/编辑/生成工具，它完全基于浏览器运行。无论您有扫描文档还是电子书，我们的 AI 驱动解决方案都能在几分钟内格式化并插入书签，或生成实体可点击的目录，让您的 PDF 易于导航。",
     "features_title": "核心功能",
     "feature_1_title": "AI 智能生成",
     "feature_1_desc": "自动从扫描页面检测并格式化目录结构。",
@@ -125,7 +125,13 @@
     "faq_1_q": "Tocify 是免费的吗？",
     "faq_1_a": "是的，Tocify 完全免费使用。",
     "faq_2_q": "我的数据安全吗？",
-    "faq_2_a": "安全。我们使用浏览器能力在本地处理文件。你的文档永远不会离开设备。"
+    "faq_2_a": "安全。我们使用浏览器能力在本地处理文件。你的文档永远不会离开设备。",
+    "faq_3_q": "Tocify 支持哪些 model?",
+    "faq_3_a": "Tocify 支持多种模型，你需要自带 API Key (Bring Your Own API Keys)。<br><br>目前支持：<br>• <b>Gemini</b>: <a href='https://aistudio.google.com/app/apikey' target='_blank' class='text-blue-600 hover:underline'>Get Key</a><br>• <b>Qwen (通义千问)</b>: <a href='https://bailian.console.aliyun.com/?tab=model#/api-key' target='_blank' class='text-blue-600 hover:underline'>Get Key</a><br>• <b>Doubao (豆包)</b>: <a href='https://www.volcengine.com/docs/82379/1541594?lang=zh' target='_blank' class='text-blue-600 hover:underline'>Get Key</a><br>• <b>Zhipu (智谱)</b>: <a href='https://open.bigmodel.cn/usercenter/apikeys' target='_blank' class='text-blue-600 hover:underline'>Get Key</a>",
+    "faq_4_q": "Tocify 是否可以在客户端运行？",
+    "faq_4_a": "是的，我们提供 <b>macOS</b> 和 <b>Windows</b> 客户端。<br>您可以前往 GitHub Releases 页面下载：<br><a href='https://github.com/anig1scur/tocify/releases' target='_blank' class='text-blue-600 hover:underline'>Download Releases</a>",
+    "faq_5_q": "Tocify 支持哪些快捷键？",
+    "faq_5_a": "• <b>Ctrl + Z</b>: 撤销<br>• <b>Ctrl + Shift + Z</b>: 重做 (撤销撤销)<br>• <b>上下键</b>: 快速切换 导航输入框<br>• <b>鼠标 Drag</b>: 拖拽目录项 / 目录组"
   },
   "star_request": {
     "title": "喜欢 Tocify 吗？",
