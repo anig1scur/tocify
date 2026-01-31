@@ -4,13 +4,14 @@ import {DEFAULT_PREFIX_CONFIG, type LevelConfig} from '$lib/prefix-service';
 import {get, writable} from 'svelte/store';
 
 export type StyleConfig = {
-  fontSize: number; dotLeader: string; color: string; lineSpacing: string;
+  fontSize: number; dotLeader: string; color: string; lineSpacing: number;
 };
 export type TocConfig = {
   titleYStart?: number;
   insertAtPage: number; pageOffset: number; firstLevel: StyleConfig;
   otherLevels: StyleConfig;
   prefixSettings: {enabled: boolean; configs: LevelConfig[];};
+  fontFamily?: 'hei' | 'kai' | 'huiwen';
 };
 
 type TocSession = {
@@ -29,6 +30,7 @@ export const tocConfig = writable({
     enabled: false,
     configs: DEFAULT_PREFIX_CONFIG,
   },
+  fontFamily: 'huiwen',
   pageOffset: 0,
   insertAtPage: 2,
   firstLevel: {

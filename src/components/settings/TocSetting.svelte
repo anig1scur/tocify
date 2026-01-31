@@ -139,6 +139,27 @@
               </div>
             </div>
 
+            <div class="border-gray-600 border-2 rounded-md my-2 p-2 w-full">
+               <div class="flex gap-2 items-center justify-between">
+                 <label
+                   class="whitespace-nowrap text-sm"
+                   for="font_family"
+                 >
+                   {$t('settings.font_family')}
+                 </label>
+                 <select
+                   id="font_family"
+                   class="border-2 border-gray-300 rounded px-1 focus:outline-none focus:bg-gray-50 text-sm py-1"
+                   value={config.fontFamily || 'huiwen'}
+                   on:change={(e) => updateField('fontFamily', (e.target as HTMLSelectElement).value)}
+                 >
+                   <option value="huiwen">{$t('settings.font_huiwen')}</option>
+                   <option value="hei">{$t('settings.font_hei')}</option>
+                   <option value="kai">{$t('settings.font_kai')}</option>
+                 </select>
+               </div>
+            </div>
+
             <div class="flex flex-col sm-[400px]:flex-row gap-4">
               <div class="w-full md:w-1/2">
                 <h3 class="my-3 font-bold">{$t('settings.first_level')}</h3>

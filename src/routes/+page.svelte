@@ -719,7 +719,7 @@
       },
     ];
     activeRangeIndex = tocRanges.length - 1;
-  };
+};
 
   const handleRemoveRange = (e: CustomEvent) => {
     const {index} = e.detail;

@@ -1,5 +1,5 @@
 {
-  "name": "tocify",
+	"name": "tocify",
 	"private": true,
 	"version": "0.0.1",
 	"type": "module",
@@ -26,7 +26,6 @@
 	"dependencies": {
 		"@aptabase/web": "^0.4.3",
 		"@google/generative-ai": "^0.24.1",
-		"@pdf-lib/fontkit": "^1.1.1",
 		"@sveltejs/adapter-vercel": "^6.1.1",
 		"@upstash/ratelimit": "^2.0.7",
 		"@upstash/redis": "^1.36.0",
@@ -34,6 +33,7 @@
 		"jsonrepair": "^3.13.1",
 		"lucide-svelte": "^0.474.0",
 		"openai": "^6.15.0",
+		"pdf-fontkit": "^1.8.9",
 		"pdf-lib": "^1.17.1",
 		"pdfjs-dist": "^4.10.38",
 		"roughjs": "^4.6.6",

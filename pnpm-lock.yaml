@@ -14,9 +14,6 @@ importers:
       '@google/generative-ai':
         specifier: ^0.24.1
         version: 0.24.1
-      '@pdf-lib/fontkit':
-        specifier: ^1.1.1
-        version: 1.1.1
       '@sveltejs/adapter-vercel':
         specifier: ^6.1.1
         version: 6.1.1(@sveltejs/kit@2.16.1(@sveltejs/vite-plugin-svelte@5.0.3(svelte@5.19.2)(vite@6.0.11(jiti@1.21.7)(yaml@2.7.0)))(svelte@5.19.2)(vite@6.0.11(jiti@1.21.7)(yaml@2.7.0)))(rollup@4.31.0)
@@ -38,6 +35,9 @@ importers:
       openai:
         specifier: ^6.15.0
         version: 6.15.0
+      pdf-fontkit:
+        specifier: ^1.8.9
+        version: 1.8.9
       pdf-lib:
         specifier: ^1.17.1
         version: 1.17.1
@@ -673,9 +673,6 @@ packages:
   '@nodelib/fs.walk@1.2.8':
     resolution: {integrity: sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg==}
     engines: {node: '>= 8'}
-
-  '@pdf-lib/fontkit@1.1.1':
-    resolution: {integrity: sha512-KjMd7grNapIWS/Dm0gvfHEilSyAmeLvrEGVcqLGi0VYebuqqzTbgF29efCx7tvx+IEbG3zQciRSWl3GkUSvjZg==}
 
   '@pdf-lib/standard-fonts@1.0.0':
     resolution: {integrity: sha512-hU30BK9IUN/su0Mn9VdlVKsWBS6GyhVfqjwl1FjZN4TxP6cCw0jP2w7V3Hf5uX7M0AZJ16vey9yE0ny7Sa59ZA==}
@@ -1399,6 +1396,9 @@ packages:
     resolution: {integrity: sha512-Xa4Nw17FS9ApQFJ9umLiJS4orGjm7ZzwUrwamcGQuHSzDyth9boKDaycYdDcZDuqYATXw4HFXgaqWTctW/v1HA==}
     engines: {node: '>=16 || 14 >=14.18'}
 
+  pdf-fontkit@1.8.9:
+    resolution: {integrity: sha512-TTq+umfhlFjUuQYOq6dCKT/wLslCrX4zVr5gqrIvrGHfo+vJ3ETapZTb4YLOCErohX7pF+HxlXSZuiToSRhNmA==}
+
   pdf-lib@1.17.1:
     resolution: {integrity: sha512-V/mpyJAoTsN4cnP31vc0wfNA1+p20evqqnap0KLoRUN0Yk/p3wN52DOEsL4oBFcLdb76hlpKPtzJIgo67j/XLw==}
 
@@ -2106,10 +2106,6 @@ snapshots:
       '@nodelib/fs.scandir': 2.1.5
       fastq: 1.18.0
 
-  '@pdf-lib/fontkit@1.1.1':
-    dependencies:
-      pako: 1.0.11
-
   '@pdf-lib/standard-fonts@1.0.0':
     dependencies:
       pako: 1.0.11
@@ -2804,6 +2800,10 @@ snapshots:
     dependencies:
       lru-cache: 10.4.3
       minipass: 7.1.2
+
+  pdf-fontkit@1.8.9:
+    dependencies:
+      pako: 1.0.11
 
   pdf-lib@1.17.1:
     dependencies:

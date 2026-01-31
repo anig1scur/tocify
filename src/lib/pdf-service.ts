@@ -1,5 +1,5 @@
 import {browser} from '$app/environment';
-import fontkit from '@pdf-lib/fontkit';
+import fontkit from 'pdf-fontkit';
 import {PDFDocument, type PDFFont, PDFName, type PDFPage, rgb, StandardFonts} from 'pdf-lib';
 import * as pdfjsLib from 'pdfjs-dist';
 
@@ -95,8 +95,24 @@ if (browser) {
 export class PDFService {
   static sharedWorker = new pdfjsLib.PDFWorker();
 
-  static regularFontBytes: ArrayBuffer|null = null;
-  static boldFontBytes: ArrayBuffer|null = null;
+  static regularFontBytes: Map<string, ArrayBuffer> = new Map();
+  static boldFontBytes: Map<string, ArrayBuffer> = new Map();
+  static fontLoadingPromises: Map<string, Promise<void>> = new Map();
+
+  static FONT_URLS = {
+    huiwen: {
+      regular: '/fonts/huiwen-mincho.ttf', // Local file
+      bold: '/fonts/huiwen-mincho.ttf', // Use regular as bold fallback
+    },
+    hei: {
+      regular: 'https://static.aeriszhu.com/SourceHanSansSC-Regular.woff2',
+      bold: 'https://static.aeriszhu.com/SourceHanSansSC-Regular.woff2',
+    },
+    kai: {
+      regular: 'https://static.aeriszhu.com/SourceHanSerifSC-Regular.woff2',
+      bold: 'https://static.aeriszhu.com/SourceHanSerifSC-Regular.woff2',
+    }
+  };
 
   static sanitizePdfMetadata(doc: PDFDocument) {
     try {
@@ -121,36 +137,55 @@ export class PDFService {
     if (browser && !PDFService.sharedWorker) {
       PDFService.sharedWorker = new pdfjsLib.PDFWorker();
     }
-    this.loadFonts();
+    this.loadFonts('huiwen');
   }
 
-  static loadingPromise: Promise<void> | null = null;
-
-  async loadFonts() {
+  async loadFonts(family: string = 'huiwen') {
     if (!browser) return;
-    if (PDFService.regularFontBytes && PDFService.boldFontBytes) return;
+    if (PDFService.regularFontBytes.has(family) && PDFService.boldFontBytes.has(family)) return;
 
-    if (PDFService.loadingPromise) {
-      return PDFService.loadingPromise;
+    if (PDFService.fontLoadingPromises.has(family)) {
+      return PDFService.fontLoadingPromises.get(family);
     }
 
-    PDFService.loadingPromise = (async () => {
+    const promise = (async () => {
       try {
-        const fontData = await fetch('/fonts/huiwen-mincho.ttf').then((res) => res.arrayBuffer());
-        PDFService.regularFontBytes = fontData;
-        PDFService.boldFontBytes = fontData;
+        const urls = PDFService.FONT_URLS[family as keyof typeof PDFService.FONT_URLS];
+        if (!urls) {
+          // Fallback to minimal set or huiwen if unknown, but better to just error or standard
+          console.warn(`Unknown font family: ${ family }, falling back to huiwen`);
+          await this.loadFonts('huiwen');
+          return;
+        }
+
+        const [regular, bold] = await Promise.all([
+          fetch(urls.regular).then((res) => {
+            if (!res.ok) throw new Error(`Failed to load ${ urls.regular }`);
+            return res.arrayBuffer();
+          }),
+          fetch(urls.bold).then((res) => {
+            if (!res.ok) throw new Error(`Failed to load ${ urls.bold }`);
+            return res.arrayBuffer();
+          })
+        ]);
+
+        PDFService.regularFontBytes.set(family, regular);
+        PDFService.boldFontBytes.set(family, bold);
       } catch (e) {
-        console.error('Failed to load fonts, fallback to standard', e);
+        console.error(`Failed to load fonts for ${ family }, fallback to standard`, e);
       } finally {
-        PDFService.loadingPromise = null;
+        PDFService.fontLoadingPromises.delete(family);
       }
     })();
 
-    return PDFService.loadingPromise;
+    PDFService.fontLoadingPromises.set(family, promise);
+    return promise;
   }
 
   async initPreview(sourceDoc: PDFDocument) {
-    await this.loadFonts();
+    // We don't strictly need to load fonts here as they are loaded on demand,
+    // but preloading default is good.
+    await this.loadFonts('huiwen');
     this.sourceDoc = sourceDoc;
   }
 
@@ -178,11 +213,18 @@ export class PDFService {
     let regularFont: PDFFont;
     let boldFont: PDFFont;
 
-    if (PDFService.regularFontBytes && PDFService.boldFontBytes) {
+    const fontKey = config.fontFamily || 'huiwen';
+
+    // Ensure fonts are loaded (idempotent if already loaded)
+    await this.loadFonts(fontKey);
+
+    if (PDFService.regularFontBytes.has(fontKey) && PDFService.boldFontBytes.has(fontKey)) {
       regularFont =
-          await doc.embedFont(PDFService.regularFontBytes, {subset: true});
-      boldFont = await doc.embedFont(PDFService.boldFontBytes, {subset: true});
+        await doc.embedFont(PDFService.regularFontBytes.get(fontKey)!, { subset: true });
+      boldFont = await doc.embedFont(PDFService.boldFontBytes.get(fontKey)!, { subset: true });
     } else {
+      // Fallback to StandardFonts as a safety net if loading failed
+      console.warn(`Font ${ fontKey } not loaded, falling back to standard fonts`);
       regularFont = await doc.embedFont(StandardFonts.Helvetica);
       boldFont = await doc.embedFont(StandardFonts.HelveticaBold);
     }

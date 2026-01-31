@@ -13,6 +13,10 @@
     "dot_leader": "引导点线",
     "color": "颜色",
     "spacing": "间距",
+    "font_family": "字体",
+    "font_huiwen": "汇文明朝体",
+    "font_hei": "思源黑体",
+    "font_kai": "思源宋体",
     "api_settings_title": "API 设置",
     "api_key_hint": "仅存储在本地，不会上传到服务器",
     "add_numbering": "添加编号",
@@ -137,7 +141,7 @@
   "star_request": {
     "title": "喜欢 Tocify 吗？",
     "body": "如果这个工具对你有帮助，请考虑在 GitHub 上给我们一个 star，或者分享你的反馈建议！",
-    "btn_star": "去 GitHub 给个 Star",
+    "btn_star": "去 GitHub 给 Star",
     "btn_feedback": "反馈建议",
     "btn_maybe_later": "以后再说",
     "btn_dont_show": "不再展示"
