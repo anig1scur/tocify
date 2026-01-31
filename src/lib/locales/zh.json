@@ -16,19 +16,22 @@
     "font_family": "字体",
     "font_huiwen": "汇文明朝体",
     "font_hei": "思源黑体",
-    "font_kai": "思源宋体",
+    "font_song": "思源宋体",
     "api_settings_title": "API 设置",
     "api_key_hint": "仅存储在本地，不会上传到服务器",
     "add_numbering": "添加编号",
     "style": "样式",
     "prefix": "前缀",
-    "suffix": "后缀",
+    "suffix": "后缀", 
     "inherit_parent": "继承父级",
     "separator": "连接符",
     "preview": "预览"
   },
   "msg": {
-    "pdf_loaded": "PDF 已加载，长按并拖动以选择目录页面"
+    "pdf_loaded": "PDF 已加载，长按并拖动以选择目录页面",
+    "font_loading": "正在下载字体资源 ({font})...",
+    "font_loaded": "字体 {font} 加载成功！",
+    "font_load_failed": "字体 {font} 加载失败。正在使用备用字体。"
   },
   "label": {
     "start": "开始",

@@ -1,5 +1,6 @@
 <script lang="ts">
   import {onMount, onDestroy, tick} from 'svelte';
+  import {get} from 'svelte/store';
   import {slide, fade, fly} from 'svelte/transition';
   import {t, isLoading} from 'svelte-i18n';
   import {injectAnalytics} from '@vercel/analytics/sveltekit';
@@ -52,10 +53,16 @@
   let showStarRequestModal = false;
   let offsetPreviewPageNum = 1;
 
-  let toastProps = {
+  let toastProps: {
+    show: boolean;
+    message: string;
+    type: 'success' | 'error' | 'info';
+    duration?: number;
+  } = {
     show: false,
     message: '',
-    type: 'success' as 'success' | 'error' | 'info',
+    type: 'success',
+    duration: 3000,
   };
 
   let originalPdfInstance: PdfjsLibTypes.PDFDocumentProxy | null = null;
@@ -287,6 +294,19 @@
 
       let newDoc = pdfState.doc;
 
+      const fontKey = config.fontFamily || 'huiwen';
+      const isFontMissing = !PDFService.regularFontBytes.has(fontKey);
+      if (isFontMissing) {
+        const translate = get(t);
+        toastProps = {
+          show: true,
+          message: translate('msg.font_loading', {values: {font: fontKey}}),
+          type: 'info',
+          duration: 100000,
+        };
+        isPreviewLoading = true;
+      }
+
       const currentInsertPage = config.insertAtPage || 2;
       if (addPhysicalTocPage) {
         if (currentInsertPage !== lastInsertAtPage) {
@@ -297,6 +317,15 @@
         const res = await $pdfService.updateTocPages(tocItems_, config, currentInsertPage);
         newDoc = res.newDoc;
         tocPageCount = res.tocPageCount;
+      
+        if (isFontMissing) {
+           // Verify if loaded
+           if (PDFService.regularFontBytes.has(fontKey)) {
+             toastProps = {show: true, message: $t('msg.font_loaded', {values: {font: fontKey}}), type: 'success', duration: 3000};
+           } else {
+             toastProps = {show: true, message: $t('msg.font_load_failed', {values: {font: fontKey}}), type: 'error', duration: 5000};
+           }
+        }
       } else {
         newDoc = await pdfState.doc.copy();
         tocPageCount = 0;
@@ -342,6 +371,11 @@
           ? 'The PDF structure is too old or corrupted to generate a preview.'
           : error.message;
       toastProps = {show: true, message: `Error updating PDF: ${msg}`, type: 'error'};
+    } finally {
+      if (isPreviewLoading && !isFileLoading) {
+        // Only reset if we are not in another loading state, though simply false is usually fine here
+        isPreviewLoading = false;
+      }
     }
   }
 
@@ -886,6 +920,7 @@
   <Toast
     message={toastProps.message}
     type={toastProps.type}
+    duration={toastProps.duration}
     on:close={() => (toastProps.show = false)}
   />
 {/if}

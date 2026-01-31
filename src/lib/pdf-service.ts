@@ -108,7 +108,7 @@ export class PDFService {
       regular: 'https://static.aeriszhu.com/SourceHanSansSC-Regular.woff2',
       bold: 'https://static.aeriszhu.com/SourceHanSansSC-Regular.woff2',
     },
-    kai: {
+    song: {
       regular: 'https://static.aeriszhu.com/SourceHanSerifSC-Regular.woff2',
       bold: 'https://static.aeriszhu.com/SourceHanSerifSC-Regular.woff2',
     }
@@ -158,19 +158,31 @@ export class PDFService {
           return;
         }
 
-        const [regular, bold] = await Promise.all([
-          fetch(urls.regular).then((res) => {
-            if (!res.ok) throw new Error(`Failed to load ${ urls.regular }`);
-            return res.arrayBuffer();
-          }),
-          fetch(urls.bold).then((res) => {
-            if (!res.ok) throw new Error(`Failed to load ${ urls.bold }`);
-            return res.arrayBuffer();
-          })
-        ]);
+        const uniqueUrls = new Set([urls.regular, urls.bold]);
+        const urlToBuffer = new Map<string, ArrayBuffer>();
 
-        PDFService.regularFontBytes.set(family, regular);
-        PDFService.boldFontBytes.set(family, bold);
+        await Promise.all(Array.from(uniqueUrls).map(async (url) => {
+          try {
+            const res = await fetch(url);
+            if (!res.ok) throw new Error(`Failed to load ${ url }`);
+            const buffer = await res.arrayBuffer();
+            urlToBuffer.set(url, buffer);
+          } catch (e) {
+            console.error(`Error loading font from ${ url }`, e);
+            throw e;
+          }
+        }));
+
+        const regular = urlToBuffer.get(urls.regular);
+        const bold = urlToBuffer.get(urls.bold);
+
+        if (regular && bold) {
+          PDFService.regularFontBytes.set(family, regular);
+          PDFService.boldFontBytes.set(family, bold);
+        } else {
+          throw new Error(`Failed to load fonts for ${ family }`);
+        }
+
       } catch (e) {
         console.error(`Failed to load fonts for ${ family }, fallback to standard`, e);
       } finally {

@@ -19,8 +19,8 @@
     "spacing": "Spacing",
     "font_family": "Font Family",
     "font_huiwen": "Huiwen Mincho",
-    "font_hei": "Source Han Sans",
-    "font_kai": "Source Han Serif",
+    "font_hei": "SourceHan Sans",
+    "font_song": "SourceHan Serif",
     "api_settings_title": "API Settings",
     "api_key_hint": "Stored locally only",
     "add_numbering": "Add Numbering",
@@ -32,7 +32,10 @@
     "preview": "Preview"
   },
   "msg": {
-    "pdf_loaded": "Pdf loaded, long press and drag to select ToC pages"
+    "pdf_loaded": "Pdf loaded, long press and drag to select ToC pages",
+    "font_loading": "Downloading font resources ({font})...",
+    "font_loaded": "Font {font} loaded successfully!",
+    "font_load_failed": "Font {font} load failed. Using fallback."
   },
   "label": {
     "start": "START",

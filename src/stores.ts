@@ -11,7 +11,7 @@ export type TocConfig = {
   insertAtPage: number; pageOffset: number; firstLevel: StyleConfig;
   otherLevels: StyleConfig;
   prefixSettings: {enabled: boolean; configs: LevelConfig[];};
-  fontFamily?: 'hei' | 'kai' | 'huiwen';
+  fontFamily?: 'hei' | 'song' | 'huiwen';
 };
 
 type TocSession = {

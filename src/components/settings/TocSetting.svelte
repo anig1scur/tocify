@@ -112,14 +112,32 @@
                   {$t('btn.go')}
                 </button>
               </div>
+              <div class="flex gap-2 items-center mt-3 justify-between">
+                <label
+                  class="whitespace-nowrap text-sm"
+                  for="font_family"
+                >
+                  {$t('settings.font_family')}
+                </label>
+                <select
+                  id="font_family"
+                  class="border-2 border-gray-300 rounded px-1 focus:outline-none focus:bg-gray-50 text-sm py-1"
+                  value={config.fontFamily || 'huiwen'}
+                  on:change={(e) => updateField('fontFamily', (e.target as HTMLSelectElement).value)}
+                >
+                  <option value="huiwen">{$t('settings.font_huiwen')}</option>
+                  <option value="hei">{$t('settings.font_hei')}</option>
+                  <option value="song">{$t('settings.font_song')}</option>
+                </select>
+              </div>
               <div class="flex flex-col gap-1 border-t border-gray-200 mt-2 pt-2">
                 <div class="flex justify-between items-center">
                   <label
                     class="text-sm"
-                    for="title_y_start">
-                    {$t('settings.title_y_start')}
-                    </label
+                    for="title_y_start"
                   >
+                    {$t('settings.title_y_start')}
+                  </label>
                 </div>
 
                 <div class="flex items-center gap-2 h-6">
@@ -137,27 +155,6 @@
                   <span class="text-[10px] text-gray-400">Bottom</span>
                 </div>
               </div>
-            </div>
-
-            <div class="border-gray-600 border-2 rounded-md my-2 p-2 w-full">
-               <div class="flex gap-2 items-center justify-between">
-                 <label
-                   class="whitespace-nowrap text-sm"
-                   for="font_family"
-                 >
-                   {$t('settings.font_family')}
-                 </label>
-                 <select
-                   id="font_family"
-                   class="border-2 border-gray-300 rounded px-1 focus:outline-none focus:bg-gray-50 text-sm py-1"
-                   value={config.fontFamily || 'huiwen'}
-                   on:change={(e) => updateField('fontFamily', (e.target as HTMLSelectElement).value)}
-                 >
-                   <option value="huiwen">{$t('settings.font_huiwen')}</option>
-                   <option value="hei">{$t('settings.font_hei')}</option>
-                   <option value="kai">{$t('settings.font_kai')}</option>
-                 </select>
-               </div>
             </div>
 
             <div class="flex flex-col sm-[400px]:flex-row gap-4">
@@ -185,7 +182,7 @@
                   />
                 </div>
                 <div class="border-gray-600 border-2 rounded-md my-3 p-2 w-full flex items-center justify-between">
-                  <label for="first_level_color" >{$t('settings.color')}</label>
+                  <label for="first_level_color">{$t('settings.color')}</label>
                   <input
                     type="color"
                     id="first_level_color"
@@ -195,7 +192,7 @@
                   />
                 </div>
                 <div class="border-gray-600 border-2 rounded-md my-3 p-2 w-full flex items-center justify-between">
-                  <label for="first_level_line_spacing" >{$t('settings.spacing')}</label>
+                  <label for="first_level_line_spacing">{$t('settings.spacing')}</label>
                   <input
                     type="number"
                     step="0.1"
@@ -210,7 +207,7 @@
               <div class="w-full md:w-1/2">
                 <h3 class="my-3 font-bold">{$t('settings.other_levels')}</h3>
 
-                <div class="border-gray-600 border-2 rounded-md my-3 p-2 w-full flex items-center justify-between ">
+                <div class="border-gray-600 border-2 rounded-md my-3 p-2 w-full flex items-center justify-between">
                   <label for="other_levels_font_size">{$t('settings.font_size')}</label>
                   <input
                     type="number"
@@ -231,7 +228,7 @@
                   />
                 </div>
                 <div class="border-gray-600 border-2 rounded-md my-3 p-2 w-full flex items-center justify-between">
-                  <label for="other_levels_color" >{$t('settings.color')}</label>
+                  <label for="other_levels_color">{$t('settings.color')}</label>
                   <input
                     type="color"
                     id="other_levels_color"
@@ -241,7 +238,7 @@
                   />
                 </div>
                 <div class="border-gray-600 border-2 rounded-md my-3 p-2 w-full flex items-center justify-between">
-                  <label for="other_levels_line_spacing" >{$t('settings.spacing')}</label>
+                  <label for="other_levels_line_spacing">{$t('settings.spacing')}</label>
                   <input
                     type="number"
                     step="0.1"
