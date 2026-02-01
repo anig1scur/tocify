@@ -1,0 +1,33 @@
+export const A4_WIDTH = 595.28;
+export const A4_HEIGHT = 841.89;
+
+export const BASE_FONT_SIZE_L1 = 13;
+export const BASE_FONT_SIZE_OTHER = 11;
+
+export const TOC_LAYOUT = {
+  PAGE: {
+    MARGIN_X_RATIO: 40 / A4_WIDTH,
+    MARGIN_BOTTOM_RATIO: 40 / A4_HEIGHT,
+  },
+  TITLE: {
+    FONT_SIZE_RATIO: 23 / A4_WIDTH,
+    MARGIN_BOTTOM_RATIO: 40 / A4_HEIGHT,
+  },
+  ITEM: {
+    LINE_HEIGHT_ADJUST_RATIO: 10 / A4_HEIGHT,
+    INDENT_PER_LEVEL_RATIO: 20 / A4_WIDTH,
+    PAGE_NUM_WIDTH_PAD_RATIO: 40 / A4_WIDTH,
+    ANNOT_Y_PADDING: 2,
+    DOT_LEADER: {
+      GAP_TITLE: 5,
+      RIGHT_PAD_RATIO: 15 / A4_WIDTH,
+      SPACING_STEP: 5,
+      SIZE_RATIO: 0.8,
+      RESERVE_COUNT: 2,
+    },
+    RIGHT_PAD_RATIO: 100 / A4_WIDTH,
+    DEFAULT_TITLE_Y_RATIO: 1 / 3,
+  },
+};
+
+export const CJK_REGEX = /[\u4e00-\u9fa5]/;

@@ -25,7 +25,7 @@ export const dragDisabled = writable(true);
 export const tocItems = writable<any[]>([]);
 export const curFileFingerprint = writable<string>('');
 export const pdfService = writable(new PDFService());
-export const tocConfig = writable({
+export const tocConfig = writable<TocConfig>({
   prefixSettings: {
     enabled: false,
     configs: DEFAULT_PREFIX_CONFIG,
@@ -50,66 +50,70 @@ export const tocConfig = writable({
 export const autoSaveEnabled = writable(true);
 
 if (browser) {
+  let saveTimer: ReturnType<typeof setTimeout>;
   const saveSession = () => {
     if (!get(autoSaveEnabled)) return;
 
-    const fingerprint = get(curFileFingerprint);
-    const items = get(tocItems);
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      const fingerprint = get(curFileFingerprint);
+      const items = get(tocItems);
 
-    if (fingerprint) {
-      if (items.length > 0) {
-        const config = get(tocConfig);
-        const session: TocSession = {
-          items,
-          pageOffset: config.pageOffset,
-          updatedAt: Date.now(),
-        };
-        try {
-          localStorage.setItem(`toc_draft_${ fingerprint }`, JSON.stringify(session));
-        } catch (e: any) {
-          if (e.name === 'QuotaExceededError' || e.code === 22 || e.code === 1014) {
-            // Storage full, try to clear old drafts
-            try {
-              const drafts: { key: string; date: number }[] = [];
-              for (let i = 0;i < localStorage.length;i++) {
-                const key = localStorage.key(i);
-                if (key && key.startsWith('toc_draft_') && key !== `toc_draft_${ fingerprint }`) {
-                  try {
-                    const val = JSON.parse(localStorage.getItem(key) || '{}');
-                    drafts.push({ key, date: val.updatedAt || 0 });
-                  } catch {
-                    drafts.push({ key, date: 0 });
+      if (fingerprint) {
+        if (items.length > 0) {
+          const config = get(tocConfig);
+          const session: TocSession = {
+            items,
+            pageOffset: config.pageOffset,
+            updatedAt: Date.now(),
+          };
+          try {
+            localStorage.setItem(`toc_draft_${ fingerprint }`, JSON.stringify(session));
+          } catch (e: any) {
+            if (e.name === 'QuotaExceededError' || e.code === 22 || e.code === 1014) {
+              // Storage full, try to clear old drafts
+              try {
+                const drafts: { key: string; date: number }[] = [];
+                for (let i = 0;i < localStorage.length;i++) {
+                  const key = localStorage.key(i);
+                  if (key && key.startsWith('toc_draft_') && key !== `toc_draft_${ fingerprint }`) {
+                    try {
+                      const val = JSON.parse(localStorage.getItem(key) || '{}');
+                      drafts.push({ key, date: val.updatedAt || 0 });
+                    } catch {
+                      drafts.push({ key, date: 0 });
+                    }
                   }
                 }
-              }
 
-              // Sort by oldest first
-              drafts.sort((a, b) => a.date - b.date);
+                // Sort by oldest first
+                drafts.sort((a, b) => a.date - b.date);
 
-              // Delete oldest until we have space or no more drafts
-              while (drafts.length > 0) {
-                const toDelete = drafts.shift();
-                if (toDelete) localStorage.removeItem(toDelete.key);
+                // Delete oldest until we have space or no more drafts
+                while (drafts.length > 0) {
+                  const toDelete = drafts.shift();
+                  if (toDelete) localStorage.removeItem(toDelete.key);
 
-                try {
-                  localStorage.setItem(`toc_draft_${ fingerprint }`, JSON.stringify(session));
-                  // If success, break loop
-                  return;
-                } catch (retryErr) {
-                  // Still full, continue deleting
+                  try {
+                    localStorage.setItem(`toc_draft_${ fingerprint }`, JSON.stringify(session));
+                    // If success, break loop
+                    return;
+                  } catch (retryErr) {
+                    // Still full, continue deleting
+                  }
                 }
+              } catch (cleanupErr) {
+                console.error('Failed to cleanup storage:', cleanupErr);
               }
-            } catch (cleanupErr) {
-              console.error('Failed to cleanup storage:', cleanupErr);
             }
+            console.error('Failed to save session:', e);
           }
-          console.error('Failed to save session:', e);
+        } else {
+          // Clear storage if items are empty
+          localStorage.removeItem(`toc_draft_${ fingerprint }`);
         }
-      } else {
-        // Clear storage if items are empty
-        localStorage.removeItem(`toc_draft_${ fingerprint }`);
       }
-    }
+    }, 1000); // 1s debounce
   };
 
   tocItems.subscribe(saveSession);

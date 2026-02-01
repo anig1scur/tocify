@@ -125,14 +125,14 @@
     if (originalPdfInstance) {
       try {
         await originalPdfInstance.destroy();
-      } catch (e) {
+      } catch (e: any) {
         console.warn('Error destroying original instance:', e);
       }
     }
     if (previewPdfInstance && previewPdfInstance !== originalPdfInstance) {
       try {
         await previewPdfInstance.destroy();
-      } catch (e) {
+      } catch (e: any) {
         console.warn('Error destroying preview instance:', e);
       }
     }
@@ -209,7 +209,7 @@
     }
   }
 
-  const debouncedUpdatePDF = debounce(updatePDF, 300);
+  const debouncedUpdatePDF = debounce(updatePDF, 400);
 
   const toggleShowInsertTocHint = () => {
     if (!hasShownTocHint && addPhysicalTocPage && $tocItems.length > 0) {
@@ -248,7 +248,7 @@
       const [pdfjsModule, PdfLibModule] = await Promise.all([import('pdfjs-dist'), import('pdf-lib')]);
       pdfjs = pdfjsModule;
       PdfLib = PdfLibModule;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to load PDF libraries:', error);
       toastProps = {
         show: true,
@@ -364,7 +364,7 @@
         pdfState.instance = originalPdfInstance;
       }
       updateViewerInstance();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating PDF:', error);
       const msg =
         error.name === 'InvalidPDFException'
@@ -392,7 +392,7 @@
         isPreviewMode = true;
         toggleShowInsertTocHint();
         await tick();
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error generating preview:', error);
         toastProps = {show: true, message: `Error generating preview: ${error.message}`, type: 'error'};
         isPreviewMode = false;
@@ -456,14 +456,14 @@
     if (originalPdfInstance) {
       try {
         await originalPdfInstance.destroy();
-      } catch (e) {
+      } catch (e: any) {
         console.warn('Error destroying original instance:', e);
       }
     }
     if (previewPdfInstance && previewPdfInstance !== originalPdfInstance) {
       try {
         await previewPdfInstance.destroy();
-      } catch (e) {
+      } catch (e: any) {
         console.warn('Error destroying preview instance:', e);
       }
     }
@@ -541,7 +541,7 @@
             tocItems.set([]);
             updateTocField('pageOffset', 0);
           }
-        } catch (err) {
+        } catch (err: any) {
           console.warn('PDF load outline error:', err);
           tocItems.set([]);
           updateTocField('pageOffset', 0);
@@ -560,7 +560,7 @@
           activeRangeIndex = 0;
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading PDF:', error);
       toastProps = {show: true, message: `Error loading PDF: ${error.message}`, type: 'error'};
     } finally {
@@ -587,7 +587,7 @@
 
       if (isSupported) {
         try {
-          fileHandle = await window.showSaveFilePicker({
+          fileHandle = await (window as any).showSaveFilePicker({
             suggestedName: pdfState.filename.replace('.pdf', '_outlined.pdf'),
             types: [
               {
@@ -596,7 +596,7 @@
               },
             ],
           });
-        } catch (err) {
+        } catch (err: any) {
           if (err.name === 'AbortError') return;
           throw err;
         }
@@ -616,7 +616,7 @@
         await writable.write(pdfBytes);
         await writable.close();
       } else {
-        const pdfBlob = new Blob([pdfBytes], {type: 'application/pdf'});
+        const pdfBlob = new Blob([pdfBytes as any], {type: 'application/pdf'});
         const url = URL.createObjectURL(pdfBlob);
         const link = document.createElement('a');
         link.href = url;
@@ -634,7 +634,7 @@
           showStarRequestModal = true;
         }
       }, 1000);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error exporting PDF:', error);
       toastProps = {show: true, message: `Error exporting PDF: ${error.message}`, type: 'error'};
     }
@@ -676,7 +676,7 @@
         tocItems.set(nestedTocItems);
         pendingTocItems = [];
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error generating ToC from AI:', error);
       aiError = error.message;
       toastProps = {show: true, message: error.message, type: 'error'};

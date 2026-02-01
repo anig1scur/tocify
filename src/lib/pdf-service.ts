@@ -1,44 +1,9 @@
-import {browser} from '$app/environment';
+import { browser } from '$app/environment';
+import { PDFDocument } from 'pdf-lib';
 import fontkit from 'pdf-fontkit';
-import {PDFDocument, type PDFFont, PDFName, type PDFPage, rgb, StandardFonts} from 'pdf-lib';
 import * as pdfjsLib from 'pdfjs-dist';
-
-const CJK_REGEX = /[\u4e00-\u9fa5]/;
-
-import {type TocConfig} from '../stores';
-
-// A4 Standards
-const A4_WIDTH = 595.28;
-const A4_HEIGHT = 841.89;
-
-const BASE_FONT_SIZE_L1 = 12;
-const BASE_FONT_SIZE_OTHER = 10;
-
-const TOC_LAYOUT = {
-  PAGE: {
-    MARGIN_X_RATIO: 40 / A4_WIDTH,
-    MARGIN_BOTTOM_RATIO: 40 / A4_HEIGHT,
-  },
-  TITLE: {
-    FONT_SIZE_RATIO: 23 / A4_WIDTH,
-    MARGIN_BOTTOM_RATIO: 40 / A4_HEIGHT,
-  },
-  ITEM: {
-    LINE_HEIGHT_ADJUST_RATIO: 10 / A4_HEIGHT,
-    INDENT_PER_LEVEL_RATIO: 20 / A4_WIDTH,
-    PAGE_NUM_WIDTH_PAD_RATIO: 40 / A4_WIDTH,
-    ANNOT_Y_PADDING: 2,
-    DOT_LEADER: {
-      GAP_TITLE: 5,
-      RIGHT_PAD_RATIO: 15 / A4_WIDTH,
-      SPACING_STEP: 5,
-      SIZE_RATIO: 0.8,
-      RESERVE_COUNT: 2,
-    },
-    RIGHT_PAD_RATIO: 100 / A4_WIDTH,
-    DEFAULT_TITLE_Y_RATIO: 1 / 3,
-  },
-};
+import { type TocConfig } from '../stores';
+import { A4_WIDTH, BASE_FONT_SIZE_L1, BASE_FONT_SIZE_OTHER } from './constants';
 
 export interface TocItem {
   id: string;
@@ -46,45 +11,28 @@ export interface TocItem {
   to: number;
   children: TocItem[];
   open?: boolean;
+  level?: number;
 }
 
 export interface PDFState {
-  doc: PDFDocument|null;
-  newDoc: PDFDocument|null;
-  instance: pdfjsLib.PDFDocumentProxy|null;
+  doc: PDFDocument | null;
+  newDoc: PDFDocument | null;
+  instance: pdfjsLib.PDFDocumentProxy | null;
   filename: string;
   currentPage: number;
   totalPages: number;
   scale: number;
 }
 
-interface TocRenderContext {
-  doc: PDFDocument;
-  regularFont: PDFFont;
-  boldFont: PDFFont;
-  pageWidth: number;
-  pageHeight: number;
-  config: TocConfig;
-  pendingAnnots: PendingAnnot[];
-  insertionStartIndex: number;
-  currentTocPageIndex: {value: number};
-}
-
-interface PendingAnnot {
-  tocPage: PDFPage;
-  rect: number[];
-  targetPageNum: number;
-}
-
 if (typeof Promise.withResolvers === 'undefined') {
   // @ts-ignore
-  Promise.withResolvers = function() {
+  Promise.withResolvers = function () {
     let resolve, reject;
     const promise = new Promise((res, rej) => {
       resolve = res;
       reject = rej;
     });
-    return {promise, resolve, reject};
+    return { promise, resolve, reject };
   };
 }
 
@@ -95,6 +43,7 @@ if (browser) {
 export class PDFService {
   static sharedWorker = new pdfjsLib.PDFWorker();
 
+  // Font Cache (Main Thread)
   static regularFontBytes: Map<string, ArrayBuffer> = new Map();
   static boldFontBytes: Map<string, ArrayBuffer> = new Map();
   static fontLoadingPromises: Map<string, Promise<void>> = new Map();
@@ -116,89 +65,134 @@ export class PDFService {
 
   static sanitizePdfMetadata(doc: PDFDocument) {
     try {
-      // Try accessing dates to see if they throw
       doc.getCreationDate();
-    } catch (e) {
+    } catch (e: any) {
       console.warn('Invalid CreationDate in PDF metadata, resetting to current date.');
       doc.setCreationDate(new Date());
     }
 
     try {
       doc.getModificationDate();
-    } catch (e) {
+    } catch (e: any) {
       console.warn('Invalid ModificationDate in PDF metadata, resetting to current date.');
       doc.setModificationDate(new Date());
     }
   }
 
-  private sourceDoc: PDFDocument|null = null;
+  private worker: Worker | null = null;
+  private workerCallbacks: Map<string, { resolve: Function, reject: Function }> = new Map();
+  private workerLoadedFonts: Set<string> = new Set();
 
-  constructor() {
+  constructor () {
     if (browser && !PDFService.sharedWorker) {
       PDFService.sharedWorker = new pdfjsLib.PDFWorker();
+    }
+    // Initialize Worker
+    if (browser) {
+      this.initWorker();
     }
     this.loadFonts('huiwen');
   }
 
-  async loadFonts(family: string = 'huiwen') {
-    if (!browser) return;
-    if (PDFService.regularFontBytes.has(family) && PDFService.boldFontBytes.has(family)) return;
-
-    if (PDFService.fontLoadingPromises.has(family)) {
-      return PDFService.fontLoadingPromises.get(family);
-    }
-
-    const promise = (async () => {
-      try {
-        const urls = PDFService.FONT_URLS[family as keyof typeof PDFService.FONT_URLS];
-        if (!urls) {
-          // Fallback to minimal set or huiwen if unknown, but better to just error or standard
-          console.warn(`Unknown font family: ${ family }, falling back to huiwen`);
-          await this.loadFonts('huiwen');
-          return;
-        }
-
-        const uniqueUrls = new Set([urls.regular, urls.bold]);
-        const urlToBuffer = new Map<string, ArrayBuffer>();
-
-        await Promise.all(Array.from(uniqueUrls).map(async (url) => {
-          try {
-            const res = await fetch(url);
-            if (!res.ok) throw new Error(`Failed to load ${ url }`);
-            const buffer = await res.arrayBuffer();
-            urlToBuffer.set(url, buffer);
-          } catch (e) {
-            console.error(`Error loading font from ${ url }`, e);
-            throw e;
-          }
-        }));
-
-        const regular = urlToBuffer.get(urls.regular);
-        const bold = urlToBuffer.get(urls.bold);
-
-        if (regular && bold) {
-          PDFService.regularFontBytes.set(family, regular);
-          PDFService.boldFontBytes.set(family, bold);
+  private initWorker() {
+    this.worker = new Worker(new URL('./workers/pdf.worker.ts', import.meta.url), { type: 'module' });
+    this.worker.onmessage = (e) => {
+      const { type, id, payload, error } = e.data;
+      if (this.workerCallbacks.has(id)) {
+        const { resolve, reject } = this.workerCallbacks.get(id)!;
+        if (type === 'ERROR') {
+          reject(new Error(error));
         } else {
-          throw new Error(`Failed to load fonts for ${ family }`);
+          resolve(payload);
         }
-
-      } catch (e) {
-        console.error(`Failed to load fonts for ${ family }, fallback to standard`, e);
-      } finally {
-        PDFService.fontLoadingPromises.delete(family);
+        this.workerCallbacks.delete(id);
       }
-    })();
+    };
+  }
 
-    PDFService.fontLoadingPromises.set(family, promise);
+  private postWorkerMessage(type: string, payload: any, transfer: Transferable[] = []): Promise<any> {
+    if (!this.worker) throw new Error('Worker not initialized');
+    const id = Date.now().toString() + Math.random();
+    const { promise, resolve, reject } = Promise.withResolvers();
+    this.workerCallbacks.set(id, { resolve, reject });
+    this.worker.postMessage({ type, id, payload }, transfer);
     return promise;
   }
 
+  async loadFonts(family: string = 'huiwen') {
+    if (!browser) return;
+
+    // 1. Ensure bytes are in Main Thread Static Cache
+    if (!PDFService.regularFontBytes.has(family) || !PDFService.boldFontBytes.has(family)) {
+
+      if (PDFService.fontLoadingPromises.has(family)) {
+        await PDFService.fontLoadingPromises.get(family);
+      } else {
+        const promise = (async () => {
+          try {
+            const urls = PDFService.FONT_URLS[family as keyof typeof PDFService.FONT_URLS];
+            if (!urls) {
+              console.warn(`Unknown font family: ${ family }, falling back to huiwen`);
+              await this.loadFonts('huiwen');
+              return;
+            }
+
+            const uniqueUrls = new Set([urls.regular, urls.bold]);
+            const urlToBuffer = new Map<string, ArrayBuffer>();
+
+            await Promise.all(Array.from(uniqueUrls).map(async (url) => {
+              const res = await fetch(url);
+              if (!res.ok) throw new Error(`Failed to load ${ url }`);
+              const buffer = await res.arrayBuffer();
+              urlToBuffer.set(url, buffer);
+            }));
+
+            const regular = urlToBuffer.get(urls.regular);
+            const bold = urlToBuffer.get(urls.bold);
+
+            if (regular && bold) {
+              PDFService.regularFontBytes.set(family, regular);
+              PDFService.boldFontBytes.set(family, bold);
+            }
+          } catch (e) {
+            console.error(`Failed to load fonts for ${ family }`, e);
+            throw e;
+          } finally {
+            PDFService.fontLoadingPromises.delete(family);
+          }
+        })();
+
+        PDFService.fontLoadingPromises.set(family, promise);
+        await promise;
+      }
+    }
+
+    // 2. Ensure bytes are sent to Current Worker
+    if (this.worker && !this.workerLoadedFonts.has(family)) {
+      if (PDFService.regularFontBytes.has(family) && PDFService.boldFontBytes.has(family)) {
+        const regular = PDFService.regularFontBytes.get(family)!;
+        const bold = PDFService.boldFontBytes.get(family)!;
+
+        await this.postWorkerMessage('LOAD_FONTS', {
+          family,
+          regular: regular.slice(0), // copy
+          bold: bold.slice(0) // copy
+        });
+        this.workerLoadedFonts.add(family);
+      }
+    }
+  }
+
   async initPreview(sourceDoc: PDFDocument) {
-    // We don't strictly need to load fonts here as they are loaded on demand,
-    // but preloading default is good.
+    if (!this.worker) return;
+    const bytes = await sourceDoc.save();
+    // Use transfer to avoid copy? Valid if we don't need bytes here anymore.
+    // But sourceDoc is still used? sourceDoc is passed in.
+    // We copy bytes to worker.
+    await this.postWorkerMessage('INIT', { pdfBytes: bytes });
+
+    // Ensure default fonts loaded
     await this.loadFonts('huiwen');
-    this.sourceDoc = sourceDoc;
   }
 
   static getAutoLayout(pageWidth: number) {
@@ -212,308 +206,31 @@ export class PDFService {
   }
 
   async updateTocPages(
-      items: TocItem[], config: TocConfig, insertAtPage: number = 2):
-      Promise<{newDoc: PDFDocument; tocPageCount: number}> {
-    if (!this.sourceDoc) {
-      throw new Error(
-          'Source document not initialized. Call initPreview() first.');
-    }
+    items: TocItem[], config: TocConfig, insertAtPage: number = 2):
+    Promise<{ newDoc: PDFDocument; tocPageCount: number }> {
 
-    const doc = await PDFDocument.create();
-    doc.registerFontkit(fontkit);
-
-    let regularFont: PDFFont;
-    let boldFont: PDFFont;
-
+    // Ensure fonts are loaded in worker
     const fontKey = config.fontFamily || 'huiwen';
-
-    // Ensure fonts are loaded (idempotent if already loaded)
     await this.loadFonts(fontKey);
 
-    if (PDFService.regularFontBytes.has(fontKey) && PDFService.boldFontBytes.has(fontKey)) {
-      regularFont =
-        await doc.embedFont(PDFService.regularFontBytes.get(fontKey)!, { subset: true });
-      boldFont = await doc.embedFont(PDFService.boldFontBytes.get(fontKey)!, { subset: true });
-    } else {
-      // Fallback to StandardFonts as a safety net if loading failed
-      console.warn(`Font ${ fontKey } not loaded, falling back to standard fonts`);
-      regularFont = await doc.embedFont(StandardFonts.Helvetica);
-      boldFont = await doc.embedFont(StandardFonts.HelveticaBold);
-    }
+    const result = await this.postWorkerMessage('GENERATE', { items, config });
+    const { pdfBytes, tocPageCount } = result;
 
-    const allIndices = this.sourceDoc.getPageIndices();
-    const copiedPages = await doc.copyPages(this.sourceDoc, allIndices);
-    copiedPages.forEach((page) => doc.addPage(page));
+    const newDoc = await PDFDocument.load(pdfBytes);
+    newDoc.registerFontkit(fontkit); // Register fontkit on main thread instance too if needed (maybe not if just saving?)
 
-    const insertionStartIndex =
-        Math.max(0, Math.min(insertAtPage - 1, allIndices.length));
-
-    const sizeRefPage = doc.getPage(1) || doc.getPage(0);
-    const {width, height} = sizeRefPage.getSize();
-
-    const pendingAnnots: PendingAnnot[] = [];
-    const currentTocPageIndex = {value: 0};
-
-    const firstTocPage = doc.insertPage(
-        insertionStartIndex + currentTocPageIndex.value, [width, height]);
-    currentTocPageIndex.value++;
-
-    const marginX = width * TOC_LAYOUT.PAGE.MARGIN_X_RATIO;
-    const titleMarginBottom = height * TOC_LAYOUT.TITLE.MARGIN_BOTTOM_RATIO;
-    const titleFontSize = width * TOC_LAYOUT.TITLE.FONT_SIZE_RATIO;
-
-    const titleYRatio =
-        typeof config.titleYStart === 'number' ? config.titleYStart : TOC_LAYOUT.ITEM.DEFAULT_TITLE_Y_RATIO;
-    let yOffset = height * (1 - titleYRatio);
-    const titleText = items.some(i => CJK_REGEX.test(i.title)) ?
-        '目录' :
-        'Table of Contents';
-
-    firstTocPage.drawText(titleText, {
-      x: marginX,
-      y: yOffset,
-      size: titleFontSize,
-      font: boldFont,
-      color: rgb(0, 0, 0),
-    });
-
-    yOffset -= titleMarginBottom;
-
-    const renderContext: TocRenderContext = {
-      doc,
-      regularFont,
-      boldFont,
-      pageWidth: width,
-      pageHeight: height,
-      config,
-      pendingAnnots,
-      insertionStartIndex,
-      currentTocPageIndex
-    };
-
-    await this.drawTocItems(firstTocPage, items, 0, yOffset, renderContext);
-
-    const tocPageCount = currentTocPageIndex.value;
-
-    this.applyLinkAnnotations(
-        doc, pendingAnnots, insertionStartIndex, tocPageCount);
-
-    return {newDoc: doc, tocPageCount};
+    // We return newDoc as PDFDocument because +page.svelte expects it.
+    // This involves de-serialization (PDFDocument.load). 
+    // This part is ON MAIN THREAD. 
+    // Loading a PDF is faster than generating it, but for very large PDFs, this step might still be noticeable.
+    // However, the *generation* and *copying* happened in worker.
+    return { newDoc, tocPageCount };
   }
 
-  private async drawTocItems(
-      currentPage: PDFPage, items: TocItem[], level: number, startY: number,
-      ctx: TocRenderContext): Promise<{currentPage: PDFPage; yOffset: number}> {
-    let yOffset = startY;
-    let currentWorkingPage = currentPage;
-
-    const {
-      doc,
-      regularFont,
-      boldFont,
-      pageWidth,
-      pageHeight,
-      config,
-      pendingAnnots,
-      insertionStartIndex,
-      currentTocPageIndex
-    } = ctx;
-
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-
-      const isFirstLevel = level === 0;
-      const levelConfig = isFirstLevel ? config.firstLevel : config.otherLevels;
-      const {fontSize, dotLeader, color, lineSpacing} = levelConfig;
-
-      const parsedColor =
-          rgb(parseInt(color.slice(1, 3), 16) / 255,
-              parseInt(color.slice(3, 5), 16) / 255,
-              parseInt(color.slice(5, 7), 16) / 255);
-
-      const indentPerLevel = pageWidth * TOC_LAYOUT.ITEM.INDENT_PER_LEVEL_RATIO;
-      const indentation = level * indentPerLevel;
-      const lineHeight = fontSize * lineSpacing;
-      const title = `${item.title}`.trim();
-
-      const marginX = pageWidth * TOC_LAYOUT.PAGE.MARGIN_X_RATIO;
-      const titleX = marginX + indentation;
-      const rightPad = pageWidth * TOC_LAYOUT.ITEM.RIGHT_PAD_RATIO;
-      const maxWidth = pageWidth - rightPad - indentation;
-      const currentFont = isFirstLevel ? boldFont : regularFont;
-
-      const lines = this.splitTextIntoLines(title, fontSize, currentFont, maxWidth);
-      const totalHeadingHeight = lines.length * lineHeight;
-
-      // 换页检查
-      const marginBottom = pageHeight * TOC_LAYOUT.PAGE.MARGIN_BOTTOM_RATIO;
-      if (yOffset - totalHeadingHeight < marginBottom) {
-        currentWorkingPage = doc.insertPage(
-          insertionStartIndex + currentTocPageIndex.value,
-          [pageWidth, pageHeight]);
-        currentTocPageIndex.value++;
-        yOffset = pageHeight - marginBottom - lineHeight;
-      }
-
-      if (isFirstLevel) {
-        yOffset -= (pageHeight * TOC_LAYOUT.ITEM.LINE_HEIGHT_ADJUST_RATIO);
-      }
-
-      const startYAnnot = yOffset + fontSize;
-
-      // 绘制标题每一行
-      for (let j = 0;j < lines.length;j++) {
-        currentWorkingPage.drawText(lines[j], {
-          x: titleX,
-          y: yOffset,
-          size: fontSize,
-          font: currentFont,
-          color: parsedColor,
-        });
-        if (j < lines.length - 1) {
-          yOffset -= lineHeight;
-        }
-      }
-
-      // 绘制页码
-      const pageNumText = String(item.to);
-      const pageNumWidth = currentFont.widthOfTextAtSize(pageNumText, fontSize);
-      const pageNumPad = pageWidth * TOC_LAYOUT.ITEM.PAGE_NUM_WIDTH_PAD_RATIO;
-      const pageNumX =
-        pageWidth - pageNumPad - pageNumWidth;
-
-      currentWorkingPage.drawText(pageNumText, {
-        x: pageNumX,
-        y: yOffset,
-        size: fontSize,
-        font: currentFont,
-        color: parsedColor,
-      });
-
-      // 绘制点线 (Dot Leader)
-      if (dotLeader) {
-        const lastLineTitle = lines[lines.length - 1];
-        const titleWidth = currentFont.widthOfTextAtSize(lastLineTitle || '', fontSize);
-        const dotsXStart =
-            titleX + titleWidth + TOC_LAYOUT.ITEM.DOT_LEADER.GAP_TITLE;
-
-        const dotsRightPad = pageWidth * TOC_LAYOUT.ITEM.DOT_LEADER.RIGHT_PAD_RATIO;
-        const dotsXEnd = pageWidth - marginX -
-          dotsRightPad;
-        const maxDotsWidth = dotsXEnd - dotsXStart;
-
-        if (maxDotsWidth > 0) {
-          const dotSize = fontSize * TOC_LAYOUT.ITEM.DOT_LEADER.SIZE_RATIO;
-          const step = TOC_LAYOUT.ITEM.DOT_LEADER.SPACING_STEP;
-          const count = Math.floor(maxDotsWidth / step);
-
-          if (count > 0) {
-            const oneDotWidth = regularFont.widthOfTextAtSize('.', dotSize);
-            const numDots = Math.floor(maxDotsWidth / oneDotWidth);
-            const finalDots = '.'.repeat(Math.max(0, numDots - TOC_LAYOUT.ITEM.DOT_LEADER.RESERVE_COUNT));
-
-            currentWorkingPage.drawText(finalDots, {
-              x: dotsXStart,
-              y: yOffset,
-              size: dotSize,
-              font: regularFont,
-              color: parsedColor,
-            });
-          }
-        }
-      }
-
-      // 记录链接区域
-      const annotRect = [
-        titleX,
-        yOffset - TOC_LAYOUT.ITEM.ANNOT_Y_PADDING,
-        pageWidth - marginX,
-        startYAnnot,
-      ];
-
-      pendingAnnots.push({
-        tocPage: currentWorkingPage,
-        rect: annotRect,
-        targetPageNum: item.to + (config.pageOffset ?? 0),
-      });
-
-      yOffset -= lineHeight;
-
-      // 递归渲染子项
-      if (item.children?.length) {
-        const childResult = await this.drawTocItems(
-            currentWorkingPage, item.children, level + 1, yOffset, ctx);
-        currentWorkingPage = childResult.currentPage;
-        yOffset = childResult.yOffset;
-      }
-    }
-
-    return {currentPage: currentWorkingPage, yOffset};
-  }
-
-  private splitTextIntoLines(
-    text: string, size: number, font: PDFFont, maxWidth: number): string[] {
-    const lines: string[] = [];
-    const words = text.split('');
-    let currentLine = '';
-
-    for (const char of words) {
-      const testLine = currentLine + char;
-      const width = font.widthOfTextAtSize(testLine || '', size);
-      if (width > maxWidth && currentLine !== '') {
-        lines.push(currentLine);
-        currentLine = char;
-      } else {
-        currentLine = testLine;
-      }
-    }
-    if (currentLine !== '') {
-      lines.push(currentLine);
-    }
-    return lines;
-  }
-
-  private applyLinkAnnotations(
-      doc: PDFDocument, pendingAnnots: PendingAnnot[],
-      insertionStartIndex: number, tocPageCount: number) {
-    const allPages = doc.getPages();
-    const totalPages = allPages.length;
-
-    for (const pa of pendingAnnots) {
-      const originalTargetPageNum = pa.targetPageNum;
-      const originalTargetIndex = originalTargetPageNum - 1;
-
-      let finalTargetIndex: number;
-
-      if (originalTargetIndex < insertionStartIndex) {
-        finalTargetIndex = originalTargetIndex;
-      } else {
-        finalTargetIndex = originalTargetIndex + tocPageCount;
-      }
-
-      const boundedIndex =
-          Math.min(Math.max(0, finalTargetIndex), totalPages - 1);
-      const targetPage = allPages[boundedIndex];
-
-      const ref = doc.context.register(doc.context.obj({
-        Type: 'Annot',
-        Subtype: 'Link',
-        Rect: pa.rect,
-        Border: [0, 0, 0],
-        Dest: [targetPage.ref, 'Fit'],
-      }));
-
-      const existingAnnots = pa.tocPage.node.get(PDFName.of('Annots'));
-      if (existingAnnots) {
-        existingAnnots.push(ref);
-      } else {
-        pa.tocPage.node.set(PDFName.of('Annots'), doc.context.obj([ref]));
-      }
-    }
-  }
+  // ... (Rendering logic remains local as it uses Canvas/PDFJS) ...
 
   async renderPage(
-      pdf: pdfjsLib.PDFDocumentProxy, pageNum: number, scale: number = 1.0) {
+    pdf: pdfjsLib.PDFDocumentProxy, pageNum: number, scale: number = 1.0) {
     if (!pdf) return;
     const canvas = document.getElementById('pdf-canvas') as HTMLCanvasElement;
     if (!canvas) {
@@ -522,7 +239,7 @@ export class PDFService {
 
     try {
       const page = await pdf.getPage(pageNum);
-      const viewport = page.getViewport({scale});
+      const viewport = page.getViewport({ scale });
 
       canvas.height = viewport.height;
       canvas.width = viewport.width;
@@ -531,20 +248,20 @@ export class PDFService {
       if (!context) return;
 
       const renderTask = page.render({
-            canvasContext: context,
-            viewport,
+        canvasContext: context,
+        viewport,
       });
 
       await renderTask.promise.then(() => page.cleanup()).catch(() => page.cleanup());
-    } catch (e) {
-      console.error(`Error rendering page ${pageNum}:`, e);
+    } catch (e: any) {
+      console.error(`Error rendering page ${ pageNum }:`, e);
     }
   }
 
   private static canvasRenderTasks = new WeakMap<HTMLCanvasElement, pdfjsLib.RenderTask>();
 
   async renderPageToCanvas(
-      pdfDoc: pdfjsLib.PDFDocumentProxy, pageNumber: number,
+    pdfDoc: pdfjsLib.PDFDocumentProxy, pageNumber: number,
     canvas: HTMLCanvasElement, width: number): Promise<pdfjsLib.RenderTask | undefined> {
 
     const existingTask = PDFService.canvasRenderTasks.get(canvas);
@@ -552,15 +269,15 @@ export class PDFService {
       try {
         existingTask.cancel();
         await existingTask.promise.catch(() => { });
-      } catch (e) {
+      } catch (e: any) {
       }
       PDFService.canvasRenderTasks.delete(canvas);
     }
 
     const page = await pdfDoc.getPage(pageNumber);
-    const viewport = page.getViewport({scale: 1.0});
+    const viewport = page.getViewport({ scale: 1.0 });
     const scale = width / viewport.width;
-    const scaledViewport = page.getViewport({scale});
+    const scaledViewport = page.getViewport({ scale });
 
     canvas.width = scaledViewport.width;
     canvas.height = scaledViewport.height;
@@ -594,11 +311,11 @@ export class PDFService {
 
 
   async getPageAsImage(
-      pdf: any, pageNum: number, targetScale: number = 1.5,
-      maxDimension: number = 2048): Promise<string> {
+    pdf: any, pageNum: number, targetScale: number = 1.5,
+    maxDimension: number = 2048): Promise<string> {
     const page = await pdf.getPage(pageNum);
 
-    let viewport = page.getViewport({scale: targetScale});
+    let viewport = page.getViewport({ scale: targetScale });
 
     const maxSide = Math.max(viewport.width, viewport.height);
 
@@ -606,9 +323,8 @@ export class PDFService {
       const adjustmentRatio = maxDimension / maxSide;
       const finalScale = targetScale * adjustmentRatio;
 
-      viewport = page.getViewport({scale: finalScale});
-      console.log(`Page ${pageNum} too large (${maxSide}px). Downscaling to ${
-          finalScale.toFixed(2)}x`);
+      viewport = page.getViewport({ scale: finalScale });
+      console.log(`Page ${ pageNum } too large (${ maxSide }px). Downscaling to ${ finalScale.toFixed(2) }x`);
     }
 
     const canvas = document.createElement('canvas');
@@ -619,8 +335,8 @@ export class PDFService {
     if (!context) throw new Error('Could not create 2D context');
 
     const renderTask = page.render({
-          canvasContext: context,
-          viewport,
+      canvasContext: context,
+      viewport,
     });
 
     await renderTask.promise.then(() => page.cleanup()).catch(() => page.cleanup());
@@ -630,38 +346,19 @@ export class PDFService {
 
   /**
    * Automatically detect potential TOC pages in the PDF.
-   * Scans first 20 pages for keywords and patterns.
+   * Delegates to worker which scans first 20 pages.
    */
-  async detectTocPages(pdf: pdfjsLib.PDFDocumentProxy): Promise<number[]> {
-    const maxScanPages = Math.min(20, pdf.numPages);
-    const tocKeywords = ['contents', 'table of contents', '目录', '目次'];
-    const detectedPages: number[] = [];
-
-    for (let pageNum = 1;pageNum <= maxScanPages;pageNum++) {
-      const page = await pdf.getPage(pageNum);
-      const content = await page.getTextContent();
-      const text = content.items
-        .map((item: any) => item.str)
-        .join(' ')
-        .toLowerCase();
-
-      const hasKeyword = tocKeywords.some(keyword => text.includes(keyword));
-
-      let patternMatches = 0;
-      const lines = content.items.map((item: any) => item.str.trim()).filter(s => s.length > 0);
-
-      for (const line of lines) {
-        if (/.*\s+(\.{3,}|_{3,}|-{3,})\s*\d+$/.test(line) || /.*\s+\d+$/.test(line)) {
-          patternMatches++;
-        }
-      }
-      if (hasKeyword || patternMatches >= 5) {
-        detectedPages.push(pageNum);
-      }
-
-      page.cleanup();
+  async detectTocPages(pdf?: any): Promise<number[]> {
+    if (!this.worker) return [];
+    // We don't use the passed 'pdf' (PDFDocumentProxy) because the worker operates on the initialized bytes.
+    // Ensure initPreview was called or INIT matching these bytes happened. 
+    // In +page.svelte, initPreview is called right after load, then detectTocPages.
+    try {
+      const detected = await this.postWorkerMessage('DETECT_TOC', {});
+      return detected as number[];
+    } catch (e) {
+      console.warn('Worker detection failed, returning empty:', e);
+      return [];
     }
-
-    return detectedPages;
   }
 }
