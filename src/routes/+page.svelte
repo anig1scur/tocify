@@ -100,15 +100,17 @@
   };
 
   onMount(() => {
-    $pdfService = new PDFService();
-  });
-
-  onMount(() => {
     trackEvent('app_started', {
       platform: 'web',
       version: '1.0.0',
     });
+  });
 
+  onMount(() => {
+    $pdfService = new PDFService();
+  });
+
+  onMount(() => {
     const hideUntil = localStorage.getItem('tocify_hide_graph_entrance_until');
     if (hideUntil) {
       const expiry = parseInt(hideUntil, 10);

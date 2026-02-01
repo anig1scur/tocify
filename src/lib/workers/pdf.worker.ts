@@ -4,10 +4,8 @@ import fontkit from 'pdf-fontkit';
 import { TOC_LAYOUT, CJK_REGEX } from '../constants';
 import { setOutline } from '../pdf-outliner';
 
-// Configure PDF.js to run in this worker thread (disable internal worker)
-pdfjsLib.GlobalWorkerOptions.workerSrc = ''; // Prevent loading external worker
-// @ts-ignore
-pdfjsLib.GlobalWorkerOptions.workerPort = null; // Ensure no worker coupling
+// Configure PDF.js
+pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 
 let sourcePdfBytes: ArrayBuffer | null = null;
 let fontCache: Map<string, ArrayBuffer> = new Map();
@@ -56,8 +54,6 @@ async function detectTocPages(pdfBytes: ArrayBuffer): Promise<number[]> {
   const loadingTask = pdfjsLib.getDocument({
     data: new Uint8Array(pdfBytes),
     disableFontFace: true,
-    // @ts-ignore
-    disableWorker: true, // Run in main thread of this worker
   });
 
   const pdf = await loadingTask.promise;
