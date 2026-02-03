@@ -2,7 +2,7 @@ name: Duplicate Issue Detector
 
 on:
   issues:
-    types: [opened]
+    types: [opened, edited]
 
 jobs:
   detect-duplicate:
@@ -11,6 +11,10 @@ jobs:
       issues: write
       contents: read
     steps:
-      - uses: platisd/duplicate-issue-detector@v2
+      - name: Validate Similar Issues
+        uses: actions-cool/issues-similarity-analysis@v1.0.0
         with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          filter-threshold: 0.5
+          title-excludes: 'bug, feature, question'
+          comment-title: '### Similar issues found'
+          comment-body: '${index}. [${title}](${url})'

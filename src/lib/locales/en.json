@@ -132,7 +132,7 @@
     "faq_4_q": "Can Tocify run on the client side?",
     "faq_4_a": "Yes, we provide clients for <b>macOS</b> and <b>Windows</b>.<br>You can download them from the GitHub Releases page:<br><a href='https://github.com/anig1scur/tocify/releases' target='_blank' class='text-blue-600 hover:underline'>Download Releases</a>",
     "faq_5_q": "Which shortcuts does Tocify support?",
-    "faq_5_a": "• <b>Ctrl + Z</b>: Undo<br>• <b>Ctrl + Shift + Z</b>: Redo<br>• <b>Up/Down Arrows</b>: Quickly switch navigation input<br>• <b>Mouse Drag</b>: Drag TOC items / groups"
+    "faq_5_a": "• <b>Ctrl/Cmd + Z</b>: Undo<br>• <b>Ctrl/Cmd + Shift + Z</b>: Redo<br>• <b>Up/Down Arrows</b>: Quickly switch navigation input<br>• <b>Mouse Drag</b>: Drag TOC items / groups"
   },
   "star_request": {
     "title": "Enjoying Tocify?",

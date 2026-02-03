@@ -140,7 +140,7 @@
     "faq_4_q": "Tocify 是否可以在客户端运行？",
     "faq_4_a": "是的，我们提供 <b>macOS</b> 和 <b>Windows</b> 客户端。<br>您可以前往 GitHub Releases 页面下载：<br><a href='https://github.com/anig1scur/tocify/releases' target='_blank' class='text-blue-600 hover:underline'>Download Releases</a>",
     "faq_5_q": "Tocify 支持哪些快捷键？",
-    "faq_5_a": "• <b>Ctrl + Z</b>: 撤销<br>• <b>Ctrl + Shift + Z</b>: 重做 (撤销撤销)<br>• <b>上下键</b>: 快速切换 导航输入框<br>• <b>鼠标 Drag</b>: 拖拽目录项 / 目录组"
+    "faq_5_a": "• <b>Ctrl/Cmd + Z</b>: 撤销<br>• <b>Ctrl/Cmd + Shift + Z</b>: 重做 (撤销撤销)<br>• <b>上下键</b>: 快速切换 导航输入框<br>• <b>鼠标 Drag</b>: 拖拽目录项 / 目录组"
   },
   "star_request": {
     "title": "喜欢 Tocify 吗？",
