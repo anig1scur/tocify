@@ -4,6 +4,11 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  pdf-lib:
+    hash: cab32abc179e3a7b1b86fb40f38cad5f528905afa73a9851ce746f9f85cfaabc
+    path: patches/pdf-lib.patch
+
 importers:
 
   .:
@@ -40,7 +45,7 @@ importers:
         version: 1.8.9
       pdf-lib:
         specifier: ^1.17.1
-        version: 1.17.1
+        version: 1.17.1(patch_hash=cab32abc179e3a7b1b86fb40f38cad5f528905afa73a9851ce746f9f85cfaabc)
       pdfjs-dist:
         specifier: ^4.10.38
         version: 4.10.38
@@ -2805,7 +2810,7 @@ snapshots:
     dependencies:
       pako: 1.0.11
 
-  pdf-lib@1.17.1:
+  pdf-lib@1.17.1(patch_hash=cab32abc179e3a7b1b86fb40f38cad5f528905afa73a9851ce746f9f85cfaabc):
     dependencies:
       '@pdf-lib/standard-fonts': 1.0.0
       '@pdf-lib/upng': 1.0.1

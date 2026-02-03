@@ -212,7 +212,7 @@
     }
   }
 
-  const debouncedUpdatePDF = debounce(updatePDF, 400);
+  const debouncedUpdatePDF = debounce(updatePDF, 300);
 
   const toggleShowInsertTocHint = () => {
     if (!hasShownTocHint && addPhysicalTocPage && $tocItems.length > 0) {
@@ -317,12 +317,11 @@
           lastInsertAtPage = currentInsertPage;
         }
 
-        const res = await $pdfService.updateTocPages(tocItems_, config, currentInsertPage);
+        const res = await $pdfService.updateTocPages(tocItems_, config);
         newDoc = res.newDoc;
         tocPageCount = res.tocPageCount;
       
         if (isFontMissing) {
-           // Verify if loaded
            if (PDFService.regularFontBytes.has(fontKey)) {
              toastProps = {show: true, message: $t('msg.font_loaded', {values: {font: fontKey}}), type: 'success', duration: 3000};
            } else {
@@ -342,6 +341,8 @@
       const loadingTask = pdfjs.getDocument({
         data: pdfBytes,
         worker: PDFService.sharedWorker,
+        cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/cmaps/',
+        cMapPacked: true,
       });
 
       const newPreviewInstance = await loadingTask.promise;
@@ -514,6 +515,8 @@
       const loadingTask = pdfjs.getDocument({
         data: uint8Array,
         worker: PDFService.sharedWorker,
+        cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/cmaps/',
+        cMapPacked: true,
       });
       originalPdfInstance = await loadingTask.promise;
 
@@ -555,7 +558,7 @@
 
       // auto detect TOC pages
       if ($pdfService && originalPdfInstance) {
-        const detected = await $pdfService.detectTocPages(originalPdfInstance);
+        const detected = await $pdfService.detectTocPages();
         if (detected.length > 0) {
           const start = Math.min(...detected);
           const end = Math.max(...detected);
