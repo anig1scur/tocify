@@ -3,7 +3,7 @@ import { Ratelimit } from '@upstash/ratelimit';
 import { Redis } from '@upstash/redis';
 
 export const LIMIT_CONFIG = {
-  MAX_REQUESTS_PER_DAY: 10,
+  MAX_REQUESTS_PER_DAY: 5,
   MAX_IMAGES: 10,
   MAX_TEXT_SIZE_KB: 128
 };
