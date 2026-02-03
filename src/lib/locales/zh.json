@@ -19,6 +19,7 @@
     "font_song": "思源宋体",
     "api_settings_title": "API 设置",
     "api_key_hint": "仅存储在本地，不会上传到服务器",
+    "api_key_placeholder": "网页内置 key，也可使用自定义 Key",
     "add_numbering": "添加编号",
     "style": "样式",
     "prefix": "前缀",

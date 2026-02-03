@@ -5,7 +5,7 @@
   import {t, isLoading} from 'svelte-i18n';
   import {injectAnalytics} from '@vercel/analytics/sveltekit';
   import type * as PdfjsLibTypes from 'pdfjs-dist';
-  import {trackEvent} from '@aptabase/web';
+  import {init, trackEvent} from '@aptabase/web';
 
   import '../lib/i18n';
   import {pdfService, tocItems, curFileFingerprint, tocConfig, autoSaveEnabled, type TocConfig} from '../stores';
@@ -99,7 +99,8 @@
     doubaoEndpointIdVision: '',
   };
 
-  onMount(() => {
+  onMount(async () => {
+    init('A-US-0422911470');
     trackEvent('app_started', {
       platform: 'web',
       version: '1.0.0',

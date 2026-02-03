@@ -149,7 +149,7 @@
             id="api_key"
             type="password"
             class="w-full outline-none text-sm"
-            placeholder="paste your key here"
+            placeholder={$t('settings.api_key_placeholder')}
             bind:value={config.apiKey}
             on:input={() => (isSaved = false)}
           />

@@ -23,6 +23,7 @@
     "font_song": "SourceHan Serif",
     "api_settings_title": "API Settings",
     "api_key_hint": "Stored locally only",
+    "api_key_placeholder": "There is a built-in key, or enter your own",
     "add_numbering": "Add Numbering",
     "style": "Style",
     "prefix": "Prefix",
