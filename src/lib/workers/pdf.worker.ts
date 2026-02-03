@@ -54,6 +54,8 @@ async function detectTocPages(pdfBytes: ArrayBuffer): Promise<number[]> {
   const loadingTask = pdfjsLib.getDocument({
     data: new Uint8Array(pdfBytes),
     disableFontFace: true,
+    cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/cmaps/',
+    cMapPacked: true,
   });
 
   const pdf = await loadingTask.promise;
@@ -116,8 +118,7 @@ interface PendingAnnot {
 }
 
 async function generatePdf(items: any[], config: any) {
-  const sourceDoc = await PDFDocument.load(sourcePdfBytes!);
-  const doc = await PDFDocument.create();
+  const doc = await PDFDocument.load(sourcePdfBytes!);
   doc.registerFontkit(fontkit);
 
   const fontKey = config.fontFamily || 'huiwen';
@@ -133,9 +134,7 @@ async function generatePdf(items: any[], config: any) {
     boldFont = await doc.embedFont(StandardFonts.HelveticaBold);
   }
 
-  const allIndices = sourceDoc.getPageIndices();
-  const copiedPages = await doc.copyPages(sourceDoc, allIndices);
-  copiedPages.forEach((page) => doc.addPage(page));
+  const allIndices = doc.getPageIndices();
 
   const insertAtPage = config.insertAtPage || 2;
   const insertionStartIndex = Math.max(0, Math.min(insertAtPage - 1, allIndices.length));

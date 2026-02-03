@@ -43,15 +43,14 @@ if (browser) {
 export class PDFService {
   static sharedWorker = new pdfjsLib.PDFWorker();
 
-  // Font Cache (Main Thread)
   static regularFontBytes: Map<string, ArrayBuffer> = new Map();
   static boldFontBytes: Map<string, ArrayBuffer> = new Map();
   static fontLoadingPromises: Map<string, Promise<void>> = new Map();
 
   static FONT_URLS = {
     huiwen: {
-      regular: '/fonts/huiwen-mincho.ttf', // Local file
-      bold: '/fonts/huiwen-mincho.ttf', // Use regular as bold fallback
+      regular: '/fonts/huiwen-mincho.ttf',
+      bold: '/fonts/huiwen-mincho.ttf',
     },
     hei: {
       regular: 'https://static.aeriszhu.com/SourceHanSansSC-Regular.woff2',
@@ -122,7 +121,6 @@ export class PDFService {
   async loadFonts(family: string = 'huiwen') {
     if (!browser) return;
 
-    // 1. Ensure bytes are in Main Thread Static Cache
     if (!PDFService.regularFontBytes.has(family) || !PDFService.boldFontBytes.has(family)) {
 
       if (PDFService.fontLoadingPromises.has(family)) {
@@ -175,8 +173,8 @@ export class PDFService {
 
         await this.postWorkerMessage('LOAD_FONTS', {
           family,
-          regular: regular.slice(0), // copy
-          bold: bold.slice(0) // copy
+          regular: regular.slice(0),
+          bold: bold.slice(0)
         });
         this.workerLoadedFonts.add(family);
       }
@@ -186,12 +184,7 @@ export class PDFService {
   async initPreview(sourceDoc: PDFDocument) {
     if (!this.worker) return;
     const bytes = await sourceDoc.save();
-    // Use transfer to avoid copy? Valid if we don't need bytes here anymore.
-    // But sourceDoc is still used? sourceDoc is passed in.
-    // We copy bytes to worker.
     await this.postWorkerMessage('INIT', { pdfBytes: bytes });
-
-    // Ensure default fonts loaded
     await this.loadFonts('huiwen');
   }
 
@@ -206,10 +199,9 @@ export class PDFService {
   }
 
   async updateTocPages(
-    items: TocItem[], config: TocConfig, insertAtPage: number = 2):
+    items: TocItem[], config: TocConfig):
     Promise<{ newDoc: PDFDocument; tocPageCount: number }> {
 
-    // Ensure fonts are loaded in worker
     const fontKey = config.fontFamily || 'huiwen';
     await this.loadFonts(fontKey);
 
@@ -217,17 +209,10 @@ export class PDFService {
     const { pdfBytes, tocPageCount } = result;
 
     const newDoc = await PDFDocument.load(pdfBytes);
-    newDoc.registerFontkit(fontkit); // Register fontkit on main thread instance too if needed (maybe not if just saving?)
+    newDoc.registerFontkit(fontkit);
 
-    // We return newDoc as PDFDocument because +page.svelte expects it.
-    // This involves de-serialization (PDFDocument.load). 
-    // This part is ON MAIN THREAD. 
-    // Loading a PDF is faster than generating it, but for very large PDFs, this step might still be noticeable.
-    // However, the *generation* and *copying* happened in worker.
     return { newDoc, tocPageCount };
   }
-
-  // ... (Rendering logic remains local as it uses Canvas/PDFJS) ...
 
   async renderPage(
     pdf: pdfjsLib.PDFDocumentProxy, pageNum: number, scale: number = 1.0) {
@@ -348,11 +333,8 @@ export class PDFService {
    * Automatically detect potential TOC pages in the PDF.
    * Delegates to worker which scans first 20 pages.
    */
-  async detectTocPages(pdf?: any): Promise<number[]> {
+  async detectTocPages(): Promise<number[]> {
     if (!this.worker) return [];
-    // We don't use the passed 'pdf' (PDFDocumentProxy) because the worker operates on the initialized bytes.
-    // Ensure initPreview was called or INIT matching these bytes happened. 
-    // In +page.svelte, initPreview is called right after load, then detectTocPages.
     try {
       const detected = await this.postWorkerMessage('DETECT_TOC', {});
       return detected as number[];

@@ -2,7 +2,7 @@
   import {createEventDispatcher, onMount} from 'svelte';
   import {slide} from 'svelte/transition';
   import {t} from 'svelte-i18n';
-  import {KeyRound} from 'lucide-svelte';
+  import {KeyRound, Sparkles} from 'lucide-svelte';
 
   export let isExpanded = false;
 
@@ -80,8 +80,9 @@
       <div class="flex flex-col gap-3">
         <div class="border-black border-2 rounded-md p-2 w-full">
           <label
-            class="block font-bold mb-1 text-sm"
-            for="llm_provider">LLM Provider</label
+            class="font-bold mb-1 text-sm flex items-center"
+            for="llm_provider">
+            <Sparkles size={14} strokeWidth={3} class="inline-block mr-1"/>LLM Provider</label
           >
           <select
             id="llm_provider"
@@ -143,12 +144,12 @@
           >
             <KeyRound size={14} strokeWidth={3} />
            Key
-            <span class="font-normal text-gray-500 text-xs">{$t('settings.api_key_hint')}</span>
+            <span class="font-normal text-gray-400 text-[11px] ml-2">{$t('settings.api_key_hint')}</span>
           </label>
           <input
             id="api_key"
             type="password"
-            class="w-full outline-none text-sm"
+            class="w-full outline-none text-sm placeholder-gray-400 placeholder:text-sm "
             placeholder={$t('settings.api_key_placeholder')}
             bind:value={config.apiKey}
             on:input={() => (isSaved = false)}
