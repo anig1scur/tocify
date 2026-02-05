@@ -32,7 +32,7 @@
     "separator": "Separator",
     "preview": "Preview",
     "page_labels": "Page Labels",
-    "page_labels_hint": "Defines the page number labels shown by PDF viewers (Catalog /PageLabels). Start page is physical page number in the exported PDF.",
+    "page_labels_hint": "Defines the page number labels shown by PDF viewers. Start page is physical page number in the PDF.",
     "page_labels_disabled_multi_range": "Disabled when multiple ranges are added",
     "start_page": "Start Page",
     "start_at": "Start At",
@@ -49,7 +49,8 @@
     "start": "START",
     "end": "END",
     "toc_pages_selection": "ToC Pages Selection",
-    "range_n": "Range {n}"
+    "range_n": "Range {n}",
+    "segment_range_n": "Segment {n}"
   },
   "toc": {
     "prompt_intro": "The 'AI Format' button is used when the book lacks a scanned table of contents. Paste the unformatted text into the box, and it will intelligently convert it to the target format.\n\nAlternatively, you can use the following prompt to generate the formatted text yourself:\n\n1 Food Categories I Love 1\n2 Fruits 2\n2.1 Strawberry 3\n\nReformat the table of contents below into the target format and remove unnecessary comments \n\n${YOUR_TOCS_COPY_FROM_ANYWHERE}",
