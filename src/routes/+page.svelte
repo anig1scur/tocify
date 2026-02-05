@@ -15,6 +15,7 @@
   import {buildTree, convertPdfJsOutlineToTocItems, setNestedValue, findActiveTocPath} from '$lib/utils';
   import {generateToc} from '$lib/toc-service';
   import {applyCustomPrefix, DEFAULT_PREFIX_CONFIG, type LevelConfig} from '$lib/prefix-service';
+  import { setPageLabels } from '$lib/page-labels';
 
   import Toast from '../components/Toast.svelte';
   import Footer from '../components/Footer.svelte';
@@ -334,6 +335,7 @@
       }
 
       setOutline(newDoc, tocItems_, config.pageOffset, tocPageCount);
+      setPageLabels(newDoc, config.pageLabelSettings);
       const pdfBytes = await newDoc.save({
         useObjectStreams: false,
       });

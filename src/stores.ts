@@ -1,6 +1,7 @@
 import {browser} from '$app/environment';
 import {PDFService} from '$lib/pdf-service';
 import {DEFAULT_PREFIX_CONFIG, type LevelConfig} from '$lib/prefix-service';
+import { createDefaultPageLabelSettings, type PageLabelSettings } from '$lib/page-labels';
 import {get, writable} from 'svelte/store';
 
 export type StyleConfig = {
@@ -11,6 +12,7 @@ export type TocConfig = {
   insertAtPage: number; pageOffset: number; firstLevel: StyleConfig;
   otherLevels: StyleConfig;
   prefixSettings: {enabled: boolean; configs: LevelConfig[];};
+  pageLabelSettings: PageLabelSettings;
   fontFamily?: 'hei' | 'song' | 'huiwen';
 };
 
@@ -30,6 +32,7 @@ export const tocConfig = writable<TocConfig>({
     enabled: false,
     configs: DEFAULT_PREFIX_CONFIG,
   },
+  pageLabelSettings: createDefaultPageLabelSettings(),
   fontFamily: 'huiwen',
   pageOffset: 0,
   insertAtPage: 2,

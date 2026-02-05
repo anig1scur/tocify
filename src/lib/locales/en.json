@@ -30,7 +30,14 @@
     "suffix": "Suffix",
     "inherit_parent": "Inherit",
     "separator": "Separator",
-    "preview": "Preview"
+    "preview": "Preview",
+    "page_labels": "Page Labels",
+    "page_labels_hint": "Defines the page number labels shown by PDF viewers (Catalog /PageLabels). Start page is physical page number in the exported PDF.",
+    "page_labels_disabled_multi_range": "Disabled when multiple ranges are added",
+    "start_page": "Start Page",
+    "start_at": "Start At",
+    "add_segment": "Add Segment",
+    "remove": "Remove"
   },
   "msg": {
     "pdf_loaded": "Pdf loaded, long press and drag to select ToC pages",

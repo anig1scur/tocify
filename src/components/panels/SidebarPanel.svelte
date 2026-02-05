@@ -81,10 +81,12 @@
         bind:tocRanges
         bind:activeRangeIndex
         totalPages={pdfState.totalPages}
+        pageLabelSettings={config.pageLabelSettings}
         on:addRange
         on:removeRange
         on:setActiveRange
         on:rangeChange={() => dispatch('rangeChange')}
+        on:updateField={(e) => dispatch('updateField', e.detail)}
       />
     </div>
   {/if}
