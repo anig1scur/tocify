@@ -23,10 +23,17 @@
     "add_numbering": "添加编号",
     "style": "样式",
     "prefix": "前缀",
-    "suffix": "后缀", 
+    "suffix": "后缀",
     "inherit_parent": "继承父级",
     "separator": "连接符",
-    "preview": "预览"
+    "preview": "预览",
+    "page_labels": "分段页码",
+    "page_labels_hint": "设置 PDF 阅读器显示的分段。起始页为导出后 PDF 的物理页码。",
+    "page_labels_disabled_multi_range": "添加多个范围时不可用",
+    "start_page": "起始页",
+    "start_at": "起始编号",
+    "add_segment": "添加分段",
+    "remove": "移除"
   },
   "msg": {
     "pdf_loaded": "PDF 已加载，长按并拖动以选择目录页面",
