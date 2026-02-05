@@ -28,7 +28,7 @@
     "separator": "连接符",
     "preview": "预览",
     "page_labels": "分段页码",
-    "page_labels_hint": "设置 PDF 阅读器显示的分段。起始页为导出后 PDF 的物理页码。",
+    "page_labels_hint": "设置 PDF 阅读器显示的分段页码。起始页为 PDF 的物理页码。",
     "page_labels_disabled_multi_range": "添加多个范围时不可用",
     "start_page": "起始页",
     "start_at": "起始编号",
@@ -45,7 +45,8 @@
     "start": "开始",
     "end": "结束",
     "toc_pages_selection": "目录页面选择",
-    "range_n": "范围 {n}"
+    "range_n": "范围 {n}",
+    "segment_range_n": "范围{n}"
   },
   "toc": {
     "prompt_intro": "AI Format 仅当书本没有影印目录，只能找文本内容时使用。将不符合格式的文本粘贴到框内，它将智能处理目录文本为目标格式。\n\n或者，你可以自行通过下列提示词获取目标文本:\n\n1 Food Categories I Love 1\n2 Fruits 2\n2.1 Strawberry 3\n\n将下方的目录整理为目标格式，并移除无用的注释\n${YOUR_TOCS_COPY_FROM_ANYWHERE}",

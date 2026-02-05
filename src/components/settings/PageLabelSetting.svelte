@@ -2,6 +2,7 @@
   import { createEventDispatcher } from 'svelte';
   import { t } from 'svelte-i18n';
   import type { PageLabelSettings, PageLabelStyle } from '$lib/page-labels';
+  import {Trash2} from 'lucide-svelte';
 
   export let settings: PageLabelSettings;
 
@@ -46,6 +47,16 @@
 
   {#each settings.segments || [] as seg, i (i)}
     <div class="border-2 border-black rounded-md p-2 bg-white shadow-[2px_2px_0px_rgba(0,0,0,0.08)]">
+      <div class="flex justify-between items-center">
+        <span class="text-xs font-bold text-gray-500 uppercase tracking-wider">{$t('label.segment_range_n', {values: {n: i + 1}})}</span>
+        <button class="text-red-500 p-1 hover:bg-blue-100 rounded"
+          on:click={() => removeSegment(i)}
+          title={$t('settings.remove')}
+          disabled={(settings.segments || []).length <= 1}
+        >
+          <Trash2 size={14} />
+        </button>
+      </div>
       <div class="flex items-center gap-2">
         <div class="w-20">
           <label class="text-[11px] text-gray-500 block">{$t('settings.start_page')}</label>
@@ -100,14 +111,6 @@
         </div>
       </div>
 
-      <button
-        class="h-8 px-2 mt-2 border-2 border-black rounded-md bg-white hover:bg-gray-50 text-xs"
-        on:click={() => removeSegment(i)}
-        title={$t('settings.remove')}
-        disabled={(settings.segments || []).length <= 1}
-      >
-        {$t('settings.remove')}
-      </button>
     </div>
   {/each}
 

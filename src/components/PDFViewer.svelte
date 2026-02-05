@@ -46,6 +46,9 @@
   let containerWidth = 0;
   let containerHeight = 0;
 
+  let pageLabels: string[] | null = null;
+  let lastPageLabelsInstance: any = null;
+
   const activeRenderTasks = new Map<number, RenderTask>();
 
   const unsubscribePdfService = pdfService.subscribe((val) => (pdfServiceInstance = val));
@@ -89,6 +92,27 @@
 
   $: activeInstance = instance || stateInstance;
   $: activeTotalPages = activeInstance?.numPages || stateTotalPages;
+
+  $: currentPageLabel = pageLabels?.[currentPage - 1] || '';
+
+  async function refreshPageLabels(pdfInstance: any) {
+    pageLabels = null;
+
+    if (!pdfInstance || typeof pdfInstance.getPageLabels !== 'function') return;
+
+    try {
+      const labels = await pdfInstance.getPageLabels();
+      if (lastPageLabelsInstance !== pdfInstance) return;
+      pageLabels = labels;
+    } catch (e) {
+      // Ignore getPageLabels errors and fall back to physical page numbers.
+    }
+  }
+
+  $: if (activeInstance && activeInstance !== lastPageLabelsInstance) {
+    lastPageLabelsInstance = activeInstance;
+    refreshPageLabels(activeInstance);
+  }
 
 
   $: if (activeInstance && filename && filename !== loadedFilename) {
@@ -496,6 +520,9 @@
               }}
               class="w-15 text-center border-b border-gray-300 focus:border-black outline-none bg-transparent p-0 text-gray-800"
             />
+            {#if currentPageLabel}
+              <span class="text-xs text-gray-400 font-mono">({currentPageLabel})</span>
+            {/if}
             <span>/ {activeTotalPages}</span>
           </div>
 
