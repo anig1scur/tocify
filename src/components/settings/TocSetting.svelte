@@ -5,6 +5,7 @@
   import type {TocConfig} from '../../stores';
   import PageLabelSetting from './PageLabelSetting.svelte';
   import { isDefaultPageLabelSegments, suggestPageLabelSegmentsFromTocRanges } from '$lib/page-labels';
+  import { HelpCircle } from 'lucide-svelte';
 
   import PrefixSettings from './PrefixSetting.svelte';
 
@@ -36,6 +37,24 @@
     updateField('pageLabelSettings', e.detail);
   }
 
+  let lastSuggestedSegmentsJson = '';
+  $: {
+    const segments = suggestPageLabelSegmentsFromTocRanges(tocRanges, totalPages);
+    const segmentsJson = JSON.stringify(segments);
+    const currentSegments = config.pageLabelSettings?.segments;
+    const currentSegmentsJson = JSON.stringify(currentSegments);
+
+    const isDefault = isDefaultPageLabelSegments(currentSegments);
+    const isMatchingLastAuto = currentSegmentsJson === lastSuggestedSegmentsJson;
+
+    if (config?.pageLabelSettings?.enabled && (isDefault || isMatchingLastAuto)) {
+      if (segmentsJson !== currentSegmentsJson) {
+        updateField('pageLabelSettings', { ...config.pageLabelSettings, segments });
+        lastSuggestedSegmentsJson = segmentsJson;
+      }
+    }
+  }
+
   function handlePageLabelsToggle(e: Event) {
     if (pageLabelsDisabled) return;
 
@@ -46,6 +65,10 @@
       const segments = isDefaultPageLabelSegments(current?.segments)
         ? suggestPageLabelSegmentsFromTocRanges(tocRanges, totalPages)
         : (current?.segments || []);
+
+      if (isDefaultPageLabelSegments(current?.segments)) {
+        lastSuggestedSegmentsJson = JSON.stringify(segments);
+      }
 
       updateField('pageLabelSettings', { ...current, enabled: true, segments });
     } else {
@@ -105,7 +128,12 @@
 
       <div class="border-gray-600 border-2 rounded-md my-2 p-2 w-full">
         <div class="flex justify-between items-center">
-          <h3>{$t('settings.page_labels')}</h3>
+          <div class="flex items-center gap-1">
+            <h3>{$t('settings.page_labels')}</h3>
+            <a href="https://pdfa.org/pdf-ux-page-labels/" target="_blank" class="text-gray-400 hover:text-black transition-colors" title="Learn more about PDF Page Labels">
+              <HelpCircle size={14} />
+            </a>
+          </div>
 
           <label
             class="relative inline-flex items-center cursor-pointer"
@@ -230,11 +258,11 @@
               </div>
             </div>
 
-            <div class="flex flex-col sm-[400px]:flex-row gap-4">
+            <div class="flex flex-col sm-[400px]:flex-row gap-4 text-sm">
               <div class="w-full md:w-1/2">
                 <h3 class="my-3 font-bold">{$t('settings.first_level')}</h3>
 
-                <div class="border-gray-600 border-2 rounded-md my-3 p-2 w-full flex items-center justify-between">
+                <div class="border-gray-600 border-2  rounded-md my-3 p-2 w-full flex items-center justify-between">
                   <label for="first_level_font_size">{$t('settings.font_size')}</label>
                   <input
                     type="number"

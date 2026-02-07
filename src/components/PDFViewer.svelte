@@ -500,11 +500,11 @@
     <div
       class="flex items-center flex-col justify-start w-full px-2 md:px-4 py-3 bg-white border-b-2 border-black rounded-t-md overflow-x-auto"
     >
-      <div class="flex z-10 items-center justify-between w-full gap-1">
+      <div class="flex z-10 items-center justify-between w-full">
         <div class="w-[70%] text-gray-600 font-serif flex gap-1 sm:gap-2 items-center text-sm md:text-base">
           <span class="truncate">{filename}</span>
           <span class="text-gray-300">|</span>
-          <div class="flex items-center gap-1 min-w-24">
+          <div class="flex items-center gap-1 min-w-32">
             <input
               type="number"
               min="1"
