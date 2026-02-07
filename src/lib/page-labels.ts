@@ -28,6 +28,60 @@ export const createDefaultPageLabelSettings = (): PageLabelSettings => ({
   segments: [{ startPage: 1, style: 'decimal', prefix: '', startAt: 1 }],
 });
 
+export function isDefaultPageLabelSegments(segments: PageLabelSegment[] | undefined): boolean {
+  if (!segments || segments.length === 0) return true;
+  if (segments.length !== 1) return false;
+  const s = segments[0];
+  return (
+    s.startPage === 1 &&
+    s.style === 'decimal' &&
+    (s.prefix ?? '') === '' &&
+    (s.startAt ?? 1) === 1
+  );
+}
+
+export function suggestPageLabelSegmentsFromTocRanges(
+  ranges: { start: number; end: number }[],
+  totalPages: number
+): PageLabelSegment[] {
+  if (!Array.isArray(ranges) || ranges.length === 0 || !Number.isFinite(totalPages) || totalPages <= 0) {
+    return [{ startPage: 1, style: 'decimal', prefix: '', startAt: 1 }];
+  }
+
+  let minSel = Infinity;
+  let maxSel = -Infinity;
+  for (const r of ranges) {
+    const a = Number(r.start);
+    const b = Number(r.end);
+    if (!Number.isFinite(a) || !Number.isFinite(b)) continue;
+    const start = Math.min(a, b);
+    const end = Math.max(a, b);
+    minSel = Math.min(minSel, start);
+    maxSel = Math.max(maxSel, end);
+  }
+
+  if (!Number.isFinite(minSel) || !Number.isFinite(maxSel)) {
+    return [{ startPage: 1, style: 'decimal', prefix: '', startAt: 1 }];
+  }
+
+  const tocStart = Math.max(1, Math.min(totalPages, Math.trunc(minSel)));
+  const tocEnd = Math.max(tocStart, Math.min(totalPages, Math.trunc(maxSel)));
+
+  const segments: PageLabelSegment[] = [];
+
+  if (tocStart > 1) {
+    segments.push({ startPage: 1, style: 'alpha_upper', prefix: '', startAt: 1 });
+  }
+
+  segments.push({ startPage: tocStart, style: 'roman_lower', prefix: '', startAt: 1 });
+
+  if (tocEnd < totalPages) {
+    segments.push({ startPage: tocEnd + 1, style: 'decimal', prefix: '', startAt: 1 });
+  }
+
+  return segments;
+}
+
 const styleToPdfName = (style: PageLabelStyle): PDFName | undefined => {
   switch (style) {
     case 'decimal':

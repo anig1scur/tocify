@@ -2,27 +2,14 @@
   import {createEventDispatcher} from 'svelte';
   import {Trash2, Plus} from 'lucide-svelte';
   import {t} from 'svelte-i18n';
-  import { createDefaultPageLabelSettings, type PageLabelSegment, type PageLabelSettings } from '$lib/page-labels';
-  import PageLabelSetting from './settings/PageLabelSetting.svelte';
 
   export let tocRanges: {start: number; end: number; id: string}[] = [];
   export let activeRangeIndex: number = 0;
   export let totalPages: number;
-  export let pageLabelSettings: PageLabelSettings = createDefaultPageLabelSettings();
 
   const dispatch = createEventDispatcher();
-  let isPageLabelSettingExpanded = false;
-  let pageLabelsDisabled = false;
-  $: pageLabelsDisabled = tocRanges.length > 1;
-  $: isPageLabelSettingExpanded = !!pageLabelSettings?.enabled && !pageLabelsDisabled;
 
   function addRange() {
-    if (tocRanges.length >= 1 && pageLabelSettings?.enabled) {
-      dispatch('updateField', {
-        path: 'pageLabelSettings',
-        value: { ...pageLabelSettings, enabled: false },
-      });
-    }
     dispatch('addRange');
   }
 
@@ -36,80 +23,6 @@
 
   function handleRangeChange() {
     dispatch('rangeChange');
-  }
-
-  function handlePageLabelChange(e: CustomEvent) {
-    dispatch('updateField', { path: 'pageLabelSettings', value: e.detail });
-  }
-
-  function handlePageLabelsToggle(e: Event) {
-    if (pageLabelsDisabled) return;
-    const enabled = (e.target as HTMLInputElement).checked;
-    if (enabled) {
-      const segments = isDefaultPageLabelSegments(pageLabelSettings?.segments)
-        ? buildPageLabelSegmentsFromTocRanges(tocRanges, totalPages)
-        : (pageLabelSettings?.segments || []);
-      dispatch('updateField', {
-        path: 'pageLabelSettings',
-        value: { ...pageLabelSettings, enabled: true, segments },
-      });
-    } else {
-      dispatch('updateField', { path: 'pageLabelSettings', value: { ...pageLabelSettings, enabled: false } });
-    }
-  }
-
-  function isDefaultPageLabelSegments(segments: PageLabelSegment[] | undefined): boolean {
-    if (!segments || segments.length === 0) return true;
-    if (segments.length !== 1) return false;
-    const s = segments[0];
-    return (
-      s.startPage === 1 &&
-      s.style === 'decimal' &&
-      (s.prefix ?? '') === '' &&
-      (s.startAt ?? 1) === 1
-    );
-  }
-
-  function buildPageLabelSegmentsFromTocRanges(
-    ranges: { start: number; end: number }[],
-    total: number
-  ): PageLabelSegment[] {
-    if (!Array.isArray(ranges) || ranges.length === 0 || !Number.isFinite(total) || total <= 0) {
-      return [{ startPage: 1, style: 'decimal', prefix: '', startAt: 1 }];
-    }
-
-    let minSel = Infinity;
-    let maxSel = -Infinity;
-    for (const r of ranges) {
-      const a = Number(r.start);
-      const b = Number(r.end);
-      if (!Number.isFinite(a) || !Number.isFinite(b)) continue;
-      const start = Math.min(a, b);
-      const end = Math.max(a, b);
-      minSel = Math.min(minSel, start);
-      maxSel = Math.max(maxSel, end);
-    }
-
-    if (!Number.isFinite(minSel) || !Number.isFinite(maxSel)) {
-      return [{ startPage: 1, style: 'decimal', prefix: '', startAt: 1 }];
-    }
-
-    const tocStart = Math.max(1, Math.min(total, Math.trunc(minSel)));
-    const tocEnd = Math.max(tocStart, Math.min(total, Math.trunc(maxSel)));
-
-    const segments: PageLabelSegment[] = [];
-
-    if (tocStart > 1) {
-      segments.push({ startPage: 1, style: 'alpha_upper', prefix: '', startAt: 1 });
-    }
-
-    segments.push({ startPage: tocStart, style: 'roman_lower', prefix: '', startAt: 1 });
-
-    if (tocEnd < total) {
-      segments.push({ startPage: tocEnd + 1, style: 'decimal', prefix: '', startAt: 1 });
-    }
-
-    return segments;
   }
 </script>
 
@@ -182,37 +95,5 @@
         </div>
       </div>
     {/each}
-  </div>
-
-  <div class="mt-3 pt-3 border-t-2 border-black/20">
-    <div class="flex justify-between items-center">
-      <h3 class="font-bold text-sm">{$t('settings.page_labels')}</h3>
-      <label
-        class="relative inline-flex items-center cursor-pointer"
-        class:opacity-50={pageLabelsDisabled}
-      >
-        <input
-          type="checkbox"
-          class="sr-only peer"
-          checked={isPageLabelSettingExpanded}
-          on:change={handlePageLabelsToggle}
-          aria-label={$t('settings.toggle_expand')}
-          title={pageLabelsDisabled ? $t('settings.page_labels_disabled_multi_range') : $t('settings.toggle_expand')}
-          disabled={pageLabelsDisabled}
-        />
-        <div
-          class="w-11 h-6 bg-gray-200 peer-focus:outline-none border-2 border-black rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-white after:border-black after:border-2 after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-gray-800"
-        ></div>
-      </label>
-    </div>
-
-    {#if isPageLabelSettingExpanded}
-      <div class="mt-2 border-2 border-black rounded-md p-2 bg-white/60">
-        <PageLabelSetting
-          settings={pageLabelSettings}
-          on:change={handlePageLabelChange}
-        />
-      </div>
-    {/if}
   </div>
 </div>

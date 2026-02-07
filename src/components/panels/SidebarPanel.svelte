@@ -42,6 +42,8 @@
   <TocSettings
     {config}
     {previewPdfInstance}
+    tocRanges={tocRanges}
+    totalPages={pdfState.totalPages}
     bind:isTocConfigExpanded
     bind:addPhysicalTocPage
     on:toggleExpand={() => (isTocConfigExpanded = !isTocConfigExpanded)}
@@ -81,12 +83,10 @@
         bind:tocRanges
         bind:activeRangeIndex
         totalPages={pdfState.totalPages}
-        pageLabelSettings={config.pageLabelSettings}
         on:addRange
         on:removeRange
         on:setActiveRange
         on:rangeChange={() => dispatch('rangeChange')}
-        on:updateField={(e) => dispatch('updateField', e.detail)}
       />
     </div>
   {/if}
