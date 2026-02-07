@@ -3,6 +3,8 @@
   import {slide} from 'svelte/transition';
   import {t} from 'svelte-i18n';
   import type {TocConfig} from '../../stores';
+  import PageLabelSetting from './PageLabelSetting.svelte';
+  import { isDefaultPageLabelSegments, suggestPageLabelSegmentsFromTocRanges } from '$lib/page-labels';
 
   import PrefixSettings from './PrefixSetting.svelte';
 
@@ -10,8 +12,13 @@
   export let addPhysicalTocPage: boolean;
   export let config: TocConfig;
   export let previewPdfInstance: any;
+  export let tocRanges: {start: number; end: number; id: string}[] = [];
+  export let totalPages: number = 0;
 
   const dispatch = createEventDispatcher();
+
+  let pageLabelsDisabled = false;
+  $: pageLabelsDisabled = (tocRanges?.length ?? 0) > 1;
 
   function updateField(path: string, value: any) {
     dispatch('updateField', {path, value});
@@ -19,6 +26,31 @@
 
   function handlePrefixChange(e: CustomEvent) {
     updateField('prefixSettings', e.detail);
+  }
+
+  $: if (pageLabelsDisabled && config?.pageLabelSettings?.enabled) {
+    updateField('pageLabelSettings', { ...config.pageLabelSettings, enabled: false });
+  }
+
+  function handlePageLabelChange(e: CustomEvent) {
+    updateField('pageLabelSettings', e.detail);
+  }
+
+  function handlePageLabelsToggle(e: Event) {
+    if (pageLabelsDisabled) return;
+
+    const enabled = (e.target as HTMLInputElement).checked;
+    const current = config.pageLabelSettings;
+
+    if (enabled) {
+      const segments = isDefaultPageLabelSegments(current?.segments)
+        ? suggestPageLabelSegmentsFromTocRanges(tocRanges, totalPages)
+        : (current?.segments || []);
+
+      updateField('pageLabelSettings', { ...current, enabled: true, segments });
+    } else {
+      updateField('pageLabelSettings', { ...current, enabled: false });
+    }
   }
 </script>
 
@@ -69,6 +101,47 @@
           settings={config.prefixSettings}
           on:change={handlePrefixChange}
         />
+      </div>
+
+      <div class="border-gray-600 border-2 rounded-md my-2 p-2 w-full">
+        <div class="flex justify-between items-center">
+          <h3>{$t('settings.page_labels')}</h3>
+
+          <label
+            class="relative inline-flex items-center cursor-pointer"
+            class:opacity-50={pageLabelsDisabled}
+          >
+            <input
+              type="checkbox"
+              class="sr-only peer"
+              checked={!!config.pageLabelSettings?.enabled && !pageLabelsDisabled}
+              on:change={handlePageLabelsToggle}
+              aria-label={$t('settings.page_labels')}
+              title={pageLabelsDisabled
+                ? $t('settings.page_labels_disabled_multi_range')
+                : $t('settings.page_labels')}
+              disabled={pageLabelsDisabled}
+            />
+            <div
+              class="w-11 h-6 bg-gray-200 peer-focus:outline-none border-2 border-black rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-white after:border-black after:border-2 after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-gray-800"
+            ></div>
+          </label>
+        </div>
+
+        {#if pageLabelsDisabled}
+          <div class="text-xs text-gray-500 mt-1">
+            {$t('settings.page_labels_disabled_multi_range')}
+          </div>
+        {/if}
+
+        {#if !!config.pageLabelSettings?.enabled && !pageLabelsDisabled}
+          <div transition:slide={{duration: 200}} class="mt-2">
+            <PageLabelSetting
+              settings={config.pageLabelSettings}
+              on:change={handlePageLabelChange}
+            />
+          </div>
+        {/if}
       </div>
 
       <div class="mt-3 border-gray-600 border-2 rounded-md my-2 p-2 w-full">
