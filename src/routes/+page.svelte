@@ -92,6 +92,7 @@
 
   let lastPdfContentJson = '';
   let lastInsertAtPage = 2;
+  let lastConfigJson = '';  
 
   let customApiConfig = {
     provider: '',
@@ -150,11 +151,17 @@
     }));
   }
 
+  // Only trigger updatePDF when config content actually changes, not just reference
   $: {
     config = $tocConfig;
-    if (isPreviewMode && !isFileLoading) {
-      debouncedUpdatePDF();
+    const currentConfigJson = JSON.stringify($tocConfig);
+    
+    if (isPreviewMode && !isFileLoading && lastConfigJson) {
+      if (currentConfigJson !== lastConfigJson) {
+        debouncedUpdatePDF();
+      }
     }
+    lastConfigJson = currentConfigJson;
   }
 
   $: currentTocPath = findActiveTocPath(
@@ -294,7 +301,6 @@
     try {
       const settings = config.prefixSettings;
       const tocItems_ = settings.enabled ? applyCustomPrefix($tocItems, settings.configs) : $tocItems;
-      const currentPageBackup = pdfState.currentPage;
 
       let newDoc = pdfState.doc;
 
@@ -361,15 +367,18 @@
       pdfState.newDoc = newDoc;
 
       if (isPreviewMode) {
-        if (currentPageBackup <= pdfState.totalPages) {
-          pdfState.currentPage = currentPageBackup;
-        } else {
-          pdfState.currentPage = 1;
+        pdfState.instance = previewPdfInstance;
+        pdfState.totalPages = previewPdfInstance.numPages;
+        
+        if (pdfState.currentPage > pdfState.totalPages) {
+          pdfState.currentPage = pdfState.totalPages;
         }
       } else {
         pdfState.instance = originalPdfInstance;
+        pdfState.totalPages = originalPdfInstance?.numPages || 0;
       }
-      updateViewerInstance();
+      
+      pdfState = {...pdfState};
     } catch (error: any) {
       console.error('Error updating PDF:', error);
       const msg =
