@@ -124,12 +124,12 @@ export async function convertPdfJsOutlineToTocItems(
 }
 
 
-export function setNestedValue<T>(obj: T, fieldPath: string, value: any): T {
+export function setNestedValue<T extends object>(obj: T, fieldPath: string, value: unknown): T {
   const keys = fieldPath.split('.');
-  let target: any = obj;
+  let target: Record<string, unknown> = obj as Record<string, unknown>;
 
   keys.slice(0, -1).forEach((key) => {
-    target = target[key];
+    target = target[key] as Record<string, unknown>;
   });
 
   target[keys[keys.length - 1]] = value;

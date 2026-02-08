@@ -42,7 +42,7 @@
 </script>
 
 <div class="space-y-3">
-  <div class="text-sm text-gray-500">
+  <div class="text-xs text-gray-700">
     {$t('settings.page_labels_hint')}
   </div>
 
@@ -52,7 +52,7 @@
     {/if}
     <div class="relative">
       <div class="flex justify-between items-center mb-1">
-        <span class="text-sm font-bold text-gray-500 uppercase tracking-wider">{$t('label.segment_range_n', {values: {n: i + 1}})}</span>
+        <span class="text-xs font-bold text-gray-500 uppercase tracking-wider">{$t('label.segment_range_n', {values: {n: i + 1}})}</span>
         <button class="text-gray-400 hover:text-black p-1 hover:bg-gray-100 rounded transition-colors"
           on:click={() => removeSegment(i)}
           title={$t('settings.remove')}

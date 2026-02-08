@@ -1,7 +1,7 @@
 <script lang="ts">
   import {onMount, onDestroy, tick} from 'svelte';
   import {get} from 'svelte/store';
-  import {slide, fade, fly} from 'svelte/transition';
+  import {fade, fly} from 'svelte/transition';
   import {t, isLoading} from 'svelte-i18n';
   import {injectAnalytics} from '@vercel/analytics/sveltekit';
   import type * as PdfjsLibTypes from 'pdfjs-dist';
@@ -34,6 +34,9 @@
   import {ChevronRight, ChevronLeft} from 'lucide-svelte';
 
   injectAnalytics();
+
+  const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
+  const TWO_SECONDS = 2000;
 
   let pdfjs: typeof PdfjsLibTypes | null = null;
   let PdfLib: typeof import('pdf-lib') | null = null;
@@ -107,13 +110,11 @@
       platform: 'web',
       version: '1.0.0',
     });
-  });
+  })
 
   onMount(() => {
     $pdfService = new PDFService();
-  });
 
-  onMount(() => {
     const hideUntil = localStorage.getItem('tocify_hide_graph_entrance_until');
     if (hideUntil) {
       const expiry = parseInt(hideUntil, 10);
@@ -123,6 +124,30 @@
         localStorage.removeItem('tocify_hide_graph_entrance_until');
       }
     }
+
+    // Global error handlers
+    const handleRejection = (event: PromiseRejectionEvent) => {
+      if (event.reason?.name === 'RenderingCancelledException') {
+        event.preventDefault();
+        return;
+      }
+      const msg = event.reason?.message || event.reason || 'Unknown Async Error';
+      toastProps = {show: true, message: msg, type: 'error'};
+      event.preventDefault();
+    };
+
+    const handleSyncError = (event: ErrorEvent) => {
+      const msg = event.message || 'Unknown Error';
+      toastProps = {show: true, message: msg, type: 'error'};
+    };
+
+    window.addEventListener('unhandledrejection', handleRejection);
+    window.addEventListener('error', handleSyncError);
+
+    return () => {
+      window.removeEventListener('unhandledrejection', handleRejection);
+      window.removeEventListener('error', handleSyncError);
+    };
   });
 
   onDestroy(async () => {
@@ -213,10 +238,7 @@
       originalPdfInstance &&
       $pdfService
     ) {
-      (async () => {
-        await tick();
-        renderOffsetPreviewPage(offsetPreviewPageNum);
-      })();
+      tick().then(() => renderOffsetPreviewPage(offsetPreviewPageNum));
     }
   }
 
@@ -231,7 +253,7 @@
       };
       setTimeout(() => {
         hasShownTocHint = true;
-      }, 2000);
+      }, TWO_SECONDS);
     }
   };
 
@@ -838,7 +860,7 @@
 
   const handleCloseNextStepHint = () => {
     showNextStepHint = false;
-    const expiry = Date.now() + 30 * 24 * 60 * 60 * 1000; // 30 days
+    const expiry = Date.now() + THIRTY_DAYS;
     localStorage.setItem('tocify_hide_next_step_hint_until', expiry.toString());
   };
 
@@ -846,40 +868,7 @@
     toastProps = {show: true, message: event.detail.message, type: event.detail.type};
   };
 
-  let prefixConfigs = DEFAULT_PREFIX_CONFIG;
-  let prefixEnabled = false;
 
-  const handlePrefixChange = (e: CustomEvent) => {
-    if (e.detail.configs) prefixConfigs = e.detail.configs;
-    if (e.detail.enabled !== undefined) prefixEnabled = e.detail.enabled;
-
-    if (isPreviewMode) debouncedUpdatePDF();
-  };
-
-  onMount(() => {
-    const handleRejection = (event: PromiseRejectionEvent) => {
-      if (event.reason?.name === 'RenderingCancelledException') {
-        event.preventDefault();
-        return;
-      }
-      const msg = event.reason?.message || event.reason || 'Unknown Async Error';
-      toastProps = {show: true, message: msg, type: 'error'};
-      event.preventDefault();
-    };
-
-    const handleSyncError = (event: ErrorEvent) => {
-      const msg = event.message || 'Unknown Error';
-      toastProps = {show: true, message: msg, type: 'error'};
-    };
-
-    window.addEventListener('unhandledrejection', handleRejection);
-    window.addEventListener('error', handleSyncError);
-
-    return () => {
-      window.removeEventListener('unhandledrejection', handleRejection);
-      window.removeEventListener('error', handleSyncError);
-    };
-  });
 </script>
 
 {#if !showGraphDrawer && tocItems && isGraphEntranceVisible}
@@ -915,7 +904,7 @@
         onHide={() => {
           showGraphDrawer = false;
           isGraphEntranceVisible = false;
-          const expiry = Date.now() + 30 * 24 * 60 * 60 * 1000; // 30 days
+          const expiry = Date.now() + THIRTY_DAYS;
           localStorage.setItem('tocify_hide_graph_entrance_until', expiry.toString());
         }}
       />
@@ -974,7 +963,6 @@
           bind:activeRangeIndex
           bind:addPhysicalTocPage
           bind:isTocConfigExpanded
-          on:prefixChange={handlePrefixChange}
           on:openhelp={() => (showHelpModal = true)}
           on:closeNextStepHint={handleCloseNextStepHint}
           on:apiConfigChange={handleApiConfigChange}

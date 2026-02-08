@@ -504,7 +504,7 @@
         <div class="w-[70%] text-gray-600 font-serif flex gap-1 sm:gap-2 items-center text-sm md:text-base">
           <span class="truncate">{filename}</span>
           <span class="text-gray-300">|</span>
-          <div class="flex items-center gap-1 min-w-32">
+          <div class="flex items-center gap-1 flex-nowrap">
             <input
               type="number"
               min="1"
@@ -523,7 +523,7 @@
             {#if currentPageLabel}
               <span class="text-xs text-gray-400 font-mono">({currentPageLabel})</span>
             {/if}
-            <span>/ {activeTotalPages}</span>
+            <span class="min-w-12">/ {activeTotalPages}</span>
           </div>
 
           {#if addPhysicalTocPage && jumpToTocPage && hasPreview}
