@@ -76,7 +76,10 @@ export function applyCustomPrefix(
     let coreNumber = '';
 
     if (config.inheritParent && parentPath.length > 0) {
-      const parentStr = parentPath.join(config.separator);
+      const parentParts = parentPath.map((val) => {
+        return convertNum(val, config.style);
+      });
+      const parentStr = parentParts.join(config.separator);
       const selfStr = convertNum(currentNum, config.style);
       coreNumber = `${parentStr}${config.separator}${selfStr}`;
     } else {

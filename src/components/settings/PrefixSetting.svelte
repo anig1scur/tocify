@@ -35,7 +35,7 @@
     } else {
       let core = num;
       if (config.inheritParent) {
-        const parentNum = '1';
+        const parentNum = convertNum(1, config.style);
         const sep = config.separator || '.';
         core = `${parentNum}${sep}${num}`;
       }

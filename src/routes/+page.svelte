@@ -12,9 +12,9 @@
   import {PDFService, type PDFState, type TocItem} from '../lib/pdf-service';
   import {setOutline} from '../lib/pdf-outliner';
   import {debounce} from '../lib';
-  import {buildTree, convertPdfJsOutlineToTocItems, setNestedValue, findActiveTocPath} from '$lib/utils';
+  import {buildTree, convertPdfJsOutlineToTocItems, setNestedValue, findActiveTocPath, cleanTocItems} from '$lib/utils';
   import {generateToc} from '$lib/toc-service';
-  import {applyCustomPrefix, DEFAULT_PREFIX_CONFIG, type LevelConfig} from '$lib/prefix-service';
+  import {applyCustomPrefix} from '$lib/prefix-service';
   import { setPageLabels } from '$lib/page-labels';
 
   import Toast from '../components/Toast.svelte';
@@ -564,7 +564,7 @@
 
       if (session) {
         const {items, pageOffset} = JSON.parse(session);
-        tocItems.set(items);
+        tocItems.set(cleanTocItems(items));
         updateTocField('pageOffset', pageOffset);
       } else {
         try {
@@ -783,16 +783,21 @@
   };
 
   const handleAddRange = () => {
+    const lastRange = tocRanges.length > 0 ? tocRanges[tocRanges.length - 1] : null;
+    let nextStart = lastRange ? lastRange.end + 1 : (pdfState.currentPage || 1);
+    
+    if (nextStart < 1) nextStart = 1;
+
     tocRanges = [
       ...tocRanges,
       {
-        start: pdfState.currentPage || 1,
-        end: pdfState.currentPage || 1,
+        start: nextStart,
+        end: nextStart,
         id: `range-${Date.now()}`,
       },
     ];
     activeRangeIndex = tocRanges.length - 1;
-};
+  };
 
   const handleRemoveRange = (e: CustomEvent) => {
     const {index} = e.detail;

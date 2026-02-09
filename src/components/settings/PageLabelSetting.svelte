@@ -22,9 +22,20 @@
   }
 
   function addSegment() {
+    const lastSegment = settings.segments && settings.segments.length > 0 ?
+        settings.segments[settings.segments.length - 1] :
+        null;
+
+    const nextStartPage = lastSegment ? lastSegment.startPage + 1 : 1;
+
     const next = [
       ...(settings.segments || []),
-      { startPage: 1, style: 'decimal' as PageLabelStyle, prefix: '', startAt: 1 },
+      {
+        startPage: nextStartPage,
+        style: 'decimal' as PageLabelStyle,
+        prefix: '',
+        startAt: 1
+      },
     ];
     emitSegments(next);
   }

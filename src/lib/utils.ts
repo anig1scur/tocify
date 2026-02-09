@@ -43,6 +43,25 @@ export function findActiveTocPath(
 }
 
 
+export function cleanTitle(title: string): string {
+  if (!title) return '';
+  // 1. Replace various irregular whitespace with standard space (NBSP, En Space, Em Space, etc.)
+  let cleaned = title.replace(/[\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000]/g, ' ');
+
+  // 2. Remove control characters and truly invisible markers (Zero Width, Soft Hyphen, BOM, etc.)
+  cleaned = cleaned.replace(/[\u0000-\u001F\u007F-\u009F\u00AD\u200B-\u200D\uFEFF\uFFFD]/g, '');
+
+  return cleaned;
+}
+
+export function cleanTocItems(items: TocItem[]): TocItem[] {
+  return items.map((item) => ({
+    ...item,
+    title: cleanTitle(item.title),
+    children: item.children ? cleanTocItems(item.children) : [],
+  }));
+}
+
 export function buildTree(
     items: {title: string; level: number; page: number}[]): TocItem[] {
   const root: TocItem[] = [];
@@ -52,7 +71,7 @@ export function buildTree(
   items.forEach((item) => {
     const newItem: TocItem = {
       id: uid.randomUUID(),
-      title: item.title,
+      title: cleanTitle(item.title),
       to: item.page,
       children: [],
       open: true,
@@ -113,7 +132,7 @@ export async function convertPdfJsOutlineToTocItems(
 
     return {
       id: `imported-${ uid.randomUUID() }`,
-      title: node.title,
+      title: cleanTitle(node.title),
       to: pageNum,
       children: children,
       open: false,
