@@ -404,16 +404,26 @@
     }
   }
 
-  function handleTouchEnd() {
+  function handlePointerMove(e: PointerEvent) {
+    lastMouseX = e.clientX;
+    lastMouseY = e.clientY;
+
+    if (!isSelecting) return;
+
+    checkAutoScroll(e.clientY);
+    updateSelectionFromPoint(e.clientX, e.clientY);
+  }
+
+  function handlePointerUp() {
     stopAutoScroll();
     if (pressTimer) {
       clearTimeout(pressTimer);
       pressTimer = null;
     }
-    if (isSelecting) {
-      handleMouseUp();
-    }
+    isSelecting = false;
+    selectionStartPage = 0;
   }
+
 
   function observeViewport(node: HTMLElement) {
     scrollContainer = node;
@@ -488,8 +498,13 @@
 </script>
 
 <svelte:window
+  on:pointermove={handlePointerMove}
+  on:pointerup={handlePointerUp}
+  on:pointercancel={handlePointerUp}
   on:mousemove={handleGridMouseMove}
   on:mouseup={handleMouseUp}
+  on:touchend={handlePointerUp}
+  on:touchcancel={handlePointerUp}
 />
 
 <div class="h-[85vh] rounded-lg relative w-full bg-white">
@@ -629,10 +644,10 @@
     <div
       class="grid grid-cols-2 gap-3 p-3 select-none md:grid-cols-3 md:gap-4 2xl:grid-cols-4 2xl:gap-5"
       class:cursor-grabbing={isSelecting}
-      class:touch-none={isSelecting}
       on:touchmove|nonpassive={handleTouchMove}
-      on:touchend={handleTouchEnd}
-      on:touchcancel={handleTouchEnd}
+      on:touchend={handlePointerUp}
+      on:touchcancel={handlePointerUp}
+      on:contextmenu|preventDefault
     >
       {#each gridPages as page (page.pageNum)}
         {@const rangeIndex = tocRanges.findIndex((r) => page.pageNum >= r.start && page.pageNum <= r.end)}
@@ -650,6 +665,7 @@
           class:border-blue-500={isSelected && isActive}
           class:border-gray-500={(isSelected && !isActive) || !isSelected}
           class:scale-[1.02]={isSelected}
+          style="-webkit-touch-callout: none;"
           on:mousedown={() => handleMouseDown(page.pageNum)}
           on:touchstart={() => handleTouchStart(page.pageNum)}
           on:mouseenter={() => handleMouseEnter(page.pageNum)}

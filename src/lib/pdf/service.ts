@@ -1,7 +1,7 @@
 import { browser } from '$app/environment';
 import { PDFDocument } from 'pdf-lib';
 import fontkit from 'pdf-fontkit';
-import * as pdfjsLib from 'pdfjs-dist';
+import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.js';
 import { type TocConfig } from '../../stores';
 import { A4_WIDTH, BASE_FONT_SIZE_L1, BASE_FONT_SIZE_OTHER } from '../constants';
 
@@ -37,11 +37,11 @@ if (typeof Promise.withResolvers === 'undefined') {
 }
 
 if (browser) {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `/pdf.worker.min.mjs`;
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `/pdf.worker.v3.min.js`;
 }
 
 export class PDFService {
-  static sharedWorker = new pdfjsLib.PDFWorker();
+  static sharedWorker = browser ? new pdfjsLib.PDFWorker() : null;
 
   static regularFontBytes: Map<string, ArrayBuffer> = new Map();
   static boldFontBytes: Map<string, ArrayBuffer> = new Map();

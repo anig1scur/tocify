@@ -278,9 +278,16 @@
   const loadPdfLibraries = async () => {
     if (pdfjs && PdfLib) return;
     try {
-      const [pdfjsModule, PdfLibModule] = await Promise.all([import('pdfjs-dist'), import('pdf-lib')]);
+      const [pdfjsModule, PdfLibModule] = await Promise.all([
+        import('pdfjs-dist/legacy/build/pdf.js'),
+        import('pdf-lib')
+      ]);
       pdfjs = pdfjsModule;
       PdfLib = PdfLibModule;
+      
+      if (pdfjs) {
+        pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.v3.min.js';
+      }
     } catch (error: any) {
       console.error('Failed to load PDF libraries:', error);
       toastProps = {
@@ -370,8 +377,8 @@
 
       const loadingTask = pdfjs.getDocument({
         data: pdfBytes,
-        worker: PDFService.sharedWorker,
-        cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/cmaps/',
+        worker: PDFService.sharedWorker || undefined,
+        cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/cmaps/',
         cMapPacked: true,
       });
 
@@ -547,8 +554,8 @@
 
       const loadingTask = pdfjs.getDocument({
         data: uint8Array,
-        worker: PDFService.sharedWorker,
-        cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/cmaps/',
+        worker: PDFService.sharedWorker || undefined,
+        cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/cmaps/',
         cMapPacked: true,
       });
       originalPdfInstance = await loadingTask.promise;

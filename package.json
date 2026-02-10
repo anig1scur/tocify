@@ -6,7 +6,7 @@
 	"scripts": {
 		"dev": "vite dev --host",
 		"build": "vite build",
-		"preview": "vite preview",
+		"preview": "vite preview --host",
 		"prepare": "svelte-kit sync || echo ''",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch"
@@ -35,7 +35,7 @@
 		"openai": "^6.15.0",
 		"pdf-fontkit": "^1.8.9",
 		"pdf-lib": "^1.17.1",
-		"pdfjs-dist": "^4.10.38",
+		"pdfjs-dist": "^3.11.174",
 		"roughjs": "^4.6.6",
 		"short-unique-id": "^5.2.0",
 		"svelte-dnd-action": "^0.9.68",
