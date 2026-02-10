@@ -2,8 +2,8 @@ import { browser } from '$app/environment';
 import { PDFDocument } from 'pdf-lib';
 import fontkit from 'pdf-fontkit';
 import * as pdfjsLib from 'pdfjs-dist';
-import { type TocConfig } from '../stores';
-import { A4_WIDTH, BASE_FONT_SIZE_L1, BASE_FONT_SIZE_OTHER } from './constants';
+import { type TocConfig } from '../../stores';
+import { A4_WIDTH, BASE_FONT_SIZE_L1, BASE_FONT_SIZE_OTHER } from '../constants';
 
 export interface TocItem {
   id: string;
@@ -94,7 +94,7 @@ export class PDFService {
   }
 
   private initWorker() {
-    this.worker = new Worker(new URL('./workers/pdf.worker.ts', import.meta.url), { type: 'module' });
+    this.worker = new Worker(new URL('../workers/pdf.worker.ts', import.meta.url), { type: 'module' });
     this.worker.onmessage = (e) => {
       const { type, id, payload, error } = e.data;
       if (this.workerCallbacks.has(id)) {

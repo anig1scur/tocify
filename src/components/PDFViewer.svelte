@@ -4,7 +4,7 @@
   import {t} from 'svelte-i18n';
 
   import {pdfService, tocItems, tocConfig} from '../stores';
-  import {type PDFService, type PDFState, type TocItem} from '../lib/pdf-service';
+  import {type PDFService, type PDFState, type TocItem} from '$lib/pdf/service';
   import type {RenderTask} from 'pdfjs-dist';
 
   export let pdfState: PDFState;

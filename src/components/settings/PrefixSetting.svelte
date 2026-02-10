@@ -2,7 +2,7 @@
   import {createEventDispatcher} from 'svelte';
   import {t} from 'svelte-i18n';
   import {slide} from 'svelte/transition';
-  import {type LevelConfig, type CounterStyle, convertNum} from '$lib/prefix-service';
+  import {type LevelConfig, type CounterStyle, convertNum} from '$lib/utils/prefix';
 
   export let settings: {
     enabled: boolean;

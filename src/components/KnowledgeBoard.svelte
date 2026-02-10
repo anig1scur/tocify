@@ -4,7 +4,7 @@
   import rough from 'roughjs';
   import GraphNode from './GraphNode.svelte';
   import {Sparkles, Loader2, RefreshCw, Maximize2, Minimize2, BrainCircuit, BookOpen, EyeOff} from 'lucide-svelte';
-  import {CARD_W, CARD_H, getRandomPaperColor, computeHierarchicalLayout, getClosestPoints} from '../lib/graph-utils';
+  import {CARD_W, CARD_H, getRandomPaperColor, computeHierarchicalLayout, getClosestPoints} from '$lib/utils/graph';
   export let items = [];
   export let apiConfig = {apiKey: ''};
 

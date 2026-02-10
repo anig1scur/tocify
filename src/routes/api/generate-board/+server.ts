@@ -40,7 +40,7 @@ Output JSON format:
   "nodes": [ 
     { 
       "id": "string", 
-      "label": "string (Short, <6 words)",
+      "label": "string (Short, <10 words)",
       "cluster": "string",
       "page": number | null 
     } 

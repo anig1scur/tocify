@@ -4,7 +4,7 @@
   import {t} from 'svelte-i18n';
   import type {TocConfig} from '../../stores';
   import PageLabelSetting from './PageLabelSetting.svelte';
-  import { isDefaultPageLabelSegments, suggestPageLabelSegmentsFromTocRanges } from '$lib/page-labels';
+  import { isDefaultPageLabelSegments, suggestPageLabelSegmentsFromTocRanges } from '$lib/pdf/page-labels';
   import { HelpCircle } from 'lucide-svelte';
 
   import PrefixSettings from './PrefixSetting.svelte';

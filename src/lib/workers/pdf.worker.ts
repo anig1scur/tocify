@@ -2,7 +2,7 @@ import { PDFDocument, type PDFFont, PDFName, type PDFPage, rgb, StandardFonts, P
 import * as pdfjsLib from 'pdfjs-dist';
 import fontkit from 'pdf-fontkit';
 import { TOC_LAYOUT, CJK_REGEX } from '../constants';
-import { setOutline } from '../pdf-outliner';
+import { setOutline } from '../pdf/outliner';
 
 // Configure PDF.js
 pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';

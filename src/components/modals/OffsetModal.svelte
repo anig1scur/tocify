@@ -3,7 +3,7 @@
   import {fade, fly} from 'svelte/transition';
   import {X} from 'lucide-svelte';
   import {t} from 'svelte-i18n';
-  import type {TocItem} from '../../lib/pdf-service';
+  import type {TocItem} from '$lib/pdf/service';
 
   export let showOffsetModal: boolean;
   export let firstTocItem: TocItem | null;

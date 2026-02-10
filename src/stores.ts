@@ -1,7 +1,7 @@
 import {browser} from '$app/environment';
-import {PDFService} from '$lib/pdf-service';
-import {DEFAULT_PREFIX_CONFIG, type LevelConfig} from '$lib/prefix-service';
-import { createDefaultPageLabelSettings, type PageLabelSettings } from '$lib/page-labels';
+import { PDFService } from '$lib/pdf/service';
+import { type LevelConfig, DEFAULT_PREFIX_CONFIG } from '$lib/utils/prefix';
+import { type PageLabelSettings, createDefaultPageLabelSettings } from '$lib/pdf/page-labels';
 import {get, writable} from 'svelte/store';
 
 export type StyleConfig = {

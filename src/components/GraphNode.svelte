@@ -2,7 +2,7 @@
   import {BrainCircuit} from 'lucide-svelte';
   import {t} from 'svelte-i18n';
   import {createEventDispatcher} from 'svelte';
-  import {CARD_W, CARD_H} from '../lib/graph-utils';
+  import {CARD_W, CARD_H} from '$lib/utils/graph';
 
   export let node;
   export let activeNodeId;

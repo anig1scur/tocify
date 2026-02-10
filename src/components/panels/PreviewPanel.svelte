@@ -6,7 +6,7 @@
 
   import DropzoneView from '../DropzoneView.svelte';
   import PDFViewer from '../PDFViewer.svelte';
-  import PdfControls from '../PdfControls.svelte';
+  import PDFControls from '../PDFControls.svelte';
 
   export let isFileLoading = false;
   export let isDragging = false;
@@ -120,7 +120,7 @@
           on:change={handleFileInputChange}
         />
 
-        <PdfControls
+        <PDFControls
           {isPreviewLoading}
           {isPreviewMode}
           {originalPdfInstance}

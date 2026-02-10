@@ -9,13 +9,13 @@
 
   import '../lib/i18n';
   import {pdfService, tocItems, curFileFingerprint, tocConfig, autoSaveEnabled, type TocConfig} from '../stores';
-  import {PDFService, type PDFState, type TocItem} from '../lib/pdf-service';
-  import {setOutline} from '../lib/pdf-outliner';
-  import {debounce} from '../lib';
+  import {PDFService, type PDFState, type TocItem} from '$lib/pdf/service';
+  import {setOutline} from '$lib/pdf/outliner';
+  import {debounce} from '$lib';
   import {buildTree, convertPdfJsOutlineToTocItems, setNestedValue, findActiveTocPath, cleanTocItems} from '$lib/utils';
   import {generateToc} from '$lib/toc-service';
-  import {applyCustomPrefix} from '$lib/prefix-service';
-  import { setPageLabels } from '$lib/page-labels';
+  import {applyCustomPrefix} from '$lib/utils/prefix';
+  import { setPageLabels } from '$lib/pdf/page-labels';
 
   import Toast from '../components/Toast.svelte';
   import Footer from '../components/Footer.svelte';

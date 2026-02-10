@@ -1,4 +1,4 @@
-import type {TocItem} from '$lib/pdf-service';
+import type {TocItem} from '../pdf/service';
 import type * as PdfjsLibTypes from 'pdfjs-dist';
 import ShortUniqueId from 'short-unique-id';
 

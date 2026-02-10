@@ -1,7 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import { t } from 'svelte-i18n';
-  import type { PageLabelSettings, PageLabelStyle } from '$lib/page-labels';
+  import type { PageLabelSettings, PageLabelStyle } from '$lib/pdf/page-labels';
   import {Trash2} from 'lucide-svelte';
 
   export let settings: PageLabelSettings;
