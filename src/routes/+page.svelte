@@ -105,7 +105,9 @@
   };
 
   onMount(async () => {
-    init('A-US-0422911470');
+    init('A-US-0422911470', {
+      appVersion: '1.0.0',
+    });
     trackEvent('app_started', {
       platform: 'web',
       version: '1.0.0',
