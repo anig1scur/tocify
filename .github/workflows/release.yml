@@ -1,0 +1,85 @@
+name: Release
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  publish-tauri:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [macos-latest, macos-15-intel, windows-latest]
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 10
+
+      - name: Setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install frontend dependencies
+        run: pnpm install
+
+      - name: Update Version from Tag
+        run: |
+          node -e "
+            const fs = require('fs');
+            // 获取 tag 名，例如 'v1.0.2'
+            const tag = '${{ github.ref_name }}';
+            // 去掉开头的 'v'
+            const version = tag.replace(/^v/, '');
+            
+            console.log('Injecting version:', version);
+
+            const tauriPath = './src-tauri/tauri.conf.json';
+            const tauriConf = require(tauriPath);
+            tauriConf.version = version;
+            fs.writeFileSync(tauriPath, JSON.stringify(tauriConf, null, 2));
+
+            const pkgPath = './package.json';
+            const pkg = require(pkgPath);
+            pkg.version = version;
+            fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2));
+          "
+
+      - name: Get Commit Log (Generate Release Notes)
+        id: changelog
+        shell: bash
+        run: |
+          LAST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -z "$LAST_TAG" ]; then
+            LOG=$(git log --oneline --pretty=format:"- %s (%h)")
+          else
+            LOG=$(git log $LAST_TAG..HEAD --oneline --pretty=format:"- %s (%h)")
+          fi
+          echo "RELEASE_BODY<<EOF" >> $GITHUB_ENV
+          echo "$LOG" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+      - name: Build and Upload
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: 'Tocify v__VERSION__'
+          releaseBody: ${{ env.RELEASE_BODY }}
+          releaseDraft: true
+          prerelease: false

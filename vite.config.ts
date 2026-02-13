@@ -19,7 +19,6 @@ export default defineConfig({
         }
       }
     },
-    target: 'es2018',
     chunkSizeWarningLimit: 1000
   }
 });

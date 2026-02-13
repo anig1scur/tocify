@@ -1,0 +1,26 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "enables the default permissions",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:app:allow-version",
+    "updater:default",
+    "updater:allow-check",
+    "updater:allow-download",
+    "updater:allow-install",
+    "updater:allow-download-and-install",
+    "process:allow-restart",
+    "process:allow-exit",
+    "dialog:default",
+    "fs:default",
+    "os:default",
+    "fs:allow-write-file",
+    {
+      "identifier": "fs:scope",
+      "allow": ["$HOME/**"]
+    }
+  ]
+}

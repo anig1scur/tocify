@@ -1,14 +1,16 @@
 <script lang="ts">
-  import {onDestroy, tick, createEventDispatcher} from 'svelte';
+  import {onDestroy, tick} from 'svelte';
   import ShortUniqueId from 'short-unique-id';
   import {Sparkles, Loader2} from 'lucide-svelte';
   import {t} from 'svelte-i18n';
   import TocItem from './TocItem.svelte';
   import Tooltip from './Tooltip.svelte';
-  import {tocItems, maxPage, autoSaveEnabled, dragDisabled} from '../stores';
+  import {tocItems, maxPage, autoSaveEnabled} from '../stores';
 
   import {dndzone} from 'svelte-dnd-action';
   import {flip} from 'svelte/animate';
+
+  import {processToc} from '$lib/service';
 
   export let currentPage = 1;
   export let isPreview = false;
@@ -17,7 +19,6 @@
   export let tocPageCount = 0;
 
   export let apiConfig = {provider: '', apiKey: ''};
-  const dispatch = createEventDispatcher();
 
   const flipDurationMs = 200;
 
@@ -146,29 +147,24 @@
     }
 
     isProcessing = true;
-    const response = await fetch('/api/process-toc', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({
+    try {
+      const aiResult = await processToc({
         text: text,
         apiKey: apiConfig.apiKey,
         provider: apiConfig.provider,
-      }),
-    });
+      });
 
-    if (!response.ok) {
-      const errData = await response.json().catch(() => ({}));
-      throw new Error(errData.message || 'AI processing failed');
-    }
+      isProcessing = false;
 
-    const aiResult = await response.json();
-    isProcessing = false;
-
-    if (Array.isArray(aiResult) && aiResult.length > 0) {
-      saveHistory();
-      $tocItems = buildTree(aiResult);
-    } else {
-      throw new Error('AI could not parse any ToC structure.');
+      if (Array.isArray(aiResult) && aiResult.length > 0) {
+        saveHistory();
+        $tocItems = buildTree(aiResult);
+      } else {
+        throw new Error('AI could not parse any ToC structure.');
+      }
+    } catch (err: any) {
+      isProcessing = false;
+      throw new Error(err.message || 'AI processing failed');
     }
   }
 
@@ -250,9 +246,6 @@
     });
   };
 
-  function handleMouseUp() {
-    $dragDisabled = true;
-  }
 
   function handleDndConsider(e) {
     handleDragStart();
@@ -340,15 +333,9 @@
     .some((line) => !TOC_REGEX.test(line));
 
   $: promptTooltipText = $t('toc.prompt_intro');
-  let innerWidth: number;
 </script>
 
-<svelte:window
-  on:keydown={handleKeydown}
-  on:mouseup={handleMouseUp}
-  on:touchend={handleMouseUp}
-  bind:innerWidth
-/>
+<svelte:window on:keydown={handleKeydown} />
 
 <div class="flex flex-col gap-4 mt-3">
   <div class="h-48 relative group">
@@ -364,7 +351,7 @@
           isTextCopiable
           width="md:w-[350px] w-[250px]"
           text={promptTooltipText}
-          position={innerWidth < 1024 ? '-200 -500' : '100 -600'}
+          position={'100 -600'}
         >
           <button
             on:click={handleAiFormat}
@@ -393,7 +380,7 @@
         use:dndzone={{
           items: $tocItems,
           flipDurationMs,
-          dragDisabled: $dragDisabled,
+          dragDisabled: isDragging,
           dropTargetStyle: {outline: '2px dashed #000', borderRadius: '8px'},
         }}
         on:consider={handleDndConsider}
@@ -414,10 +401,8 @@
               {pageOffset}
               {insertAtPage}
               {tocPageCount}
+              on:jumpToPage
               on:hoveritem
-              on:jumpToPage={(e) => {
-                dispatch('jumpToPage', e.detail);
-              }}
               index={i + 1}
             />
           </div>

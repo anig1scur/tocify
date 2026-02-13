@@ -9,7 +9,7 @@
   const dispatch = createEventDispatcher();
 
   let config = {
-    provider: '',
+    provider: 'gemini',
     apiKey: '',
     doubaoEndpointIdText: '',
     doubaoEndpointIdVision: '',
@@ -90,7 +90,6 @@
             bind:value={config.provider}
             on:change={() => (isSaved = false)}
           >
-            <option value="">Auto</option>
             <option value="gemini">Gemini</option>
             <option value="qwen">Qwen</option>
             <option value="doubao">Doubao</option>

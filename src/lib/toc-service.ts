@@ -2,6 +2,7 @@ import type * as PdfjsLibTypes from 'pdfjs-dist';
 import {get} from 'svelte/store';
 
 import {pdfService} from '../stores';
+import { processToc } from '$lib/service';
 
 interface AiTocOptions {
   pdfInstance: PdfjsLibTypes.PDFDocumentProxy;
@@ -64,40 +65,21 @@ export async function generateToc(
     throw new Error('No valid pages selected.');
   }
 
-  const response = await fetch('/api/process-toc', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({
-      images: imagesBase64,
-      apiKey: apiKey,
-      provider: provider,
-      doubaoEndpointIdText,
-      doubaoEndpointIdVision,
-    }),
-  });
-
-  if (!response.ok) {
-    const err = await response.json();
-    let friendlyMessage = err.message || 'AI processing failed.';
-
-    if (response.status >= 500 && response.status < 600) {
-      const p = provider || 'Unknown Provider';
-      const providerName = p.charAt(0).toUpperCase() + p.slice(1);
-      friendlyMessage = `${ providerName }: ${ friendlyMessage } You can try other model in API settings.`;
-    } else if (friendlyMessage.includes('No valid ToC') ||
-        friendlyMessage.includes('parsing error') ||
-        friendlyMessage.includes('structure')) {
-      friendlyMessage =
-          'The selected pages don\'t look like a ToC. Please try adjusting the page range.';
-    } else if (response.status === 413) {
-      friendlyMessage =
-          'Request too large. Please reduce the page range or lower the resolution.';
-    } else if (response.status === 429) {
-      friendlyMessage =
-          'Daily limit exceeded. Please try again tomorrow or download the client or deploy service with your own API key.';
-    }
-    throw new Error(friendlyMessage);
+  if (!apiKey) {
+    throw new Error('Please enter your API Key in Settings first.');
   }
 
-  return await response.json();
+  try {
+    const result = await processToc({
+      images: imagesBase64,
+      apiKey: apiKey,
+      provider: provider || 'gemini',
+      doubaoEndpointIdText,
+      doubaoEndpointIdVision,
+    });
+    return result;
+  } catch (err: any) {
+    const friendlyMessage = err.message || 'AI processing failed.';
+    throw new Error(friendlyMessage);
+  }
 }

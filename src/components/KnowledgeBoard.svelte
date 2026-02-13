@@ -6,7 +6,12 @@
   import {Sparkles, Loader2, RefreshCw, Maximize2, Minimize2, BrainCircuit, BookOpen, EyeOff} from 'lucide-svelte';
   import {CARD_W, CARD_H, getRandomPaperColor, computeHierarchicalLayout, getClosestPoints} from '$lib/utils/graph';
   export let items = [];
-  export let apiConfig = {apiKey: ''};
+  export let apiConfig = {
+    apiKey: '',
+    provider: '',
+    doubaoEndpointIdText: '',
+    doubaoEndpointIdVision: '',
+  };
 
   export let title = 'Untitled Book';
 
@@ -56,37 +61,52 @@
   const LINE_DIM = {roughness: 2, bowing: 1, stroke: '#e2e8f0', strokeWidth: 1};
   const LINE_ACTIVE = {roughness: 1, bowing: 1, stroke: ACTIVE_COLOR, strokeWidth: 2.5};
 
+  import { generateKnowledgeGraph } from '$lib/service';
+
   async function handleGenerateGraph() {
     if (items.length === 0) return;
     isLoading = true;
     activeNodeId = null;
 
-  const simplifiedItems = items.map((item) => ({
+    const simplifiedItems = items.map((item) => ({
       id: item.id,
       title: item.title,
       page: item.to || null,
     }));
 
     try {
-      const response = await fetch('/api/generate-board', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-          tocItems: simplifiedItems,
-          apiKey: apiConfig.apiKey,
-        }),
+      const data = await generateKnowledgeGraph({
+        tocItems: simplifiedItems,
+        apiKey: apiConfig.apiKey,
+        provider: apiConfig.provider,
+        doubaoConfig: {
+            textEndpoint: apiConfig.doubaoEndpointIdText,
+            visionEndpoint: apiConfig.doubaoEndpointIdVision
+        }
       });
 
-      if (!response.ok) throw new Error('API Failed');
-      const data = await response.json();
+      let nodes = data.nodes.map((n) => {
+        // Try to recover page number from source items if AI missed it
+        let page = n.page;
+        if (page === undefined || page === null) {
+            const match = items.find(i => String(i.id) === String(n.id));
+            if (match && match.to) page = match.to;
+        }
 
-      let nodes = data.nodes.map((n) => ({
-        ...n,
-        bgColor: n.isInferred ? '#f8fafc' : getRandomPaperColor(),
-        x: 0,
-        y: 0,
-        page: n.page || null,
-      }));
+        const isInferred = (page === null || page === undefined);
+
+        return {
+            ...n,
+            title: n.label || n.title || n.id,
+            cluster: n.cluster || 'Unclassified',
+            page: page,
+            isInferred: isInferred,
+            bgColor: isInferred ? '#f8fafc' : getRandomPaperColor(),
+            x: 0,
+            y: 0,
+        };
+      });
+      
       let edges = data.edges || [];
 
       nodes = computeHierarchicalLayout(nodes, edges, canvasWidth);
@@ -98,7 +118,7 @@
       drawWall();
     } catch (e) {
       console.error(e);
-      alert($t('knowledge_board.error_failed'));
+      alert($t('knowledge_board.error_failed') + ': ' + (e.message || e));
     } finally {
       isLoading = false;
     }

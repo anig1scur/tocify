@@ -1,0 +1,52 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "Tocify",
+  "version": "1.0.0",
+  "identifier": "com.tocify.app",
+  "build": {
+    "frontendDist": "../build",
+    "devUrl": "http://localhost:5173",
+    "beforeDevCommand": "pnpm dev",
+    "beforeBuildCommand": "pnpm build"
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDNCNTdDRTMyRTg1RjAzRjcKUldUM0ExL29NczVYTzhBdWVBWUFnYlYvOE95Y3JIdEM0Z3dhRXFWQ2IwWUwyWkJBc1lwRHRRVFYK",
+      "endpoints": [
+        "https://github.com/anig1scur/tocify/releases/latest/download/latest.json"
+      ]
+    }
+  },
+  "app": {
+    "withGlobalTauri": true,
+   "windows": [
+      {
+        "label": "main",
+        "title": "Tocify",
+        "width": 1440,       
+        "height": 900,       
+        "minWidth": 900,     
+        "minHeight": 600,    
+        "center": true,      
+        "resizable": true,
+        "fullscreen": false,
+        "decorations": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "createUpdaterArtifacts": true,
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  }
+}

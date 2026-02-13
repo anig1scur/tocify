@@ -3,10 +3,11 @@
   import {get} from 'svelte/store';
   import {fade, fly} from 'svelte/transition';
   import {t, isLoading} from 'svelte-i18n';
-  import {injectAnalytics} from '@vercel/analytics/sveltekit';
   import type * as PdfjsLibTypes from 'pdfjs-dist';
   import {init, trackEvent} from '@aptabase/web';
 
+  import { getVersion } from '@tauri-apps/api/app';
+  import { isTauri } from '@tauri-apps/api/core';
   import '../lib/i18n';
   import {pdfService, tocItems, curFileFingerprint, tocConfig, autoSaveEnabled, type TocConfig} from '../stores';
   import {PDFService, type PDFState, type TocItem} from '$lib/pdf/service';
@@ -23,17 +24,12 @@
   import AiLoadingModal from '../components/modals/AiLoadingModal.svelte';
   import OffsetModal from '../components/modals/OffsetModal.svelte';
   import HelpModal from '../components/modals/HelpModal.svelte';
-  import StarRequestModal from '../components/modals/StarRequestModal.svelte';
 
-  import DownloadBanner from '../components/DownloadBanner.svelte';
   import SidebarPanel from '../components/panels/SidebarPanel.svelte';
   import PreviewPanel from '../components/panels/PreviewPanel.svelte';
-  import SeoJsonLd from '../components/SeoJsonLd.svelte';
 
   import TocRelation from '../components/KnowledgeBoard.svelte';
   import {ChevronRight, ChevronLeft} from 'lucide-svelte';
-
-  injectAnalytics();
 
   const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
   const TWO_SECONDS = 2000;
@@ -50,11 +46,9 @@
   let hasShownTocHint = false;
 
   let showGraphDrawer = false;
-  let isGraphEntranceVisible = true;
 
   let showOffsetModal = false;
   let showHelpModal = false;
-  let showStarRequestModal = false;
   let offsetPreviewPageNum = 1;
 
   let toastProps: {
@@ -105,25 +99,30 @@
   };
 
   onMount(async () => {
-    init('A-US-0422911470');
-    trackEvent('app_started', {
-      platform: 'web',
-      version: '1.0.0',
+    let currentVersion = '1.0.0';
+    const isTauriEnv = isTauri();
+    
+    if (isTauriEnv) {
+      try {
+        currentVersion = await getVersion();
+      } catch (e) {
+        console.warn('Failed to get app version:', e);
+      }
+    }
+
+    init('A-US-0422911470', {
+      isDebug: !import.meta.env.PROD,
+      appVersion: currentVersion
     });
-  })
+
+    trackEvent('app_started', {
+      version: currentVersion,
+      platform: isTauriEnv ? 'desktop' : 'web',
+    });
+  });
 
   onMount(() => {
     $pdfService = new PDFService();
-
-    const hideUntil = localStorage.getItem('tocify_hide_graph_entrance_until');
-    if (hideUntil) {
-      const expiry = parseInt(hideUntil, 10);
-      if (Date.now() < expiry) {
-        isGraphEntranceVisible = false;
-      } else {
-        localStorage.removeItem('tocify_hide_graph_entrance_until');
-      }
-    }
 
     // Global error handlers
     const handleRejection = (event: PromiseRejectionEvent) => {
@@ -673,13 +672,6 @@
         setTimeout(() => URL.revokeObjectURL(url), 1000);
       }
       toastProps = {show: true, message: 'Export Successful!', type: 'success'};
-
-      setTimeout(() => {
-        const isDismissed = localStorage.getItem('tocify_hide_star_request') === 'true';
-        if (!isDismissed) {
-          showStarRequestModal = true;
-        }
-      }, 1000);
     } catch (error: any) {
       console.error('Error exporting PDF:', error);
       toastProps = {show: true, message: `Error exporting PDF: ${error.message}`, type: 'error'};
@@ -703,6 +695,8 @@
         ranges: tocRanges,
         apiKey: customApiConfig.apiKey,
         provider: customApiConfig.provider,
+        doubaoEndpointIdText: customApiConfig.doubaoEndpointIdText,
+        doubaoEndpointIdVision: customApiConfig.doubaoEndpointIdVision,
       });
 
       if (!res || res.length === 0) {
@@ -883,7 +877,7 @@
 
 </script>
 
-{#if !showGraphDrawer && tocItems && isGraphEntranceVisible}
+{#if !showGraphDrawer && tocItems}
   <button
     transition:fly={{x: -50, duration: 300}}
     class="fixed -left-1 p-1 md:p-2 md:left-0 top-[40vh] z-40 bg-white border-2 border-black border-l-0 rounded-r-lg shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:bg-yellow-200 transition-colors flex flex-col items-center gap-2 group"
@@ -911,14 +905,10 @@
     <div class="flex-1 overflow-hidden relative w-full h-full bg-slate-50">
       <TocRelation
         items={$tocItems}
+        apiConfig={customApiConfig}
+        onHide={() => (showGraphDrawer = false)}
         onJumpToPage={jumpToPage}
         title={pdfState.filename ? `${pdfState.filename}`.replace('.pdf', '') : 'No file loaded'}
-        onHide={() => {
-          showGraphDrawer = false;
-          isGraphEntranceVisible = false;
-          const expiry = Date.now() + THIRTY_DAYS;
-          localStorage.setItem('tocify_hide_graph_entrance_until', expiry.toString());
-        }}
       />
     </div>
   </div>
@@ -932,7 +922,7 @@
   {/if}
 </div>
 
-<DownloadBanner />
+
 
 {#if toastProps.show}
   <Toast
@@ -1023,11 +1013,9 @@
       </div>
   </div>
 
-
-
   <Footer />
 
-  <SeoJsonLd title={$t('meta.title')} />
+
 
   <AiLoadingModal
     {isAiLoading}
@@ -1043,58 +1031,10 @@
   />
 
   <HelpModal bind:showHelpModal />
-
-  <StarRequestModal bind:show={showStarRequestModal} />
 {/if}
 
 <svelte:window on:beforeunload={handleBeforeUnload} />
 
-<svelte:head>
-  <title>{$t('meta.title') || 'Tocify · Add or edit PDF Table of Contents online'}</title>
-  <meta
-    name="description"
-    content={$t('meta.description') ||
-      'A free, online tool to automatically generate Table of Contents (bookmarks) for PDFs.'}
-  />
-  <link
-    rel="canonical"
-    href="https://tocify.aeriszhu.com/"
-  />
-  <meta
-    name="keywords"
-    content="add bookmarks to PDF, PDF table of contents, clickable PDF outline, PDF bookmark editor, create PDF TOC, generate PDF outline, PDF 目录生成, PDF 添加书签, 扫描版 PDF 目录, PDF 在线免费工具"
-  />
-  <meta
-    property="og:title"
-    content="Tocify - 给 PDF 自动生成目录"
-  />
-  <meta
-    property="og:description"
-    content="一个免费为 PDF 添加目录（书签）的在线工具"
-  />
-  <meta
-    name="twitter:card"
-    content="summary_large_image"
-  />
-  <meta
-    name="twitter:image"
-    content="/og-image.png"
-  />
-  <link
-    rel="icon"
-    href="/favicon.ico"
-  />
-  <link
-    rel="icon"
-    type="image/svg+xml"
-    href="/favicon.svg"
-  />
-  <link
-    rel="icon"
-    type="image/png"
-    href="/favicon.png"
-  />
-</svelte:head>
 
 <style>
   .writing-mode-vertical {
