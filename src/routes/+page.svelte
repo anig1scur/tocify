@@ -108,6 +108,7 @@
     init('A-US-0422911470', {
       appVersion: '1.0.0',
     });
+
     trackEvent('app_started', {
       platform: 'web',
       version: '1.0.0',
@@ -323,6 +324,8 @@
 
   async function updatePDF() {
     if (!pdfState.doc || !$pdfService) return;
+    isPreviewLoading = true;
+
     if (!pdfjs || !PdfLib) {
       console.error('PDF libraries not loaded.');
       toastProps = {show: true, message: 'Components not loaded. Please reupload your file.', type: 'error'};
