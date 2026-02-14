@@ -1,3 +1,14 @@
+if (typeof (globalThis as any).document === 'undefined') {
+  (globalThis as any).document = {
+    createElement: () => ({}),
+    currentScript: null,
+    baseURI: (globalThis as any).location?.href || ''
+  };
+}
+if (typeof (globalThis as any).window === 'undefined') {
+  (globalThis as any).window = globalThis;
+}
+
 import { PDFDocument, type PDFFont, PDFName, type PDFPage, rgb, StandardFonts, PDFArray } from 'pdf-lib';
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.js';
 import fontkit from 'pdf-fontkit';
@@ -50,7 +61,8 @@ self.onmessage = async (e: MessageEvent) => {
 
 async function detectTocPages(pdfBytes: ArrayBuffer): Promise<number[]> {
   // Load with PDF.js for text extraction
-  // disableWorker: true forces it to run in the current thread (which is already a worker)
+  // We avoid spawning another worker here by letting it fall back to the "fake worker"
+  // which now has a mocked document/window to prevent crashing.
   const loadingTask = pdfjsLib.getDocument({
     data: new Uint8Array(pdfBytes),
     disableFontFace: true,
