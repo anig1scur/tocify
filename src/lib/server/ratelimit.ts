@@ -69,11 +69,23 @@ export function withRateLimit(
   handler: (event: any) => Promise<Response>
 ) {
   return async (event: any) => {
+    try {
+      const clonedRequest = event.request.clone();
+      const body = await clonedRequest.json();
+
+      if (body.apiKey) {
+        return handler(event);
+      }
+    } catch (e) {
+      // If body parsing fails or is not JSON, proceed to rate check
+    }
+
     const limitRes = await checkRateLimit(
       event.request,
       LIMIT_CONFIG.MAX_REQUESTS_PER_DAY,
       '@tocify/ratelimit'
     );
+
     if (limitRes) {
       return limitRes;
     }
