@@ -188,7 +188,7 @@ export const POST = withRateLimit(async ({ request }) => {
         console.error(`[${ currentProvider }] JSON Repair failed:`, rawString);
         throw error(
           500,
-          'AI returned invalid JSON structure that could not be repaired.');
+          'AI returned invalid JSON structure that could not be repaired. Please try again.');
       }
     }
 

@@ -94,7 +94,7 @@ export async function generateToc(
           'Request too large. Please reduce the page range or lower the resolution.';
     } else if (response.status === 429) {
       friendlyMessage =
-          'Daily limit exceeded. Please try again tomorrow or download the client or deploy service with your own API key.';
+        'Daily limit exceeded. Please try again tomorrow or input your own API key in API settings.';
     }
     throw new Error(friendlyMessage);
   }
