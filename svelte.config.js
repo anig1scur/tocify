@@ -6,7 +6,9 @@ const config = {
   preprocess: vitePreprocess(),
 
   kit: {
-    adapter: adapter(),
+    adapter: adapter({
+      runtime: 'nodejs22.x'
+    }),
 
     // paths: {
     //   base: '',
