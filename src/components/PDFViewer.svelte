@@ -3,20 +3,24 @@
   import {ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCw, ListOrdered} from 'lucide-svelte';
   import {t} from 'svelte-i18n';
 
-  import {pdfService, tocItems, tocConfig} from '../stores';
-  import {type PDFService, type PDFState, type TocItem} from '$lib/pdf/service';
-  import type {RenderTask} from 'pdfjs-dist';
+  import { pdfService, tocConfig } from '../stores';
+  import { type PDFService, type PDFState, type TocItem } from '$lib/pdf/service';
+  import { renderQueue } from '$lib/pdf/render-queue';
+  import { formatPageLabel } from '$lib/pdf/page-labels';
+  import type { RenderTask } from 'pdfjs-dist';
 
   export let pdfState: PDFState;
-  export let instance: any = null;
+  export let originalPdfInstance: any = null;
+  export let tocPdfInstance: any = null;
+  export let tocPageCount: number = 0;
   export let mode: 'single' | 'grid' = 'single';
   export let tocRanges: {start: number; end: number; id: string}[];
   export let activeRangeIndex: number = 0;
 
   export let jumpToTocPage: (() => Promise<void>) | undefined = undefined;
   export let addPhysicalTocPage: boolean = false;
-  export let hasPreview: boolean = false;
   export let currentTocPath: TocItem[] = [];
+  export let prefetchPageNum: number = 0;
 
   const dispatch = createEventDispatcher();
 
@@ -39,17 +43,17 @@
   let lastMouseX = 0;
   let lastMouseY = 0;
 
-  let currentRenderTask: RenderTask | null = null;
-  let lastRenderedPage = 0;
-  let lastRenderedScale = 0;
-  let lastRenderedInstance: any = null;
+  let lastPageId = '';
   let containerWidth = 0;
   let containerHeight = 0;
 
   let pageLabels: string[] | null = null;
   let lastPageLabelsInstance: any = null;
 
-  const activeRenderTasks = new Map<number, RenderTask>();
+  let tocVersion = 0;
+  $: if (tocPdfInstance) {
+    tocVersion++;
+  }
 
   const unsubscribePdfService = pdfService.subscribe((val) => (pdfServiceInstance = val));
 
@@ -60,14 +64,6 @@
     } catch (e) {
       // Ignore cancellation errors
     }
-  }
-
-  function cleanupRenderTasks() {
-    safeCancel(currentRenderTask);
-    currentRenderTask = null;
-
-    activeRenderTasks.forEach((task) => safeCancel(task));
-    activeRenderTasks.clear();
   }
 
   function cleanupObservers() {
@@ -84,16 +80,38 @@
 
   onDestroy(() => {
     unsubscribePdfService();
-    cleanupRenderTasks();
     cleanupObservers();
   });
 
-  $: ({filename, currentPage, scale, totalPages: stateTotalPages, instance: stateInstance} = pdfState);
+  $: ({filename, currentPage, scale, totalPages: stateTotalPages} = pdfState);
+  $: activeTotalPages = stateTotalPages;
 
-  $: activeInstance = instance || stateInstance;
-  $: activeTotalPages = activeInstance?.numPages || stateTotalPages;
+  function getVirtualPageInfo(pageNum: number) {
+    if (!tocPdfInstance || !addPhysicalTocPage) {
+      return { instance: originalPdfInstance, localPageNum: pageNum };
+    }
 
-  $: currentPageLabel = pageLabels?.[currentPage - 1] || '';
+    const insertAt = $tocConfig.insertAtPage || 2;
+    if (pageNum < insertAt) {
+      return { instance: originalPdfInstance, localPageNum: pageNum };
+    } else if (pageNum < insertAt + tocPageCount) {
+      return { instance: tocPdfInstance, localPageNum: pageNum - insertAt + 1 };
+    } else {
+      return { instance: originalPdfInstance, localPageNum: pageNum - tocPageCount };
+    }
+  }
+
+  function getPageId(pageNum: number) {
+    const { instance, localPageNum } = getVirtualPageInfo(pageNum);
+    if (instance === tocPdfInstance) {
+      return `toc-${tocVersion}-${localPageNum}`;
+    }
+    return `orig-${localPageNum}`;
+  }
+
+  $: currentPageLabel = (originalPdfInstance && $tocConfig.pageLabelSettings.enabled) 
+    ? formatPageLabel(currentPage - 1, $tocConfig.pageLabelSettings, activeTotalPages)
+    : (pageLabels?.[currentPage - 1] || '');
 
   async function refreshPageLabels(pdfInstance: any) {
     pageLabels = null;
@@ -109,13 +127,13 @@
     }
   }
 
-  $: if (activeInstance && activeInstance !== lastPageLabelsInstance) {
-    lastPageLabelsInstance = activeInstance;
-    refreshPageLabels(activeInstance);
+  $: if (originalPdfInstance && originalPdfInstance !== lastPageLabelsInstance) {
+    lastPageLabelsInstance = originalPdfInstance;
+    refreshPageLabels(originalPdfInstance);
   }
 
 
-  $: if (activeInstance && filename && filename !== loadedFilename) {
+  $: if (originalPdfInstance && filename && filename !== loadedFilename) {
     loadedFilename = filename;
     tick().then(() => {
       dispatch('fileloaded', {
@@ -125,71 +143,69 @@
     });
   }
 
+  $: if (!originalPdfInstance) {
+    lastPageId = '';
+    gridPages = [];
+    cleanupObservers();
+  }
+
   async function renderCurrentPage() {
-    if (!activeInstance || !currentPage || !scale) return;
-    if (lastRenderedPage === currentPage && lastRenderedScale === scale && lastRenderedInstance === activeInstance) {
-      return;
-    }
-
-    if (currentRenderTask) {
-      safeCancel(currentRenderTask);
-      currentRenderTask = null;
-    }
-
-    await tick();
-    const canvas = canvasElement;
-    if (!canvas || !activeInstance) return;
+    if (!originalPdfInstance || !currentPage || !scale || !canvasElement) return;
+    
+    const pageId = getPageId(currentPage);
+    const { instance, localPageNum } = getVirtualPageInfo(currentPage);
+    if (!instance) return;
 
     try {
-      const page = await activeInstance.getPage(currentPage);
+      const page = await instance.getPage(localPageNum);
+      const viewportOrig = page.getViewport({ scale: 1.0 });
 
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      const viewport = page.getViewport({scale: 1.0});
-      const availableWidth = Math.max(0, containerWidth - 32); // p-4
-      const availableHeight = Math.max(0, containerHeight - 32);
-
-      if (availableWidth <= 0 || availableHeight <= 0) return;
-
-      const scaleX = availableWidth / viewport.width;
-      const scaleY = availableHeight / viewport.height;
-      const baseScale = Math.min(scaleX, scaleY);
-
-      const effectiveScale = baseScale * scale;
-      const renderViewport = page.getViewport({scale: effectiveScale});
-
-      canvas.width = Math.floor(renderViewport.width * dpr);
-      canvas.height = Math.floor(renderViewport.height * dpr);
-
-      canvas.style.width = `${Math.floor(renderViewport.width)}px`;
-      canvas.style.height = `${Math.floor(renderViewport.height)}px`;
-
-      const canvasContext = canvas.getContext('2d');
-      if (!canvasContext) return;
-
-      canvasContext.scale(dpr, dpr);
-
-      const renderContext = {
-        canvasContext,
-        viewport: renderViewport,
-      };
-
-      currentRenderTask = page.render(renderContext);
-
-      await currentRenderTask?.promise.then(() => page.cleanup()).catch(() => page.cleanup());
-
-      lastRenderedPage = currentPage;
-      lastRenderedScale = scale;
-      lastRenderedInstance = activeInstance;
-      currentRenderTask = null;
-    } catch (e: any) {
-      if (e?.name !== 'RenderingCancelledException') {
-        console.error('Rendering error:', e);
+      // Calculate relative fit scale
+      let baseFitScale = 1.0;
+      if (containerWidth > 0 && containerHeight > 0) {
+        baseFitScale = Math.min((containerWidth - 40) / viewportOrig.width, (containerHeight - 40) / viewportOrig.height);
       }
-      currentRenderTask = null;
+      
+      const displayScale = scale * baseFitScale;
+      const viewport = page.getViewport({ scale: displayScale });
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const targetW = Math.floor(viewport.width * dpr);
+      const targetH = Math.floor(viewport.height * dpr);
+
+      // Simple Redundancy Check: if page and canvas size haven't changed, skip
+      if (lastPageId === pageId && canvasElement.width === targetW && canvasElement.height === targetH) {
+        page.cleanup();
+        return;
+      }
+
+      const isNewPage = lastPageId !== pageId;
+      lastPageId = pageId;
+
+      const ctx = canvasElement.getContext('2d', { alpha: false });
+      if (ctx) {
+        canvasElement.width = targetW;
+        canvasElement.height = targetH;
+        canvasElement.style.width = `${Math.floor(viewport.width)}px`;
+        canvasElement.style.height = `${Math.floor(viewport.height)}px`;
+        if (isNewPage) {
+          ctx.fillStyle = 'white';
+          ctx.fillRect(0, 0, targetW, targetH);
+        }
+      }
+
+      const bitmap = await renderQueue.enqueue(pageId, instance, localPageNum, 0);
+      const ctxFinal = canvasElement.getContext('2d', { alpha: false });
+      if (!ctxFinal) return;
+
+      ctxFinal.clearRect(0, 0, targetW, targetH);
+      ctxFinal.drawImage(bitmap, 0, 0, targetW, targetH);
+      page.cleanup();
+    } catch (e: any) {
+      if (e?.name !== 'RenderingCancelledException') console.error('Rendering error:', e);
     }
   }
 
-  $: if (mode === 'single' && activeInstance && currentPage && scale && containerWidth && containerHeight) {
+  $: if (mode === 'single' && originalPdfInstance && currentPage && scale && containerWidth && containerHeight && (tocPdfInstance || true)) {
     renderCurrentPage();
   }
 
@@ -216,30 +232,19 @@
     pdfState.scale = 1.0;
   };
 
-  $: if (activeInstance && mode === 'grid') {
-    if (gridPages.length !== activeTotalPages) {
-      cleanupRenderTasks();
+  $: if (prefetchPageNum > 0) {
+    handleMouseHover(prefetchPageNum);
+  }
 
+  $: if (originalPdfInstance && activeTotalPages > 0) {
+    if (gridPages.length !== activeTotalPages) {
       gridPages = Array.from({length: activeTotalPages}, (_, i) => ({
         pageNum: i + 1,
         canvasId: `thumb-canvas-${i + 1}`,
       }));
     }
-    lastRenderedInstance = activeInstance;
-  } else {
-    if (activeInstance) {
-      if (gridPages.length > 0) {
-        gridPages = [];
-        cleanupRenderTasks();
-      }
-    } else {
-      // Full reset when no instance
-      gridPages = [];
-      lastRenderedInstance = null;
-      lastRenderedPage = 0;
-      cleanupRenderTasks();
-      cleanupObservers();
-    }
+  } else if (!originalPdfInstance && gridPages.length > 0) {
+    gridPages = [];
   }
 
   async function autoScrollToActiveRange() {
@@ -328,6 +333,16 @@
     } else {
       stopAutoScroll();
     }
+  }
+
+  function handleMouseHover(pageNum: number) {
+    if (mode === 'grid' || !originalPdfInstance) return;
+    
+    // Prefetch with lower priority
+    const { instance, localPageNum } = getVirtualPageInfo(pageNum);
+    if (!instance) return;
+    const pageId = getPageId(pageNum);
+    renderQueue.enqueue(pageId, instance, localPageNum, 5);
   }
 
   function handleMouseDown(pageNum: number) {
@@ -431,20 +446,41 @@
     if (intersectionObserver) intersectionObserver.disconnect();
 
     intersectionObserver = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
+      async (entries) => {
+        entries.forEach(async (entry) => {
           if (entry.isIntersecting) {
             const canvas = entry.target as HTMLCanvasElement;
             const pageNum = parseInt(canvas.dataset.pageNum || '0', 10);
 
-            if (pageNum > 0 && activeInstance && pdfServiceInstance) {
+            if (pageNum > 0 && originalPdfInstance) {
+              const { instance, localPageNum } = getVirtualPageInfo(pageNum);
+              if (!instance) return;
+
               const dpr = Math.min(window.devicePixelRatio || 1, 2);
               const canvasWidth = canvas.clientWidth;
-
-              pdfServiceInstance.renderPageToCanvas(activeInstance, pageNum, canvas, canvasWidth * dpr);
-
+              
+              // Determine scale for grid view (thumbnails)
+              // We'll use a fixed width for the scale calculation to be consistent
+              const page = await instance.getPage(localPageNum);
+              const viewport = page.getViewport({ scale: 1.0 });
+              const scale = canvasWidth / viewport.width;
+              
+              const pageId = getPageId(pageNum);
+              
+              const bitmap = await renderQueue.enqueue(pageId, instance, localPageNum, 1);
+              
+              const ctx = canvas.getContext('2d', { alpha: false });
+              if (!ctx) return;
+              
+              canvas.width = Math.floor(viewport.width * scale * dpr);
+              canvas.height = Math.floor(viewport.height * scale * dpr);
               canvas.style.width = `${canvasWidth}px`;
               canvas.style.height = 'auto';
+
+              ctx.clearRect(0, 0, canvas.width, canvas.height);
+              ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+
+              page.cleanup();
 
               if (intersectionObserver) {
                 intersectionObserver.unobserve(canvas);
@@ -541,7 +577,7 @@
             <span class="min-w-12">/ {activeTotalPages}</span>
           </div>
 
-          {#if addPhysicalTocPage && jumpToTocPage && hasPreview}
+          {#if tocPdfInstance && jumpToTocPage}
             <button
               on:click={jumpToTocPage}
               class="p-1 w-12 min-w-12 rounded-lg hover:bg-gray-100 text-black border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all disabled:opacity-50 disabled:cursor-not-allowed text-xs"
@@ -648,6 +684,8 @@
       on:touchend={handlePointerUp}
       on:touchcancel={handlePointerUp}
       on:contextmenu|preventDefault
+      role="grid"
+      tabindex="0"
     >
       {#each gridPages as page (page.pageNum)}
         {@const rangeIndex = tocRanges.findIndex((r) => page.pageNum >= r.start && page.pageNum <= r.end)}
@@ -670,6 +708,8 @@
           on:touchstart={() => handleTouchStart(page.pageNum)}
           on:mouseenter={() => handleMouseEnter(page.pageNum)}
           on:dragstart|preventDefault
+          role="gridcell"
+          tabindex="0"
         >
           {#if isStart}
             <span
@@ -694,7 +734,7 @@
           <canvas
             id={page.canvasId}
             class:cursor-grabbing={isSelecting}
-            class="w-full border-b bg-white"
+            class="w-full border-b bg-white h-[calc(100%-30px)]"
             use:lazyRender={{pageNum: page.pageNum}}
           ></canvas>
 

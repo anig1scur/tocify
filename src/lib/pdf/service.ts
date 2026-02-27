@@ -199,19 +199,22 @@ export class PDFService {
   }
 
   async updateTocPages(
-    items: TocItem[], config: TocConfig):
-    Promise<{ newDoc: PDFDocument; tocPageCount: number }> {
+    items: TocItem[], config: TocConfig, previewOnly = false, pageSize?: { width: number; height: number }):
+    Promise<{ newDoc: PDFDocument | null; tocPageCount: number; tocBytes: Uint8Array }> {
 
     const fontKey = config.fontFamily || 'huiwen';
     await this.loadFonts(fontKey);
 
-    const result = await this.postWorkerMessage('GENERATE', { items, config });
-    const { pdfBytes, tocPageCount } = result;
+    const result = await this.postWorkerMessage('GENERATE', { items, config, previewOnly, pageSize });
+    const { pdfBytes, tocPageCount, tocBytes } = result;
 
-    const newDoc = await PDFDocument.load(pdfBytes);
-    newDoc.registerFontkit(fontkit);
+    let newDoc = null;
+    if (pdfBytes) {
+      newDoc = await PDFDocument.load(pdfBytes);
+      newDoc.registerFontkit(fontkit);
+    }
 
-    return { newDoc, tocPageCount };
+    return { newDoc, tocPageCount, tocBytes };
   }
 
   async renderPage(
@@ -229,7 +232,7 @@ export class PDFService {
       canvas.height = viewport.height;
       canvas.width = viewport.width;
 
-      const context = canvas.getContext('2d');
+      const context = canvas.getContext('2d', { alpha: false });
       if (!context) return;
 
       const renderTask = page.render({
@@ -267,7 +270,7 @@ export class PDFService {
     canvas.width = scaledViewport.width;
     canvas.height = scaledViewport.height;
 
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { alpha: false });
     if (!ctx) {
       page.cleanup();
       return;
@@ -316,7 +319,7 @@ export class PDFService {
     canvas.height = viewport.height;
     canvas.width = viewport.width;
 
-    const context = canvas.getContext('2d');
+    const context = canvas.getContext('2d', { alpha: false });
     if (!context) throw new Error('Could not create 2D context');
 
     const renderTask = page.render({

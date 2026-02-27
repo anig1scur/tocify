@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
   import {ChevronRight, ChevronDown, Plus, Trash, GripVertical} from 'lucide-svelte';
   import ShortUniqueId from 'short-unique-id';
   import Self from './TocItem.svelte';
@@ -7,12 +7,13 @@
   import {t} from 'svelte-i18n';
   import {dndzone} from 'svelte-dnd-action';
   import {flip} from 'svelte/animate';
+  import type { TocItem } from '$lib/pdf/service';
 
-  export let item;
-  export let onUpdate;
-  export let onDelete;
-  export let onDragStart = () => {};
-  export let onDragEnd = () => {};
+  export let item: TocItem;
+  export let onUpdate: (item: TocItem, updates: Partial<TocItem>, skipHistory?: boolean) => void;
+  export let onDelete: (item: TocItem) => void;
+  export let onDragStart: () => void = () => {};
+  export let onDragEnd: () => void = () => {};
 
   export let currentPage = 1;
   export let isPreview = false;
@@ -24,7 +25,10 @@
   export let prefix = '';
   export let index = 0;
 
-  const dispatch = createEventDispatcher();
+  const dispatch = createEventDispatcher<{
+    hoveritem: { to: number };
+    jumpToPage: { to: number };
+  }>();
   const flipDurationMs = 200;
 
   let editTitle = item ? item.title : '';
@@ -58,15 +62,15 @@
   }
 
   function handleUpdatePage() {
-    const val = parseInt(editPage);
-    const page = isNaN(val) ? 1 : val;
-    if (page !== item.to) {
+    const page = Math.floor(editPage);
+    if (!isNaN(page) && page !== item.to) {
       onUpdate(item, {to: page});
     }
   }
 
-  function handlePageInput(e) {
-    const val = parseInt(e.target.value);
+  function handlePageInput(e: Event) {
+    const target = e.target as HTMLInputElement;
+    const val = parseInt(target.value);
     if (!isNaN(val) && val > 0) {
       dispatch('jumpToPage', {to: val});
     }
@@ -94,14 +98,14 @@
     onUpdate(item, {children: updatedChildren, open: true});
   }
 
-  function handleUpdateChild(childItem, updates, skipHistory = false) {
+  function handleUpdateChild(childItem: TocItem, updates: Partial<TocItem>, skipHistory = false) {
     const updatedChildren = (item.children || []).map((child) =>
       child.id === childItem.id ? {...child, ...updates} : child,
     );
     onUpdate(item, {children: updatedChildren}, skipHistory);
   }
 
-  function handleDeleteChild(childItem) {
+  function handleDeleteChild(childItem: TocItem) {
     const updatedChildren = (item.children || []).filter((c) => c.id !== childItem.id);
     onUpdate(item, {children: updatedChildren});
   }
@@ -112,24 +116,25 @@
     }
   }
 
-  function handleDndConsider(e) {
+  function handleDndConsider(e: CustomEvent<{items: TocItem[]}>) {
     onDragStart();
     item.children = e.detail.items;
     item = item;
   }
 
-  function handleDndFinalize(e) {
+  function handleDndFinalize(e: CustomEvent<{items: TocItem[]}>) {
     item.children = e.detail.items;
     item = item;
     onUpdate(item, {children: item.children}, true);
     onDragEnd();
   }
 
-  function handleTitleKeydown(e) {
+  function handleTitleKeydown(e: KeyboardEvent) {
     if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
       e.preventDefault();
-      const allInputs = Array.from(document.querySelectorAll('.toc-item-title'));
-      const index = allInputs.indexOf(e.target);
+      const allInputs = Array.from(document.querySelectorAll<HTMLInputElement>('.toc-item-title'));
+      const target = e.target as HTMLInputElement;
+      const index = allInputs.indexOf(target);
       if (index !== -1) {
         if (e.key === 'ArrowUp' && index > 0) {
           allInputs[index - 1].focus();
@@ -188,7 +193,7 @@
             handleUpdateTitle();
           }}
           on:keydown={handleTitleKeydown}
-          on:keypress={(e) => e.key === 'Enter' && e.target.blur()}
+          on:keypress={(e) => e.key === 'Enter' && (e.target as HTMLElement).blur()}
           class="toc-item-title border-2 border-black rounded px-2 py-1 text-sm myfocus focus:outline-none focus:ring-2 focus:ring-blue-500 flex-1 min-w-[100px]"
         />
       </div>
@@ -203,7 +208,7 @@
           isPageFocused = false;
           handleUpdatePage();
         }}
-        on:keypress={(e) => e.key === 'Enter' && e.target.blur()}
+        on:keypress={(e) => e.key === 'Enter' && (e.target as HTMLElement).blur()}
         class="w-14 border-2 border-black rounded ml-1 pl-1.5 py-1 text-sm myfocus focus:outline-none focus:ring-2 focus:ring-blue-500"
       />
 
@@ -253,7 +258,7 @@
               {insertAtPage}
               {tocPageCount}
               on:hoveritem
-              on:jumpToPage={(e) => dispatch('jumpToPage', e.detail)}
+              on:jumpToPage={(e: CustomEvent<{to: number}>) => dispatch('jumpToPage', e.detail)}
             />
           </div>
         {/each}

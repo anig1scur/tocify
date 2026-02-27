@@ -13,7 +13,7 @@
 
   export let pdfState: any;
   export let originalPdfInstance: any;
-  export let previewPdfInstance: any;
+  export let tocPdfInstance: any;
   export let isAiLoading = false;
   export let aiError: string | null = null;
   export let showNextStepHint = false;
@@ -41,8 +41,8 @@
 
   <TocSettings
     {config}
-    {previewPdfInstance}
-    tocRanges={tocRanges}
+    {tocPdfInstance}
+    {tocRanges}
     totalPages={pdfState.totalPages}
     bind:isTocConfigExpanded
     bind:addPhysicalTocPage
@@ -123,7 +123,7 @@
   {#key $curFileFingerprint}
     <TocEditor
       on:hoveritem
-      on:jumpToPage={(e) => { dispatch('jumpToPage', e.detail); }}
+      on:jumpToPage={(e) => dispatch('jumpToPage', e.detail)}
       currentPage={pdfState.currentPage}
       isPreview={isPreviewMode}
       pageOffset={config.pageOffset}

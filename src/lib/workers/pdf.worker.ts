@@ -12,7 +12,7 @@ if (typeof (globalThis as any).window === 'undefined') {
 import { PDFDocument, type PDFFont, PDFName, type PDFPage, rgb, StandardFonts, PDFArray } from 'pdf-lib';
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.js';
 import fontkit from 'pdf-fontkit';
-import { TOC_LAYOUT, CJK_REGEX } from '../constants';
+import { TOC_LAYOUT, CJK_REGEX, A4_WIDTH, A4_HEIGHT } from '../constants';
 import { setOutline } from '../pdf/outliner';
 
 // Configure PDF.js
@@ -34,16 +34,16 @@ self.onmessage = async (e: MessageEvent) => {
       fontCache.set(`${ family }_bold`, bold);
       self.postMessage({ type: 'LOAD_FONTS_SUCCESS', id });
     } else if (type === 'GENERATE') {
-      if (!sourcePdfBytes) throw new Error('Source PDF not initialized');
+      const { items, config, previewOnly, pageSize } = payload;
+      const result = await generatePdf(items, config, previewOnly, pageSize);
 
-      const { items, config } = payload;
-      const result = await generatePdf(items, config);
+      const transferList: any[] = [];
+      if (result.pdfBytes) transferList.push(result.pdfBytes.buffer);
+      if (result.tocBytes) transferList.push(result.tocBytes.buffer);
 
-      // Transfer the buffer back to main thread
-      self.postMessage(
+      (self as any).postMessage(
         { type: 'GENERATE_SUCCESS', payload: result, id },
-        // @ts-ignore
-        [result.pdfBytes.buffer]
+        transferList
       );
     } else if (type === 'DETECT_TOC') {
       if (!sourcePdfBytes) throw new Error('Source PDF not initialized');
@@ -129,8 +129,16 @@ interface PendingAnnot {
   targetPageNum: number;
 }
 
-async function generatePdf(items: any[], config: any) {
-  const doc = await PDFDocument.load(sourcePdfBytes!);
+async function generatePdf(items: any[], config: any, previewOnly = false, pageSize?: { width: number; height: number }) {
+  let doc: PDFDocument;
+  let insertionStartIndex = 0;
+
+  if (previewOnly) {
+    doc = await PDFDocument.create();
+  } else {
+    if (!sourcePdfBytes) throw new Error('Source PDF not initialized');
+    doc = await PDFDocument.load(sourcePdfBytes);
+  }
   doc.registerFontkit(fontkit);
 
   const fontKey = config.fontFamily || 'huiwen';
@@ -146,13 +154,28 @@ async function generatePdf(items: any[], config: any) {
     boldFont = await doc.embedFont(StandardFonts.HelveticaBold);
   }
 
-  const allIndices = doc.getPageIndices();
+  if (!previewOnly) {
+    const allIndices = doc.getPageIndices();
+    const insertAtPage = config.insertAtPage || 2;
+    insertionStartIndex = Math.max(0, Math.min(insertAtPage - 1, allIndices.length));
+  }
 
-  const insertAtPage = config.insertAtPage || 2;
-  const insertionStartIndex = Math.max(0, Math.min(insertAtPage - 1, allIndices.length));
+  let width = A4_WIDTH;
+  let height = A4_HEIGHT;
 
-  const sizeRefPage = doc.getPage(1) || doc.getPage(0);
-  const { width, height } = sizeRefPage.getSize();
+  if (pageSize) {
+    width = pageSize.width;
+    height = pageSize.height;
+  } else {
+    try {
+      const first = doc.getPage(1) || doc.getPage(0);
+      const size = first.getSize();
+      width = size.width;
+      height = size.height;
+    } catch (e) {
+      // Fallback already set to A4
+    }
+  }
 
   const pendingAnnots: PendingAnnot[] = [];
   const currentTocPageIndex = { value: 0 };
@@ -205,9 +228,21 @@ async function generatePdf(items: any[], config: any) {
   // Set Outline
   await setOutline(doc, items, config.pageOffset, tocPageCount);
 
-  const pdfBytes = await doc.save({ useObjectStreams: false });
+  const tocDoc = await PDFDocument.create();
+  const indices = previewOnly
+    ? Array.from({ length: tocPageCount }, (_, i) => i)
+    : Array.from({ length: tocPageCount }, (_, i) => insertionStartIndex + i);
 
-  return { pdfBytes, tocPageCount };
+  const copiedPages = await tocDoc.copyPages(doc, indices);
+  copiedPages.forEach(p => tocDoc.addPage(p));
+  const tocBytes = await tocDoc.save({ useObjectStreams: false });
+
+  let pdfBytes: Uint8Array | null = null;
+  if (!previewOnly) {
+    pdfBytes = await doc.save({ useObjectStreams: false });
+  }
+
+  return { pdfBytes, tocPageCount, tocBytes };
 }
 
 async function drawTocItems(

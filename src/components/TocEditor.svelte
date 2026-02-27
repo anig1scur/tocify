@@ -5,7 +5,7 @@
   import {t} from 'svelte-i18n';
   import TocItem from './TocItem.svelte';
   import Tooltip from './Tooltip.svelte';
-  import {tocItems, maxPage, autoSaveEnabled, dragDisabled} from '../stores';
+  import {tocItems, maxPage, autoSaveEnabled, dragDisabled, curFileFingerprint} from '../stores';
 
   import {dndzone} from 'svelte-dnd-action';
   import {flip} from 'svelte/animate';
@@ -100,6 +100,11 @@
     clearTimeout(textGenTimer);
     clearTimeout(debounceTimer);
   });
+
+  $: if ($curFileFingerprint) {
+    historyStack = [];
+    futureStack = [];
+  }
 
   function buildTree(items) {
     const root = [];

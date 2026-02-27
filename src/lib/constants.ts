@@ -1,8 +1,8 @@
 export const A4_WIDTH = 595.28;
 export const A4_HEIGHT = 841.89;
 
-export const BASE_FONT_SIZE_L1 = 13;
-export const BASE_FONT_SIZE_OTHER = 11;
+export const BASE_FONT_SIZE_L1 = 14;
+export const BASE_FONT_SIZE_OTHER = 12;
 
 export const TOC_LAYOUT = {
   PAGE: {
