@@ -786,6 +786,20 @@
     }
   };
 
+  const handleOffsetSkip = () => {
+    if (pendingTocItems.length > 0) {
+      pendingTocItems.shift();
+      firstTocItem = pendingTocItems.length > 0 ? pendingTocItems[0] : null;
+
+      if (firstTocItem) {
+        offsetPreviewPageNum = firstTocItem.to;
+      } else {
+        showOffsetModal = false;
+        tocItems.set([]);
+      }
+    }
+  };
+
   const debouncedJumpToPage = debounce((page: number) => {
     if (page > 0 && page <= pdfState.totalPages) {
       pdfState.currentPage = page;
@@ -1069,6 +1083,7 @@
     {firstTocItem}
     totalPages={pdfState.totalPages}
     on:confirm={handleOffsetConfirm}
+    on:skip={handleOffsetSkip}
   />
 
   <HelpModal bind:showHelpModal />

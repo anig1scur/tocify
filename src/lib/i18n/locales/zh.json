@@ -64,6 +64,7 @@
     "preview": "预览",
     "generate_pdf": "导出 PDF",
     "yes_this_page": "是的！就是这一页！",
+    "skip_this_item": "跳过此项",
     "save": "保存",
     "saved": "已保存",
     "close_hint": "关闭提示"
@@ -105,7 +106,9 @@
     "found_on_prefix": "位于",
     "page_n": "第 {n} 页",
     "instruction": "请选择该章节实际对应的物理页码",
-    "physical_page_label": "物理页码"
+    "physical_page_label": "物理页码",
+    "skip_tooltip": "如果该项不是真正的目录内容（例如序言等无关内容），跳过此项，以下一项作为基准。",
+    "skip_hint": "不是目录项？跳过它"
   },
   "loading": {
     "extracting_pages": "正在从 {ranges} 页提取目录...",

@@ -549,7 +549,7 @@
     class:hidden={mode !== 'single'}
   >
     <div
-      class="flex items-center flex-col justify-start w-full px-2 md:px-4 py-3 bg-white border-b-2 border-black rounded-t-md overflow-x-auto"
+      class="flex items-center flex-col justify-start w-full px-2 md:px-4 py-2 bg-white border-b-2 border-black rounded-t-md overflow-x-auto"
     >
       <div class="flex z-10 items-center justify-between w-full">
         <div class="w-[70%] text-gray-600 font-serif flex gap-1 sm:gap-2 items-center text-sm md:text-base">
@@ -580,13 +580,14 @@
           {#if tocPdfInstance && jumpToTocPage}
             <button
               on:click={jumpToTocPage}
-              class="p-1 w-12 min-w-12 rounded-lg hover:bg-gray-100 text-black border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all disabled:opacity-50 disabled:cursor-not-allowed text-xs"
+              class="p-1 py-0.5 rounded-lg hover:bg-gray-100 text-black border-2 border-black shadow-[1px_1px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all disabled:opacity-50 disabled:cursor-not-allowed text-xs"
               title={$t('tooltip.jump_toc')}
             >
               <ListOrdered
                 size={11}
                 class="inline-block"
-              /> ToC
+              /> 
+              <span class="hidden sm:inline">ToC</span>
             </button>
           {/if}
         </div>
