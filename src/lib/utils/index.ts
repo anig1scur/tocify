@@ -155,3 +155,14 @@ export function setNestedValue<T extends object>(obj: T, fieldPath: string, valu
 
   return obj;
 }
+
+
+export function isLegacyBrowser(): boolean {
+  try {
+    if (typeof WebAssembly === 'undefined') return true;
+    new Function('import("data:text/javascript,")');
+    return false;
+  } catch (e) {
+    return true;
+  }
+}

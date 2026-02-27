@@ -1,9 +1,10 @@
 import { browser } from '$app/environment';
 import { PDFDocument } from 'pdf-lib';
 import fontkit from 'pdf-fontkit';
-import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.js';
+import * as pdfjsLib from 'pdfjs-dist';
 import { type TocConfig } from '../../stores';
 import { A4_WIDTH, BASE_FONT_SIZE_L1, BASE_FONT_SIZE_OTHER } from '../constants';
+import { isLegacyBrowser } from '$lib/utils';
 
 export interface TocItem {
   id: string;
@@ -37,11 +38,11 @@ if (typeof Promise.withResolvers === 'undefined') {
 }
 
 if (browser) {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `/pdf.worker.v3.min.js`;
+  pdfjsLib.GlobalWorkerOptions.workerSrc = isLegacyBrowser() ? '/pdf.worker.legacy.min.mjs' : '/pdf.worker.min.mjs';
 }
 
 export class PDFService {
-  static sharedWorker = browser ? new pdfjsLib.PDFWorker() : null;
+  static sharedWorker: pdfjsLib.PDFWorker | null = browser ? new pdfjsLib.PDFWorker() : null;
 
   static regularFontBytes: Map<string, ArrayBuffer> = new Map();
   static boldFontBytes: Map<string, ArrayBuffer> = new Map();

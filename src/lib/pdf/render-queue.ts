@@ -11,7 +11,7 @@ export class RenderQueue {
   private queue: RenderTask[] = [];
   private activeCount = 0;
   private maxConcurrency = 6;
-  private STANDARD_RENDER_SCALE = 2.0;
+  private STANDARD_RENDER_SCALE = 1.25;
   public cache = new Map<string, ImageBitmap | HTMLCanvasElement>();
 
   enqueue(

@@ -10,13 +10,14 @@ if (typeof (globalThis as any).window === 'undefined') {
 }
 
 import { PDFDocument, type PDFFont, PDFName, type PDFPage, rgb, StandardFonts, PDFArray } from 'pdf-lib';
-import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.js';
+import * as pdfjsLib from 'pdfjs-dist';
 import fontkit from 'pdf-fontkit';
+import { isLegacyBrowser } from '$lib/utils';
 import { TOC_LAYOUT, CJK_REGEX, A4_WIDTH, A4_HEIGHT } from '../constants';
 import { setOutline } from '../pdf/outliner';
 
-// Configure PDF.js
-pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.v3.min.js';
+const workerFileName = isLegacyBrowser() ? '/pdf.worker.legacy.min.mjs' : '/pdf.worker.min.mjs';
+pdfjsLib.GlobalWorkerOptions.workerSrc = workerFileName;
 
 let sourcePdfBytes: ArrayBuffer | null = null;
 let fontCache: Map<string, ArrayBuffer> = new Map();
@@ -66,7 +67,7 @@ async function detectTocPages(pdfBytes: ArrayBuffer): Promise<number[]> {
   const loadingTask = pdfjsLib.getDocument({
     data: new Uint8Array(pdfBytes),
     disableFontFace: true,
-    cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/cmaps/',
+    cMapUrl: `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version}/cmaps/`,
     cMapPacked: true,
   });
 
