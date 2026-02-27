@@ -2,10 +2,7 @@
 	"name": "tocify",
 	"private": true,
 	"version": "0.0.1",
-	"type": "module",
-  "engines": {
-    "node": "22.x"
-  },
+  "type": "module",
 	"scripts": {
 		"dev": "vite dev --host",
 		"build": "vite build",
