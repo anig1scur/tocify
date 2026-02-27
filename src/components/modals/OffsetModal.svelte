@@ -4,6 +4,7 @@
   import {X} from 'lucide-svelte';
   import {t} from 'svelte-i18n';
   import type {TocItem} from '$lib/pdf/service';
+  import Tooltip from '../Tooltip.svelte';
 
   export let showOffsetModal: boolean;
   export let firstTocItem: TocItem | null;
@@ -43,18 +44,38 @@
       </div>
       <div class="flex flex-col md:flex-row gap-2 md:gap-6 justify-between">
         <div class="w-full md:w-[40%] flex flex-col text-base md:text-xl">
-          <p class="my-4 text-gray-700">
+          <div class="my-4 text-gray-700">
             {$t('offset.found_prefix')}
             <strong class="text-black text-2xl md:text-3xl block my-2">{firstTocItem?.title}</strong>
             {$t('offset.found_on_prefix')}
-            <strong class="text-black text-2xl md:text-3xl block my-2">
-              {$t('offset.page_n', {
-                values: {n: firstTocItem?.to},
-              })}
-            </strong>
-          </p>
+            <div class="my-2" />
+            <div class="flex items-center gap-4">
+              <strong class="text-black text-2xl md:text-3xl">
+                {$t('offset.page_n', {
+                  values: {n: firstTocItem?.to},
+                })}
+              </strong>
+            <Tooltip
+              text={$t('offset.skip_tooltip')}
+              position="right"
+              width="w-64"
+            >
+              <span
+                on:click={() => dispatch('skip')}
+                class="bg-gray-50 rounded-lg text-sm border border-gray-300 px-2 py-1 cursor-pointer text-gray-500 hover:text-gray-600 transition-colors"
+                role="button"
+                tabindex="0"
+                on:keydown={(e) => e.key === 'Enter' && dispatch('skip')}
+              >
+                {$t('btn.skip_this_item')}
+              </span>
+            </Tooltip>
+            </div>
+          </div>
+            
           <p class="mt-4 text-gray-700 text-sm">{$t('offset.instruction')}</p>
-          <div class="flex gap-4 items-center my-4">
+    
+          <div class="flex gap-4 items-center mb-4">
             <label
               for="physical_page_select"
               class="font-semibold">{$t('offset.physical_page_label')}</label
@@ -85,12 +106,14 @@
               </button>
             </div>
           </div>
-          <button
-            on:click={() => dispatch('confirm')}
-            class="btn mt-auto mb-1 font-bold bg-blue-400 text-black border-2 border-black rounded-lg px-4 py-2 shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all w-full"
-          >
-            {$t('btn.yes_this_page')}
-          </button>
+          <div class="flex flex-col gap-2 mt-auto mb-1">
+            <button
+              on:click={() => dispatch('confirm')}
+              class="btn font-bold bg-blue-400 text-black border-2 border-black rounded-lg px-4 py-2 shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all w-full"
+            >
+              {$t('btn.yes_this_page')}
+            </button>
+          </div>
         </div>
         <div class="w-full md:w-[50%]">
           <div class="border-2 border-black rounded-lg overflow-hidden bg-gray-50 h-[70vh]">
