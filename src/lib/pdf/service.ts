@@ -1,9 +1,10 @@
 import { browser } from '$app/environment';
 import { PDFDocument } from 'pdf-lib';
 import fontkit from 'pdf-fontkit';
-import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.js';
+import * as pdfjsLib from 'pdfjs-dist';
 import { type TocConfig } from '../../stores';
 import { A4_WIDTH, BASE_FONT_SIZE_L1, BASE_FONT_SIZE_OTHER } from '../constants';
+import { isLegacyBrowser } from '$lib/utils';
 
 export interface TocItem {
   id: string;
@@ -37,11 +38,11 @@ if (typeof Promise.withResolvers === 'undefined') {
 }
 
 if (browser) {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `/pdf.worker.v3.min.js`;
+  pdfjsLib.GlobalWorkerOptions.workerSrc = isLegacyBrowser() ? '/pdf.worker.legacy.min.mjs' : '/pdf.worker.min.mjs';
 }
 
 export class PDFService {
-  static sharedWorker = browser ? new pdfjsLib.PDFWorker() : null;
+  static sharedWorker: pdfjsLib.PDFWorker | null = browser ? new pdfjsLib.PDFWorker() : null;
 
   static regularFontBytes: Map<string, ArrayBuffer> = new Map();
   static boldFontBytes: Map<string, ArrayBuffer> = new Map();
@@ -199,19 +200,22 @@ export class PDFService {
   }
 
   async updateTocPages(
-    items: TocItem[], config: TocConfig):
-    Promise<{ newDoc: PDFDocument; tocPageCount: number }> {
+    items: TocItem[], config: TocConfig, previewOnly = false, pageSize?: { width: number; height: number }):
+    Promise<{ newDoc: PDFDocument | null; tocPageCount: number; tocBytes: Uint8Array }> {
 
     const fontKey = config.fontFamily || 'huiwen';
     await this.loadFonts(fontKey);
 
-    const result = await this.postWorkerMessage('GENERATE', { items, config });
-    const { pdfBytes, tocPageCount } = result;
+    const result = await this.postWorkerMessage('GENERATE', { items, config, previewOnly, pageSize });
+    const { pdfBytes, tocPageCount, tocBytes } = result;
 
-    const newDoc = await PDFDocument.load(pdfBytes);
-    newDoc.registerFontkit(fontkit);
+    let newDoc = null;
+    if (pdfBytes) {
+      newDoc = await PDFDocument.load(pdfBytes);
+      newDoc.registerFontkit(fontkit);
+    }
 
-    return { newDoc, tocPageCount };
+    return { newDoc, tocPageCount, tocBytes };
   }
 
   async renderPage(
@@ -229,7 +233,7 @@ export class PDFService {
       canvas.height = viewport.height;
       canvas.width = viewport.width;
 
-      const context = canvas.getContext('2d');
+      const context = canvas.getContext('2d', { alpha: false });
       if (!context) return;
 
       const renderTask = page.render({
@@ -267,7 +271,7 @@ export class PDFService {
     canvas.width = scaledViewport.width;
     canvas.height = scaledViewport.height;
 
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { alpha: false });
     if (!ctx) {
       page.cleanup();
       return;
@@ -316,7 +320,7 @@ export class PDFService {
     canvas.height = viewport.height;
     canvas.width = viewport.width;
 
-    const context = canvas.getContext('2d');
+    const context = canvas.getContext('2d', { alpha: false });
     if (!context) throw new Error('Could not create 2D context');
 
     const renderTask = page.render({

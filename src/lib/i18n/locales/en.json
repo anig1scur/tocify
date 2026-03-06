@@ -68,6 +68,7 @@
     "preview": "Preview",
     "generate_pdf": "Generate PDF",
     "yes_this_page": "Yes! This page !",
+    "skip_this_item": "Skip This Item",
     "save": "Save",
     "saved": "Saved",
     "close_hint": "Close"
@@ -109,7 +110,8 @@
     "found_on_prefix": "on",
     "page_n": "Page {n}",
     "instruction": "Select the physical page where this section actually begins",
-    "physical_page_label": "Physical Page"
+    "physical_page_label": "Physical Page",
+    "skip_tooltip": "Skip this item if it's not actually part of the table of contents (e.g. preface or other irrelevant content) and use the next one as the base."
   },
   "loading": {
     "extracting_pages": "Extracting ToC from pages {ranges}...",

@@ -9,9 +9,10 @@
   import { getVersion } from '@tauri-apps/api/app';
   import { isTauri } from '@tauri-apps/api/core';
   import '../lib/i18n';
-  import {pdfService, tocItems, curFileFingerprint, tocConfig, autoSaveEnabled, type TocConfig} from '../stores';
-  import {PDFService, type PDFState, type TocItem} from '$lib/pdf/service';
-  import {setOutline} from '$lib/pdf/outliner';
+  import { pdfService, tocItems, curFileFingerprint, tocConfig, autoSaveEnabled, type TocConfig } from '../stores';
+  import { PDFService, type PDFState, type TocItem } from '$lib/pdf/service';
+  import { renderQueue } from '../lib/pdf/render-queue';
+  import { setOutline } from '../lib/pdf/outliner';
   import {debounce} from '$lib';
   import {buildTree, convertPdfJsOutlineToTocItems, setNestedValue, findActiveTocPath, cleanTocItems} from '$lib/utils';
   import {generateToc} from '$lib/toc-service';
@@ -64,8 +65,7 @@
   };
 
   let originalPdfInstance: PdfjsLibTypes.PDFDocumentProxy | null = null;
-  let previewPdfInstance: PdfjsLibTypes.PDFDocumentProxy | null = null;
-  let offsetRenderTask: PdfjsLibTypes.RenderTask | null = null;
+  let tocPdfInstance: PdfjsLibTypes.PDFDocumentProxy | null = null;
 
   let pdfState: PDFState = {
     doc: null,
@@ -89,6 +89,7 @@
 
   let lastPdfContentJson = '';
   let lastInsertAtPage = 2;
+  let prefetchPageNum = 0;
   let lastConfigJson = '';  
 
   let customApiConfig = {
@@ -158,11 +159,11 @@
         console.warn('Error destroying original instance:', e);
       }
     }
-    if (previewPdfInstance && previewPdfInstance !== originalPdfInstance) {
+    if (tocPdfInstance) {
       try {
-        await previewPdfInstance.destroy();
+        await tocPdfInstance.destroy();
       } catch (e: any) {
-        console.warn('Error destroying preview instance:', e);
+        console.warn('Error destroying TOC instance:', e);
       }
     }
   });
@@ -199,20 +200,8 @@
 
 
   $: if (showOffsetModal) {
-    offsetPreviewPageNum = tocRanges[0]?.end + 1 || 1;
-    cleanupOffsetRenderTask();
+    tick().then(() => renderOffsetPreviewPage(offsetPreviewPageNum));
   } else {
-    cleanupOffsetRenderTask();
-  }
-
-  function cleanupOffsetRenderTask() {
-    if (offsetRenderTask) {
-      try {
-        offsetRenderTask.cancel();
-      } catch (e) {
-      }
-      offsetRenderTask = null;
-    }
   }
 
   let previousAddPhysicalTocPage = addPhysicalTocPage;
@@ -278,15 +267,12 @@
     if (pdfjs && PdfLib) return;
     try {
       const [pdfjsModule, PdfLibModule] = await Promise.all([
-        import('pdfjs-dist/legacy/build/pdf.js'),
+        import('pdfjs-dist'),
         import('pdf-lib')
       ]);
       pdfjs = pdfjsModule;
       PdfLib = PdfLibModule;
-      
-      if (pdfjs) {
-        pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.v3.min.js';
-      }
+
     } catch (error: any) {
       console.error('Failed to load PDF libraries:', error);
       toastProps = {
@@ -305,21 +291,20 @@
   }
 
   const updateViewerInstance = () => {
-    if (isPreviewMode && previewPdfInstance) {
-      pdfState.instance = previewPdfInstance;
-      pdfState.totalPages = previewPdfInstance.numPages;
-    } else if (originalPdfInstance) {
-      pdfState.instance = originalPdfInstance;
-      pdfState.totalPages = originalPdfInstance.numPages;
+    pdfState.instance = originalPdfInstance;
+    if (isPreviewMode) {
+      pdfState.totalPages = (originalPdfInstance?.numPages || 0) + tocPageCount;
     } else {
-      pdfState.instance = null;
-      pdfState.totalPages = 0;
+      pdfState.totalPages = originalPdfInstance?.numPages || 0;
     }
     pdfState = {...pdfState};
   };
 
-  async function updatePDF() {
+  async function updatePDF(forceFull = false) {
+    const isFull = !isPreviewMode || forceFull;
     if (!pdfState.doc || !$pdfService) return;
+    isPreviewLoading = true;
+
     if (!pdfjs || !PdfLib) {
       console.error('PDF libraries not loaded.');
       toastProps = {show: true, message: 'Components not loaded. Please reupload your file.', type: 'error'};
@@ -346,15 +331,21 @@
       }
 
       const currentInsertPage = config.insertAtPage || 2;
+      let tocBytes: Uint8Array | null = null;
+
       if (addPhysicalTocPage) {
         if (currentInsertPage !== lastInsertAtPage) {
           await $pdfService.initPreview(pdfState.doc);
           lastInsertAtPage = currentInsertPage;
         }
 
-        const res = await $pdfService.updateTocPages(tocItems_, config);
-        newDoc = res.newDoc;
+        const firstPage = pdfState.doc.getPages()[0];
+        const pageSize = firstPage ? firstPage.getSize() : undefined;
+
+        const res = await $pdfService.updateTocPages(tocItems_, config, !isFull, pageSize);
+        newDoc = res.newDoc || pdfState.doc;
         tocPageCount = res.tocPageCount;
+        tocBytes = res.tocBytes;
       
         if (isFontMissing) {
            if (PDFService.regularFontBytes.has(fontKey)) {
@@ -368,41 +359,55 @@
         tocPageCount = 0;
       }
 
-      setOutline(newDoc, tocItems_, config.pageOffset, tocPageCount);
-      setPageLabels(newDoc, config.pageLabelSettings);
-      const pdfBytes = await newDoc.save({
-        useObjectStreams: false,
-      });
+      setOutline(newDoc!, tocItems_, config.pageOffset, tocPageCount);
+      setPageLabels(newDoc!, config.pageLabelSettings);
 
-      const loadingTask = pdfjs.getDocument({
-        data: pdfBytes,
-        worker: PDFService.sharedWorker || undefined,
-        cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/cmaps/',
-        cMapPacked: true,
-      });
-
-      const newPreviewInstance = await loadingTask.promise;
-
-      if (previewPdfInstance && previewPdfInstance !== originalPdfInstance) {
-        try {
-          await previewPdfInstance.destroy();
-        } catch (e) {
-          console.warn('Error destroying old preview instance:', e);
-        }
+      if (isFull) {
+        const pdfBytes = await newDoc!.save({
+          useObjectStreams: false,
+        });
+        pdfState.newDoc = newDoc;
       }
 
-      previewPdfInstance = newPreviewInstance;
-      pdfState.newDoc = newDoc;
+      if (tocBytes) {
+        const loadingTask = pdfjs.getDocument({
+          data: tocBytes,
+          worker: PDFService.sharedWorker || undefined,
+          cMapUrl: `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/cmaps/`,
+          cMapPacked: true,
+        });
+
+        const newTocInstance = await loadingTask.promise;
+
+        if (tocPdfInstance) {
+          try {
+            await tocPdfInstance.destroy();
+          } catch (e) {
+            console.warn('Error destroying old TOC instance:', e);
+          }
+        }
+
+        tocPdfInstance = newTocInstance;
+      } else {
+        if (tocPdfInstance) {
+          try {
+            await tocPdfInstance.destroy();
+          } catch (e) { }
+        }
+        tocPdfInstance = null;
+      }
+
+      if (isFull) {
+        pdfState.newDoc = newDoc;
+      }
 
       if (isPreviewMode) {
-        pdfState.instance = previewPdfInstance;
-        pdfState.totalPages = previewPdfInstance.numPages;
+        pdfState.totalPages = (originalPdfInstance?.numPages || 0) + tocPageCount;
         
         if (pdfState.currentPage > pdfState.totalPages) {
           pdfState.currentPage = pdfState.totalPages;
         }
       } else {
-        pdfState.instance = originalPdfInstance;
         pdfState.totalPages = originalPdfInstance?.numPages || 0;
       }
       
@@ -428,7 +433,7 @@
     if (!isPreviewMode) {
       isPreviewLoading = true;
       try {
-        if (!previewPdfInstance || previewPdfInstance === originalPdfInstance) {
+        if (!tocPdfInstance) {
           await updatePDF();
         }
 
@@ -450,36 +455,45 @@
   };
 
   const renderOffsetPreviewPage = async (pageNum: number) => {
-    if (!originalPdfInstance || !$pdfService || !showOffsetModal) return;
+    if (!originalPdfInstance || !showOffsetModal) return;
     
-    cleanupOffsetRenderTask();
-
     const canvas = document.getElementById('offset-preview-canvas') as HTMLCanvasElement;
     if (canvas) {
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      const renderWidth = canvas.clientWidth * dpr;
-      if (renderWidth === 0) {
-        setTimeout(() => renderOffsetPreviewPage(pageNum), 100);
+      const pageId = `orig-${pageNum}`;
+      // Use premium priority (0) for modal preview
+      const bitmap = await renderQueue.enqueue(pageId, originalPdfInstance, pageNum, 0);
+      
+      const ctx = canvas.getContext('2d', { alpha: false });
+      if (!ctx || !showOffsetModal) return;
+
+      const containerHeight = canvas.parentElement?.clientHeight || 0;
+      const containerWidth = canvas.parentElement?.clientWidth || 0;
+      
+      if (containerHeight === 0) {
+        setTimeout(() => renderOffsetPreviewPage(pageNum), 50);
         return;
       }
-      
-      const task = await $pdfService.renderPageToCanvas(originalPdfInstance, pageNum, canvas, renderWidth);
-      if (task) {
-        offsetRenderTask = task;
-        task.promise.finally(() => {
-          if (offsetRenderTask === task) {
-            offsetRenderTask = null;
-          }
-        });
-      }
+
+      const aspectRatio = bitmap.width / bitmap.height;
+      const displayHeight = containerHeight;
+      const displayWidth = displayHeight * aspectRatio;
+
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = Math.floor(displayWidth * dpr);
+      canvas.height = Math.floor(displayHeight * dpr);
+      canvas.style.width = `${Math.floor(displayWidth)}px`;
+      canvas.style.height = `${Math.floor(displayHeight)}px`;
+
+      ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
     }
   };
 
   const loadPdfFile = async (file: File) => {
     if (!file) return;
 
-    const fingerprint = `${file.name}_${file.size}`;
+    renderQueue.clear();
 
+    const fingerprint = `${file.name}_${file.size}`;
     curFileFingerprint.set(fingerprint);
     localStorage.setItem('tocify_last_fingerprint', fingerprint);
 
@@ -488,7 +502,6 @@
     showNextStepHint = false;
     hasShownTocHint = false;
     showOffsetModal = false;
-    cleanupOffsetRenderTask();
     
     pendingTocItems = [];
     firstTocItem = null;
@@ -503,17 +516,17 @@
         console.warn('Error destroying original instance:', e);
       }
     }
-    if (previewPdfInstance && previewPdfInstance !== originalPdfInstance) {
+    if (tocPdfInstance) {
       try {
-        await previewPdfInstance.destroy();
+        await tocPdfInstance.destroy();
       } catch (e: any) {
-        console.warn('Error destroying preview instance:', e);
+        console.warn('Error destroying TOC instance:', e);
       }
     }
 
     pdfState.instance = null;
     originalPdfInstance = null;
-    previewPdfInstance = null;
+    tocPdfInstance = null;
     pdfState = {...pdfState};
     await tick();
 
@@ -554,12 +567,12 @@
       const loadingTask = pdfjs.getDocument({
         data: uint8Array,
         worker: PDFService.sharedWorker || undefined,
-        cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/cmaps/',
+        cMapUrl: `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/cmaps/`,
         cMapPacked: true,
       });
       originalPdfInstance = await loadingTask.promise;
 
-      previewPdfInstance = originalPdfInstance;
+      tocPdfInstance = null;
       isPreviewMode = false;
       tocPageCount = 0;
       pdfState.currentPage = 1;
@@ -649,7 +662,7 @@
 
       toastProps = {show: true, message: 'Exporting file...', type: 'info'};
 
-      await updatePDF();
+      await updatePDF(true);
       if (!pdfState.newDoc) {
         toastProps = {show: true, message: 'Error: No PDF document to export.', type: 'error'};
         return;
@@ -761,6 +774,20 @@
     }
   };
 
+  const handleOffsetSkip = () => {
+    if (pendingTocItems.length > 0) {
+      pendingTocItems.shift();
+      firstTocItem = pendingTocItems.length > 0 ? pendingTocItems[0] : null;
+
+      if (firstTocItem) {
+        offsetPreviewPageNum = firstTocItem.to;
+      } else {
+        showOffsetModal = false;
+        tocItems.set([]);
+      }
+    }
+  };
+
   const debouncedJumpToPage = debounce((page: number) => {
     if (page > 0 && page <= pdfState.totalPages) {
       pdfState.currentPage = page;
@@ -771,7 +798,13 @@
   const handleTocItemHover = (e: CustomEvent) => {
     if (!isPreviewMode) return;
     const logicalPage = e.detail.to as number;
-    jumpToPage(logicalPage);
+    const physicalContentPage = logicalPage + config.pageOffset;
+    if (physicalContentPage >= (config.insertAtPage || 2)) {
+      prefetchPageNum = physicalContentPage + tocPageCount;
+    } else {
+      prefetchPageNum = physicalContentPage;
+    }
+    debouncedJumpToPage(prefetchPageNum);
   };
 
   const handleUpdateActiveRange = (e: CustomEvent) => {
@@ -839,7 +872,7 @@
   };
 
   const jumpToTocPage = async () => {
-    if (!previewPdfInstance) {
+    if (!tocPdfInstance) {
       toastProps = {show: true, message: 'Please edit the ToC first to generate a preview.', type: 'error'};
       return;
     }
@@ -903,13 +936,19 @@
     </button>
 
     <div class="flex-1 overflow-hidden relative w-full h-full bg-slate-50">
-      <TocRelation
-        items={$tocItems}
-        apiConfig={customApiConfig}
-        onHide={() => (showGraphDrawer = false)}
-        onJumpToPage={jumpToPage}
-        title={pdfState.filename ? `${pdfState.filename}`.replace('.pdf', '') : 'No file loaded'}
-      />
+      {#key $curFileFingerprint}
+        <TocRelation
+          items={$tocItems}
+          apiConfig={customApiConfig}
+          onJumpToPage={jumpToPage}
+          title={pdfState.filename ? `${pdfState.filename}`.replace('.pdf', '') : 'No file loaded'}
+          onHide={() => {
+            showGraphDrawer = false;
+            const expiry = Date.now() + THIRTY_DAYS;
+            localStorage.setItem('tocify_hide_graph_entrance_until', expiry.toString());
+          }}
+        />
+      {/key}
     </div>
   </div>
 
@@ -953,7 +992,7 @@
         <SidebarPanel
           {pdfState}
           {originalPdfInstance}
-          {previewPdfInstance}
+          {tocPdfInstance}
           {isAiLoading}
           {aiError}
           {showNextStepHint}
@@ -995,14 +1034,16 @@
           {isFileLoading}
           bind:pdfState
           {originalPdfInstance}
-          {previewPdfInstance}
+          {tocPdfInstance}
           {isPreviewMode}
           {isPreviewLoading}
           {tocRanges}
           {activeRangeIndex}
+          {tocPageCount}
           {addPhysicalTocPage}
           {jumpToTocPage}
           {currentTocPath}
+          {prefetchPageNum}
           bind:isDragging
           on:fileselect={(e) => loadPdfFile(e.detail)}
           on:viewerMessage={handleViewerMessage}
@@ -1028,6 +1069,7 @@
     {firstTocItem}
     totalPages={pdfState.totalPages}
     on:confirm={handleOffsetConfirm}
+    on:skip={handleOffsetSkip}
   />
 
   <HelpModal bind:showHelpModal />

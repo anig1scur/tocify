@@ -12,7 +12,7 @@
   export let isTocConfigExpanded: boolean;
   export let addPhysicalTocPage: boolean;
   export let config: TocConfig;
-  export let previewPdfInstance: any;
+  export let tocPdfInstance: any;
   export let tocRanges: {start: number; end: number; id: string}[] = [];
   export let totalPages: number = 0;
 
@@ -112,7 +112,7 @@
             type="number"
             id="page_offset"
             value={config.pageOffset}
-            on:input={(e) => updateField('pageOffset', parseInt(e.target.value, 10) || 0)}
+            on:input={(e) => updateField('pageOffset', parseInt((e.target as HTMLInputElement).value, 10) || 0)}
             class="w-20 border-2 border-gray-300 rounded px-1 focus:outline-none focus:bg-gray-50 transition-colors"
           />
         </div>
@@ -200,7 +200,7 @@
                   type="number"
                   id="insert_at_page"
                   value={config.insertAtPage || 2}
-                  on:input={(e) => updateField('insertAtPage', parseInt(e.target.value, 10) || 2)}
+                  on:input={(e) => updateField('insertAtPage', parseInt((e.target as HTMLInputElement).value, 10) || 2)}
                   class="w-20 border-2 border-gray-300 rounded px-1 focus:outline-none focus:bg-gray-50"
                   min={1}
                 />
@@ -208,7 +208,7 @@
                   on:click={() => dispatch('jumpToTocPage')}
                   class="ml-auto px-2 py-0.5 bg-white text-black border-2 border-black rounded-md shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all text-sm"
                   title={$t('tooltip.jump_toc')}
-                  disabled={!previewPdfInstance}
+                  disabled={!tocPdfInstance}
                 >
                   {$t('btn.go')}
                 </button>
@@ -250,7 +250,7 @@
                     max="0.9"
                     step="0.1"
                     value={config.titleYStart ?? 0.33}
-                    on:input={(e) => updateField('titleYStart', parseFloat(e.target.value))}
+                    on:input={(e) => updateField('titleYStart', parseFloat((e.target as HTMLInputElement).value))}
                     class="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-black border border-gray-300 hover:border-gray-400"
                   />
                   <span class="text-[10px] text-gray-400">Bottom</span>
@@ -268,7 +268,7 @@
                     type="number"
                     id="first_level_font_size"
                     value={config.firstLevel.fontSize}
-                    on:input={(e) => updateField('firstLevel.fontSize', parseInt(e.target.value, 10) || 0)}
+                    on:input={(e) => updateField('firstLevel.fontSize', parseInt((e.target as HTMLInputElement).value, 10) || 0)}
                     class="w-[50%] border-2 border-gray-300 rounded px-1 focus:outline-none focus:bg-gray-50"
                   />
                 </div>
@@ -278,7 +278,7 @@
                     type="text"
                     id="first_level_dot_leader"
                     value={config.firstLevel.dotLeader}
-                    on:input={(e) => updateField('firstLevel.dotLeader', e.target.value)}
+                    on:input={(e) => updateField('firstLevel.dotLeader', (e.target as HTMLInputElement).value)}
                     class="w-[50%] border-2 border-gray-300 rounded px-1 focus:outline-none focus:bg-gray-50"
                   />
                 </div>
@@ -288,7 +288,7 @@
                     type="color"
                     id="first_level_color"
                     value={config.firstLevel.color}
-                    on:input={(e) => updateField('firstLevel.color', e.target.value)}
+                    on:input={(e) => updateField('firstLevel.color', (e.target as HTMLInputElement).value)}
                     class="w-[50%]"
                   />
                 </div>
@@ -299,7 +299,7 @@
                     step="0.1"
                     id="first_level_line_spacing"
                     value={config.firstLevel.lineSpacing}
-                    on:input={(e) => updateField('firstLevel.lineSpacing', parseFloat(e.target.value) || 1)}
+                    on:input={(e) => updateField('firstLevel.lineSpacing', parseFloat((e.target as HTMLInputElement).value) || 1)}
                     class="w-[50%] border-2 border-gray-300 rounded px-1 focus:outline-none focus:bg-gray-50"
                   />
                 </div>
@@ -314,7 +314,7 @@
                     type="number"
                     id="other_levels_font_size"
                     value={config.otherLevels.fontSize}
-                    on:input={(e) => updateField('otherLevels.fontSize', parseInt(e.target.value, 10) || 0)}
+                    on:input={(e) => updateField('otherLevels.fontSize', parseInt((e.target as HTMLInputElement).value, 10) || 0)}
                     class="w-[50%] border-2 border-gray-300 rounded px-1 focus:outline-none focus:bg-gray-50"
                   />
                 </div>
@@ -324,7 +324,7 @@
                     type="text"
                     id="other_levels_dot_leader"
                     value={config.otherLevels.dotLeader}
-                    on:input={(e) => updateField('otherLevels.dotLeader', e.target.value)}
+                    on:input={(e) => updateField('otherLevels.dotLeader', (e.target as HTMLInputElement).value)}
                     class="w-[50%] border-2 border-gray-300 rounded px-1 focus:outline-none focus:bg-gray-50"
                   />
                 </div>
@@ -334,7 +334,7 @@
                     type="color"
                     id="other_levels_color"
                     value={config.otherLevels.color}
-                    on:input={(e) => updateField('otherLevels.color', e.target.value)}
+                    on:input={(e) => updateField('otherLevels.color', (e.target as HTMLInputElement).value)}
                     class="w-[50%]"
                   />
                 </div>
@@ -345,7 +345,7 @@
                     step="0.1"
                     id="other_levels_line_spacing"
                     value={config.otherLevels.lineSpacing}
-                    on:input={(e) => updateField('otherLevels.lineSpacing', parseFloat(e.target.value) || 1)}
+                    on:input={(e) => updateField('otherLevels.lineSpacing', parseFloat((e.target as HTMLInputElement).value) || 1)}
                     class="w-[50%] border-2 border-gray-300 rounded px-1 focus:outline-none focus:bg-gray-50"
                   />
                 </div>

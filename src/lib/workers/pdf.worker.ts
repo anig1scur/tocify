@@ -1,11 +1,23 @@
+if (typeof (globalThis as any).document === 'undefined') {
+  (globalThis as any).document = {
+    createElement: () => ({}),
+    currentScript: null,
+    baseURI: (globalThis as any).location?.href || ''
+  };
+}
+if (typeof (globalThis as any).window === 'undefined') {
+  (globalThis as any).window = globalThis;
+}
+
 import { PDFDocument, type PDFFont, PDFName, type PDFPage, rgb, StandardFonts, PDFArray } from 'pdf-lib';
-import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.js';
+import * as pdfjsLib from 'pdfjs-dist';
 import fontkit from 'pdf-fontkit';
-import { TOC_LAYOUT, CJK_REGEX } from '../constants';
+import { isLegacyBrowser } from '$lib/utils';
+import { TOC_LAYOUT, CJK_REGEX, A4_WIDTH, A4_HEIGHT } from '../constants';
 import { setOutline } from '../pdf/outliner';
 
-// Configure PDF.js
-pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.v3.min.js';
+const workerFileName = isLegacyBrowser() ? '/pdf.worker.legacy.min.mjs' : '/pdf.worker.min.mjs';
+pdfjsLib.GlobalWorkerOptions.workerSrc = workerFileName;
 
 let sourcePdfBytes: ArrayBuffer | null = null;
 let fontCache: Map<string, ArrayBuffer> = new Map();
@@ -23,16 +35,16 @@ self.onmessage = async (e: MessageEvent) => {
       fontCache.set(`${ family }_bold`, bold);
       self.postMessage({ type: 'LOAD_FONTS_SUCCESS', id });
     } else if (type === 'GENERATE') {
-      if (!sourcePdfBytes) throw new Error('Source PDF not initialized');
+      const { items, config, previewOnly, pageSize } = payload;
+      const result = await generatePdf(items, config, previewOnly, pageSize);
 
-      const { items, config } = payload;
-      const result = await generatePdf(items, config);
+      const transferList: any[] = [];
+      if (result.pdfBytes) transferList.push(result.pdfBytes.buffer);
+      if (result.tocBytes) transferList.push(result.tocBytes.buffer);
 
-      // Transfer the buffer back to main thread
-      self.postMessage(
+      (self as any).postMessage(
         { type: 'GENERATE_SUCCESS', payload: result, id },
-        // @ts-ignore
-        [result.pdfBytes.buffer]
+        transferList
       );
     } else if (type === 'DETECT_TOC') {
       if (!sourcePdfBytes) throw new Error('Source PDF not initialized');
@@ -50,11 +62,12 @@ self.onmessage = async (e: MessageEvent) => {
 
 async function detectTocPages(pdfBytes: ArrayBuffer): Promise<number[]> {
   // Load with PDF.js for text extraction
-  // disableWorker: true forces it to run in the current thread (which is already a worker)
+  // We avoid spawning another worker here by letting it fall back to the "fake worker"
+  // which now has a mocked document/window to prevent crashing.
   const loadingTask = pdfjsLib.getDocument({
     data: new Uint8Array(pdfBytes),
     disableFontFace: true,
-    cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/cmaps/',
+    cMapUrl: `https://cdn.jsdelivr.net/npm/pdfjs-dist@${ pdfjsLib.version }/cmaps/`,
     cMapPacked: true,
   });
 
@@ -117,8 +130,16 @@ interface PendingAnnot {
   targetPageNum: number;
 }
 
-async function generatePdf(items: any[], config: any) {
-  const doc = await PDFDocument.load(sourcePdfBytes!);
+async function generatePdf(items: any[], config: any, previewOnly = false, pageSize?: { width: number; height: number }) {
+  let doc: PDFDocument;
+  let insertionStartIndex = 0;
+
+  if (previewOnly) {
+    doc = await PDFDocument.create();
+  } else {
+    if (!sourcePdfBytes) throw new Error('Source PDF not initialized');
+    doc = await PDFDocument.load(sourcePdfBytes);
+  }
   doc.registerFontkit(fontkit);
 
   const fontKey = config.fontFamily || 'huiwen';
@@ -134,13 +155,28 @@ async function generatePdf(items: any[], config: any) {
     boldFont = await doc.embedFont(StandardFonts.HelveticaBold);
   }
 
-  const allIndices = doc.getPageIndices();
+  if (!previewOnly) {
+    const allIndices = doc.getPageIndices();
+    const insertAtPage = config.insertAtPage || 2;
+    insertionStartIndex = Math.max(0, Math.min(insertAtPage - 1, allIndices.length));
+  }
 
-  const insertAtPage = config.insertAtPage || 2;
-  const insertionStartIndex = Math.max(0, Math.min(insertAtPage - 1, allIndices.length));
+  let width = A4_WIDTH;
+  let height = A4_HEIGHT;
 
-  const sizeRefPage = doc.getPage(1) || doc.getPage(0);
-  const { width, height } = sizeRefPage.getSize();
+  if (pageSize) {
+    width = pageSize.width;
+    height = pageSize.height;
+  } else {
+    try {
+      const first = doc.getPage(1) || doc.getPage(0);
+      const size = first.getSize();
+      width = size.width;
+      height = size.height;
+    } catch (e) {
+      // Fallback already set to A4
+    }
+  }
 
   const pendingAnnots: PendingAnnot[] = [];
   const currentTocPageIndex = { value: 0 };
@@ -193,9 +229,21 @@ async function generatePdf(items: any[], config: any) {
   // Set Outline
   await setOutline(doc, items, config.pageOffset, tocPageCount);
 
-  const pdfBytes = await doc.save({ useObjectStreams: false });
+  const tocDoc = await PDFDocument.create();
+  const indices = previewOnly
+    ? Array.from({ length: tocPageCount }, (_, i) => i)
+    : Array.from({ length: tocPageCount }, (_, i) => insertionStartIndex + i);
 
-  return { pdfBytes, tocPageCount };
+  const copiedPages = await tocDoc.copyPages(doc, indices);
+  copiedPages.forEach(p => tocDoc.addPage(p));
+  const tocBytes = await tocDoc.save({ useObjectStreams: false });
+
+  let pdfBytes: Uint8Array | null = null;
+  if (!previewOnly) {
+    pdfBytes = await doc.save({ useObjectStreams: false });
+  }
+
+  return { pdfBytes, tocPageCount, tocBytes };
 }
 
 async function drawTocItems(
@@ -391,11 +439,11 @@ function applyLinkAnnotations(
     const targetPage = allPages[boundedIndex];
 
     const ref = doc.context.register(doc.context.obj({
-      Type: 'Annot',
-      Subtype: 'Link',
+      Type: PDFName.of('Annot'),
+      Subtype: PDFName.of('Link'),
       Rect: pa.rect,
       Border: [0, 0, 0],
-      Dest: [targetPage.ref, 'Fit'],
+      Dest: [targetPage.ref, PDFName.of('Fit')],
     }));
 
     const existingAnnots = pa.tocPage.node.get(PDFName.of('Annots')) as PDFArray | undefined;

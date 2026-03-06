@@ -12,7 +12,7 @@
   export let isDragging = false;
   export let pdfState: any;
   export let originalPdfInstance: any;
-  export let previewPdfInstance: any;
+  export let tocPdfInstance: any;
 
   export let isPreviewMode = false;
   export let isPreviewLoading = false;
@@ -20,7 +20,9 @@
   export let tocRanges: {start: number; end: number; id: string}[];
   export let activeRangeIndex: number;
   export let addPhysicalTocPage: boolean;
-  export let currentTocPath: any[] = []; // Type should be TocItem[]
+  export let tocPageCount: number;
+  export let currentTocPath: any[] = []; // TocItem[]
+  export let prefetchPageNum: number = 0;
 
   export let jumpToTocPage: () => Promise<void>;
 
@@ -80,37 +82,21 @@
 
     {#if pdfState.instance}
       <div class="relative z-10 h-full flex flex-col">
-        <div class="contents" class:hidden={isPreviewMode}>
-          <PDFViewer
-            bind:pdfState
-            mode="grid"
-            instance={originalPdfInstance}
-            {tocRanges}
-            {activeRangeIndex}
-            on:updateActiveRange
-            on:fileloaded={forwardFileLoadedEvent}
-            {jumpToTocPage}
-            {addPhysicalTocPage}
-            {currentTocPath}
-            hasPreview={!!previewPdfInstance}
-          />
-        </div>
-
-        <div class="contents" class:hidden={!isPreviewMode}>
-          <PDFViewer
-            bind:pdfState
-            mode="single"
-            instance={previewPdfInstance || originalPdfInstance}
-            {tocRanges}
-            {activeRangeIndex}
-            on:updateActiveRange
-            on:fileloaded={forwardFileLoadedEvent}
-            {jumpToTocPage}
-            {addPhysicalTocPage}
-            {currentTocPath}
-            hasPreview={!!previewPdfInstance}
-          />
-        </div>
+        <PDFViewer
+          bind:pdfState
+          mode={isPreviewMode ? 'single' : 'grid'}
+          {originalPdfInstance}
+          {tocPdfInstance}
+          {tocPageCount}
+          {tocRanges}
+          {activeRangeIndex}
+          on:updateActiveRange
+          on:fileloaded={forwardFileLoadedEvent}
+          {jumpToTocPage}
+          {addPhysicalTocPage}
+          {currentTocPath}
+          {prefetchPageNum}
+        />
 
         <input
           type="file"
