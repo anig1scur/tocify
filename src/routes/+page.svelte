@@ -8,6 +8,8 @@
 
   import { getVersion } from '@tauri-apps/api/app';
   import { isTauri } from '@tauri-apps/api/core';
+  import { check } from '@tauri-apps/plugin-updater';
+  import { relaunch } from '@tauri-apps/plugin-process';
   import '../lib/i18n';
   import { pdfService, tocItems, curFileFingerprint, tocConfig, autoSaveEnabled, type TocConfig } from '../stores';
   import { PDFService, type PDFState, type TocItem } from '$lib/pdf/service';
@@ -25,6 +27,7 @@
   import AiLoadingModal from '../components/modals/AiLoadingModal.svelte';
   import OffsetModal from '../components/modals/OffsetModal.svelte';
   import HelpModal from '../components/modals/HelpModal.svelte';
+  import UpdateModal from '../components/modals/UpdateModal.svelte';
 
   import SidebarPanel from '../components/panels/SidebarPanel.svelte';
   import PreviewPanel from '../components/panels/PreviewPanel.svelte';
@@ -50,6 +53,9 @@
 
   let showOffsetModal = false;
   let showHelpModal = false;
+  let showUpdateModal = false;
+  let updateData: {version: string; body: string; date?: string} | null = null;
+  let updateObj: any = null; // Store tauri update object
   let offsetPreviewPageNum = 1;
 
   let toastProps: {
@@ -99,6 +105,8 @@
     doubaoEndpointIdVision: '',
   };
 
+  let hasCheckedUpdate = false;
+
   onMount(async () => {
     let currentVersion = '1.0.0';
     const isTauriEnv = isTauri();
@@ -120,7 +128,43 @@
       version: currentVersion,
       platform: isTauriEnv ? 'desktop' : 'web',
     });
+
+    if (isTauriEnv && !hasCheckedUpdate) {
+      hasCheckedUpdate = true;
+      checkAppUpdate();
+    }
   });
+
+  async function checkAppUpdate() {
+    try {
+      const update = await check();
+      if (update) {
+        updateObj = update;
+        updateData = {
+          version: update.version,
+          body: update.body || '',
+          date: update.date
+        };
+        showUpdateModal = true;
+      }
+    } catch (e) {
+      console.error('Failed to check for updates:', e);
+    }
+  }
+
+  async function handleAppUpdate() {
+    if (!updateObj) return;
+    try {
+      await updateObj.downloadAndInstall();
+      // Wait a bit for the user to see success before relaunching
+      setTimeout(async () => {
+        await relaunch();
+      }, 1000);
+    } catch (e) {
+      console.error('Update failed:', e);
+      throw e; // UpdateModal handles the error display
+    }
+  }
 
   onMount(() => {
     $pdfService = new PDFService();
@@ -1073,6 +1117,13 @@
   />
 
   <HelpModal bind:showHelpModal />
+
+  <UpdateModal
+    bind:showUpdateModal
+    {updateData}
+    onUpdate={handleAppUpdate}
+    onCancel={() => (showUpdateModal = false)}
+  />
 {/if}
 
 <svelte:window on:beforeunload={handleBeforeUnload} />
