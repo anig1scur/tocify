@@ -104,10 +104,11 @@ export const setOutline = async (
       const outlineRef = refMap.get(outline)!;
 
       const destOrAction = (() => {
-        if (typeof outline.to === 'string') {
+        if (typeof outline.to === 'string' && isNaN(Number(outline.to))) {
           return { A: { S: PDFName.of('URI'), URI: PDFHexString.fromText(outline.to) } };
-        } else if (typeof outline.to === 'number') {
-          const finalIndex = getFinalPageIndex(outline.to);
+        } else if (typeof outline.to === 'number' || (typeof outline.to === 'string' && !isNaN(Number(outline.to)))) {
+          const pageNum = typeof outline.to === 'number' ? outline.to : Number(outline.to);
+          const finalIndex = getFinalPageIndex(pageNum);
           return { Dest: [pageRefs[finalIndex], PDFName.of('Fit')] };
         } else if (Array.isArray(outline.to)) {
           const finalIndex = getFinalPageIndex(outline.to[0]);

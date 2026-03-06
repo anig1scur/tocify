@@ -115,7 +115,7 @@
       const newItem = {
         id: uid.randomUUID(),
         title: item.title,
-        to: item.page,
+        to: parseInt(item.page as any) || 1,
         children: [],
         open: true,
       };

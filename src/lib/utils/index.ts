@@ -49,9 +49,10 @@ export function cleanTitle(title: string): string {
   let cleaned = title.replace(/[\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000]/g, ' ');
 
   // 2. Remove control characters and truly invisible markers (Zero Width, Soft Hyphen, BOM, etc.)
-  cleaned = cleaned.replace(/[\u0000-\u001F\u007F-\u009F\u00AD\u200B-\u200D\uFEFF\uFFFD]/g, '');
+  // We also add \u00FE\u00FF (Latin-1 encoded UTF-16 BE BOM) and \uFFFD (Replacement char)
+  cleaned = cleaned.replace(/[\u0000-\u001F\u007F-\u009F\u00AD\u200B-\u200D\uFEFF\uFFFD\u00FE\u00FF]/g, '');
 
-  return cleaned;
+  return cleaned.trim();
 }
 
 export function cleanTocItems(items: TocItem[]): TocItem[] {
