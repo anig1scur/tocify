@@ -1,7 +1,7 @@
 <script lang="ts">
   import {onDestroy, tick, createEventDispatcher} from 'svelte';
   import ShortUniqueId from 'short-unique-id';
-  import {Sparkles, Loader2} from 'lucide-svelte';
+  import {Sparkles, Loader2, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown} from 'lucide-svelte';
   import {t} from 'svelte-i18n';
   import TocItem from './TocItem.svelte';
   import Tooltip from './Tooltip.svelte';
@@ -306,6 +306,21 @@
     $tocItems = [...currentItems, ...newItems];
   };
 
+  const toggleAll = (open: boolean) => {
+    const updateRecursive = (items: any[]): any[] =>
+      items.map((item) => ({
+        ...item,
+        open,
+        children: item.children?.length ? updateRecursive(item.children) : [],
+      }));
+    $tocItems = updateRecursive($tocItems);
+  };
+
+  const expandAll = () => toggleAll(true);
+  const collapseAll = () => toggleAll(false);
+
+  $: hasAnyExpanded = $tocItems.some((item: any) => item.open);
+
   const addTocItem = () => {
     addMultipleTocItems(1);
   };
@@ -392,8 +407,32 @@
     {/if}
   </div>
 
-  <div class="-ml-8">
+  <div class="-ml-8 group/toc-list pt-2 relative">
     {#if $tocItems.length > 0}
+      <div
+        class="flex items-center gap-1 sticky top-12 z-20 opacity-0 group-hover/toc-list:opacity-100 transition-all duration-300 translate-y-1 group-hover/toc-list:translate-y-0 pointer-events-none"
+      >
+        <div class="-ml-2.5 -mb-8 pointer-events-auto bg-white/50 backdrop-blur-sm rounded-md shadow-sm">
+          {#if hasAnyExpanded}
+            <button
+              on:click={collapseAll}
+              class="p-1 rounded-md text-gray-500 hover:text-gray-700 transition-colors"
+              title={$t('toc.collapse_all')}
+            >
+              <ChevronsDownUp size={17} font-weight={600} />
+            </button>
+          {:else}
+            <button
+              on:click={expandAll}
+              class="p-1 rounded-md text-gray-500 hover:text-gray-700 transition-colors"
+              title={$t('toc.expand_all')}
+            >
+              <ChevronsUpDown size={17} font-weight={600} />
+            </button>
+          {/if}
+        </div>
+      </div>
+
       <section
         use:dndzone={{
           items: $tocItems,
