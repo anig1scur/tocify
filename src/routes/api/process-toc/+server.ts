@@ -209,7 +209,7 @@ async function processWithQwen(
     });
 
     const response = await client.chat.completions.create({
-      model: 'qwen-vl-plus',
+      model: env.QWEN_VL_MODEL || 'qwen-vl-plus',
       messages: [
         { role: 'system', content: SYSTEM_PROMPT_VISION },
         { role: 'user', content: contentParts }
