@@ -9,6 +9,7 @@
 
   import {dndzone} from 'svelte-dnd-action';
   import {flip} from 'svelte/animate';
+  import {fly} from 'svelte/transition';
 
   export let currentPage = 1;
   export let isPreview = false;
@@ -81,6 +82,17 @@
 
   let isDragging = false;
   let textGenTimer;
+
+  let showNavHint = false;
+  let navHintTimer: ReturnType<typeof setTimeout> | undefined = undefined;
+
+  function handleShowNavHint() {
+    if (navHintTimer) clearTimeout(navHintTimer);
+    showNavHint = true;
+    navHintTimer = setTimeout(() => {
+      showNavHint = false;
+    }, 4000);
+  }
 
   const unsubscribe = tocItems.subscribe((value) => {
     if (isUpdatingFromEditor) return;
@@ -439,6 +451,17 @@
         </div>
       </div>
 
+      {#if showNavHint}
+        <div class="absolute right-0 top-0 z-50 h-6 flex justify-center pointer-events-none">
+          <div 
+            transition:fly={{y: -10, duration: 300}}
+            class="bg-black/50 backdrop-blur-sm text-white text-xs px-2 py-1 rounded-lg pointer-events-none"
+          >
+            {$t('toc.nav_hint')}
+          </div>
+        </div>
+      {/if}
+
       <section
         use:dndzone={{
           items: $tocItems,
@@ -465,6 +488,7 @@
               {pageOffset}
               {insertAtPage}
               {tocPageCount}
+              on:showNavHint={handleShowNavHint}
               on:hoveritem
               on:jumpToPage={(e) => {
                 dispatch('jumpToPage', e.detail);

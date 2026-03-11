@@ -28,6 +28,7 @@
   const dispatch = createEventDispatcher<{
     hoveritem: { to: number };
     jumpToPage: { to: number };
+    showNavHint: void;
   }>();
   export let flipDurationMs = 200;
 
@@ -144,6 +145,17 @@
       }
     }
   }
+
+  function handleTitleFocus() {
+    isFocused = true;
+    const expiryStr = localStorage.getItem('tocify_edit_title_toast_until');
+    const now = Date.now();
+    if (!expiryStr || now > parseInt(expiryStr, 10)) {
+       dispatch('showNavHint');
+       const newExpiry = now + 30 * 24 * 60 * 60 * 1000;
+       localStorage.setItem('tocify_edit_title_toast_until', newExpiry.toString());
+    }
+  }
 </script>
 
 {#if item}
@@ -187,7 +199,7 @@
         <input
           type="text"
           bind:value={editTitle}
-          on:focus={() => (isFocused = true)}
+          on:focus={handleTitleFocus}
           on:blur={() => {
             isFocused = false;
             handleUpdateTitle();
@@ -259,6 +271,7 @@
               {pageOffset}
               {insertAtPage}
               {tocPageCount}
+              on:showNavHint
               on:hoveritem
               on:jumpToPage={(e: CustomEvent<{to: number}>) => dispatch('jumpToPage', e.detail)}
             />

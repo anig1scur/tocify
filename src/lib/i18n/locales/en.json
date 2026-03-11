@@ -58,7 +58,8 @@
     "new_section_default": "New Section",
     "new_item_default": "New Item",
     "expand_all": "Expand All",
-    "collapse_all": "Collapse All"
+    "collapse_all": "Collapse All",
+    "nav_hint": "Use up and down arrow keys for quick navigation"
   },
   "btn": {
     "generate_toc_ai": "Generate ToC from Pages",

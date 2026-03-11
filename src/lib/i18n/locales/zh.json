@@ -54,7 +54,8 @@
     "new_section_default": "新章节",
     "new_item_default": "新条目",
     "expand_all": "展开全部",
-    "collapse_all": "折叠全部"
+    "collapse_all": "折叠全部",
+    "nav_hint": "可以使用上下方向键进行快速移动"
   },
   "btn": {
     "generate_toc_ai": "从所选页面生成目录",
