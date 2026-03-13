@@ -1,0 +1,28 @@
+name: Bug / Feature Request
+description: 提交前请先确认是否已有相关功能或类似 issue
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **提交前请确认：**
+        1. 已检查应用左上角的 **API 设置** 和 **目录设置**，确认没有相关功能。
+        2. 已搜索历史 issues，确认没有类似问题。若已有类似 issue，请在现有 issue 下留言，而不是重复提交。
+        
+  - type: checkboxes
+    id: precheck
+    attributes:
+      label: "我已完成以上自查"
+      options:
+        - label: "我已经检查 API 设置和目录设置"
+        - label: "我已经搜索历史 issues"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: "请详细描述你的问题或功能需求"
+      description: "提供足够的信息让开发者可以复现或理解问题，如果有 PDF 文件请尽量在这里上传，不要分享网盘链接。"
+      placeholder: "在这里写你的描述"
+    validations:
+      required: true
