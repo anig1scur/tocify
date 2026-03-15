@@ -32,7 +32,7 @@
   let futureStack = [];
   const maxHistory = 20;
 
-  function saveHistory() {
+  export function saveHistory() {
     const clone = JSON.parse(JSON.stringify($tocItems));
     historyStack.push(clone);
     if (historyStack.length > maxHistory) {
@@ -182,8 +182,10 @@
     isProcessing = false;
 
     if (Array.isArray(aiResult) && aiResult.length > 0) {
-      saveHistory();
-      $tocItems = buildTree(aiResult);
+      const nestedItems = buildTree(aiResult);
+      dispatch('aiFormatResponse', {
+        items: nestedItems,
+      });
     } else {
       throw new Error('AI could not parse any ToC structure.');
     }
@@ -430,25 +432,27 @@
       <div
         class="flex items-center gap-1 sticky top-12 z-20 opacity-0 group-hover/toc-list:opacity-100 transition-all duration-300 translate-y-1 group-hover/toc-list:translate-y-0 pointer-events-none"
       >
-        <div class="-ml-2.5 -mb-8 pointer-events-auto bg-white/50 backdrop-blur-sm rounded-md shadow-sm">
-          {#if hasAnyExpanded}
-            <button
-              on:click={collapseAll}
-              class="p-1 rounded-md text-gray-500 hover:text-gray-700 transition-colors"
-              title={$t('toc.collapse_all')}
-            >
-              <ChevronsDownUp size={17} font-weight={600} />
-            </button>
-          {:else}
-            <button
-              on:click={expandAll}
-              class="p-1 rounded-md text-gray-500 hover:text-gray-700 transition-colors"
-              title={$t('toc.expand_all')}
-            >
-              <ChevronsUpDown size={17} font-weight={600} />
-            </button>
-          {/if}
-        </div>
+        {#if firstItemWithChildrenId}
+          <div class="-ml-2.5 -mb-8 pointer-events-auto bg-white/50 backdrop-blur-sm rounded-md shadow-sm">
+            {#if hasAnyExpanded}
+              <button
+                on:click={collapseAll}
+                class="p-1 rounded-md text-gray-500 hover:text-gray-700 transition-colors"
+                title={$t('toc.collapse_all')}
+              >
+                <ChevronsDownUp size={17} font-weight={600} />
+              </button>
+            {:else}
+              <button
+                on:click={expandAll}
+                class="p-1 rounded-md text-gray-500 hover:text-gray-700 transition-colors"
+                title={$t('toc.expand_all')}
+              >
+                <ChevronsUpDown size={17} font-weight={600} />
+              </button>
+            {/if}
+          </div>
+        {/if}
       </div>
 
       {#if showNavHint}

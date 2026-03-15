@@ -29,6 +29,7 @@
   export let isPreviewMode: boolean;
 
   const dispatch = createEventDispatcher();
+  export let tocEditor: any = undefined;
 </script>
 
 <div class="w-full lg:w-[35%] flex-shrink-0">
@@ -124,6 +125,8 @@
     <TocEditor
       on:hoveritem
       on:jumpToPage={(e) => dispatch('jumpToPage', e.detail)}
+      on:aiFormatResponse
+      bind:this={tocEditor}
       currentPage={pdfState.currentPage}
       isPreview={isPreviewMode}
       pageOffset={config.pageOffset}

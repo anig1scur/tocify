@@ -104,6 +104,7 @@
     doubaoEndpointIdText: '',
     doubaoEndpointIdVision: '',
   };
+  let tocEditor: any;
 
   onMount(async () => {
     init('A-US-0422911470', {
@@ -752,6 +753,20 @@
       isAiLoading = false;
     }
   };
+  
+  const handleAiFormatResponse = (e: any) => {
+    const { items } = e.detail;
+    pendingTocItems = items;
+    firstTocItem = items.length > 0 ? items[0] : null;
+
+    if (firstTocItem) {
+      offsetPreviewPageNum = Math.min(firstTocItem.to, originalPdfInstance?.numPages || 1);
+      showOffsetModal = true;
+    } else {
+      if (tocEditor) tocEditor.saveHistory();
+      tocItems.set(items);
+    }
+  };
 
   const handleOffsetConfirm = async () => {
     if (!firstTocItem) return;
@@ -779,6 +794,7 @@
       pendingTocItems.unshift(rootNode);
     }
 
+    if (tocEditor) tocEditor.saveHistory();
     tocItems.set(pendingTocItems);
     showOffsetModal = false;
     pendingTocItems = [];
@@ -1028,6 +1044,8 @@
       on:setActiveRange={handleSetActiveRange}
       on:rangeChange={handleRangeChange}
       on:updateActiveRange={handleUpdateActiveRange}
+      on:aiFormatResponse={handleAiFormatResponse}
+      bind:tocEditor
     />
 
     <PreviewPanel
