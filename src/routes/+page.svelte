@@ -988,7 +988,7 @@
     <div class="animate-spin rounded-full h-12 w-12 border-4 border-black border-t-transparent"></div>
   </div>
 {:else}
-  <p class="sr-only">Generate clickable PDF bookmarks from scanned pages — AI-powered, private, and free.</p>
+  <h1 class="sr-only">Generate PDF bookmarks / table of contents in browser — AI-powered, private, online and free.</h1>
 
   <div
     class="flex flex-col mt-5 lg:flex-row lg:mt-8 p-2 md:p-4 md:pr-3 gap-4 lg:gap-8 mx-auto w-[95%] md:w-[90%] xl:w-[80%] 3xl:w-[75%] justify-between"
@@ -1078,52 +1078,6 @@
 
 <svelte:window on:beforeunload={handleBeforeUnload} />
 
-<svelte:head>
-  <title>{$t('meta.title') || 'Tocify · Add or edit PDF Table of Contents online'}</title>
-  <meta
-    name="description"
-    content={$t('meta.description') ||
-      'A free, online tool to automatically generate Table of Contents (bookmarks) for PDFs.'}
-  />
-  <link
-    rel="canonical"
-    href="https://tocify.aeriszhu.com/"
-  />
-  <meta
-    name="keywords"
-    content="add bookmarks to PDF, PDF table of contents, clickable PDF outline, PDF bookmark editor, create PDF TOC, generate PDF outline, PDF 目录生成, PDF 添加书签, 扫描版 PDF 目录, PDF 在线免费工具"
-  />
-  <meta
-    property="og:title"
-    content="Tocify - 给 PDF 自动生成目录"
-  />
-  <meta
-    property="og:description"
-    content="一个免费为 PDF 添加目录（书签）的在线工具"
-  />
-  <meta
-    name="twitter:card"
-    content="summary_large_image"
-  />
-  <meta
-    name="twitter:image"
-    content="/og-image.png"
-  />
-  <link
-    rel="icon"
-    href="/favicon.ico"
-  />
-  <link
-    rel="icon"
-    type="image/svg+xml"
-    href="/favicon.svg"
-  />
-  <link
-    rel="icon"
-    type="image/png"
-    href="/favicon.png"
-  />
-</svelte:head>
 
 <style>
   .writing-mode-vertical {
