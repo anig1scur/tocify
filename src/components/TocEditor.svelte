@@ -393,6 +393,7 @@
 <div class="flex flex-col gap-4 mt-3">
   <div class="h-48 relative group">
     <textarea
+      placeholder={$t('toc.outline_placeholder')}
       bind:value={text}
       on:input={handleInput}
       class="w-full h-full border-2 border-black rounded-lg p-2 text-sm myfocus leading-6 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none pr-10"
@@ -504,12 +505,12 @@
       </section>
     {/if}
 
-    <div class="flex items-center gap-2 ml-9 mt-3 mb-4">
+    <div class="flex items-center gap-2 ml-8 mt-3 mb-4">
       <button
         on:click={addTocItem}
         class="btn font-bold bg-yellow-400 text-black border-2 border-black rounded-lg px-4 py-2 shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all"
       >
-        {$t('btn.add_section')}
+        {$t('btn.add_chapter')}
       </button>
       <button
         on:click={() => addMultipleTocItems(5)}

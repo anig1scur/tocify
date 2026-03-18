@@ -51,11 +51,12 @@
   },
   "toc": {
     "prompt_intro": "AI Format 仅当书本没有影印目录，只能找文本内容时使用。将不符合格式的文本粘贴到框内，它将智能处理目录文本为目标格式。\n\n或者，你可以自行通过下列提示词获取目标文本:\n\n1 Food Categories I Love 1\n2 Fruits 2\n2.1 Strawberry 3\n\n将下方的目录整理为目标格式，并移除无用的注释\n${YOUR_TOCS_COPY_FROM_ANYWHERE}",
-    "new_section_default": "新章节",
+    "new_chapter_default": "新章节",
     "new_item_default": "新条目",
     "expand_all": "展开全部",
     "collapse_all": "折叠全部",
-    "nav_hint": "可以使用上下方向键进行快速移动"
+    "nav_hint": "可以使用上下方向键进行快速移动",
+    "outline_placeholder": "1. 请先加载 PDF\n2. 拖动选择目录页面范围\n3. 点击上方生成目录按钮"
   },
   "btn": {
     "generate_toc_ai": "从所选页面生成目录",
@@ -176,5 +177,36 @@
     "beta": "现在是 beta，或许永远是 beta",
     "hide_graph": "隐藏入口",
     "export_graph": "导出知识看板"
+  },
+  "error": {
+    "no_page_ranges": "请选择目录页面范围",
+    "pdf_service_not_init": "PDF 服务未初始化，请刷新页面后重试",
+    "too_many_pages": "选择的页面过多，最多允许 {max} 页",
+    "payload_too_large": "请求体过大 (>5MB)，请减少页面范围或降低分辨率",
+    "no_valid_pages": "未选择有效目录页面",
+    "ai_failed": "AI 处理失败",
+    "try_other_model": "{provider}: {message} 您可以在 API 设置中尝试其他模型",
+    "not_a_toc": "所选页面看起来不像是目录，请尝试调整页面范围",
+    "request_too_large": "请求体过大，请减少页面范围或降低分辨率",
+    "daily_limit_exceeded": "已超过每日限制。请明天再试，或在 API 设置中输入您自己的 API Key"
+  },
+  "toast": {
+    "load_failed": "核心组件加载失败，请刷新页面后重试",
+    "components_not_loaded": "组件未加载，请重新上传文件",
+    "toc_insert_hint": "目录页将插入到第 {page} 页。你可以在设置中修改",
+    "pdf_corrupted": "该 PDF 结构过于陈旧或已损坏，无法生成预览",
+    "error_updating_pdf": "更新 PDF 出错：{msg}",
+    "error_generating_preview": "生成预览出错：{msg}",
+    "raw_toc_imported": "已从 PDF 中导入原始目录",
+    "error_loading_pdf": "加载 PDF 出错：{msg}",
+    "exporting": "正在导出文件...",
+    "no_pdf_to_export": "没有可导出的 PDF 文档",
+    "export_success": "导出成功！",
+    "error_exporting": "导出 PDF 出错：{msg}",
+    "load_pdf_first": "请先加载 PDF 文件",
+    "no_valid_toc": "未能在所选页面中找到有效的目录",
+    "error_generating_toc": "AI 生成目录出错：{msg}",
+    "unknown_async_error": "未知异步错误",
+    "unknown_error": "未知错误"
   }
 }

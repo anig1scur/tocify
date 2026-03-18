@@ -1,5 +1,6 @@
 import type * as PdfjsLibTypes from 'pdfjs-dist';
 import {get} from 'svelte/store';
+import {_} from 'svelte-i18n';
 
 import {pdfService} from '../stores';
 
@@ -14,6 +15,10 @@ interface AiTocOptions {
   doubaoEndpointIdVision?: string;
 }
 
+function t(key: string, values?: Record<string, string | number>): string {
+  return get(_)(key, { values }) as string;
+}
+
 export async function generateToc(
   { pdfInstance, ranges, startPage, endPage, apiKey, provider, doubaoEndpointIdText, doubaoEndpointIdVision }: AiTocOptions) {
 
@@ -24,12 +29,12 @@ export async function generateToc(
   } else if (startPage !== undefined && endPage !== undefined) {
     finalRanges = [{ start: startPage, end: endPage }];
   } else {
-    throw new Error('No page ranges provided.');
+    throw new Error(t('error.no_page_ranges'));
   }
 
   const service = get(pdfService);
   if (!service) {
-    throw new Error('PDF Service not initialized');
+    throw new Error(t('error.pdf_service_not_init'));
   }
 
   const imagesBase64: string[] = [];
@@ -45,15 +50,14 @@ export async function generateToc(
     for (let pageNum = range.start;pageNum <= range.end;pageNum++) {
       totalPageCount++;
       if (totalPageCount > 10) {
-        throw new Error(`Too many pages selected. Max allowed is 10 pages.`);
+        throw new Error(t('error.too_many_pages', { max: 10 }));
       }
 
       const image = await service.getPageAsImage(pdfInstance, pageNum);
 
       currentTotalSize += image.length;
       if (currentTotalSize > MAX_PAYLOAD_SIZE) {
-        throw new Error(
-          'Total size too large (>5MB). Please reduce page range or lower resolution.');
+        throw new Error(t('error.payload_too_large'));
       }
 
       imagesBase64.push(image);
@@ -61,7 +65,7 @@ export async function generateToc(
   }
 
   if (imagesBase64.length === 0) {
-    throw new Error('No valid pages selected.');
+    throw new Error(t('error.no_valid_pages'));
   }
 
   const response = await fetch('/api/process-toc', {
@@ -78,23 +82,20 @@ export async function generateToc(
 
   if (!response.ok) {
     const err = await response.json();
-    let friendlyMessage = err.message || 'AI processing failed.';
+    let friendlyMessage = err.message || t('error.ai_failed');
 
     if (response.status >= 500 && response.status < 600) {
       const p = provider || 'Unknown Provider';
       const providerName = p.charAt(0).toUpperCase() + p.slice(1);
-      friendlyMessage = `${ providerName }: ${ friendlyMessage } You can try other model in API settings.`;
+      friendlyMessage = t('error.try_other_model', { provider: providerName, message: friendlyMessage });
     } else if (friendlyMessage.includes('No valid ToC') ||
         friendlyMessage.includes('parsing error') ||
         friendlyMessage.includes('structure')) {
-      friendlyMessage =
-          'The selected pages don\'t look like a ToC. Please try adjusting the page range.';
+      friendlyMessage = t('error.not_a_toc');
     } else if (response.status === 413) {
-      friendlyMessage =
-          'Request too large. Please reduce the page range or lower the resolution.';
+      friendlyMessage = t('error.request_too_large');
     } else if (response.status === 429) {
-      friendlyMessage =
-        'Daily limit exceeded. Please try again tomorrow or input your own API key in API settings.';
+      friendlyMessage = t('error.daily_limit_exceeded');
     }
     throw new Error(friendlyMessage);
   }

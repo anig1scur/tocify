@@ -7,7 +7,7 @@
 </script>
 
 <div
-  class="w-full h-full rounded-lg text-center cursor-pointer transition-colors duration-200
+  class="w-full h-full rounded-lg select-none text-center cursor-pointer transition-colors duration-200
   {hasInstance ? 'pointer-events-none' : ''} "
   class:pointer-events-auto={isDragging}
   class:bg-blue-200={isDragging}

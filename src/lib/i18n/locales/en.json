@@ -55,17 +55,18 @@
   },
   "toc": {
     "prompt_intro": "The 'AI Format' button is used when the book lacks a scanned table of contents. Paste the unformatted text into the box, and it will intelligently convert it to the target format.\n\nAlternatively, you can use the following prompt to generate the formatted text yourself:\n\n1 Food Categories I Love 1\n2 Fruits 2\n2.1 Strawberry 3\n\nReformat the table of contents below into the target format and remove unnecessary comments \n\n${YOUR_TOCS_COPY_FROM_ANYWHERE}",
-    "new_section_default": "New Section",
+    "new_chapter_default": "New Chapter",
     "new_item_default": "New Item",
     "expand_all": "Expand All",
     "collapse_all": "Collapse All",
-    "nav_hint": "Use up and down arrow keys for quick navigation"
+    "nav_hint": "Use up and down arrow keys for quick navigation",
+    "outline_placeholder": "1. Please load your PDF first\n2. Drag to select the ToC page range\n3. Click the Generate ToC button above"
   },
   "btn": {
     "generate_toc_ai": "Generate ToC from Pages",
     "generating": "Generating...",
     "go": "Go",
-    "add_section": "Add New Section",
+    "add_chapter": "Add New Chapter",
     "upload_new": "Upload New",
     "loading": "Loading...",
     "select_grid": "Select",
@@ -113,7 +114,7 @@
     "found_prefix": "We found",
     "found_on_prefix": "on",
     "page_n": "Page {n}",
-    "instruction": "Select the physical page where this section actually begins",
+    "instruction": "Select the physical page where this chapter actually begins",
     "physical_page_label": "Physical Page",
     "skip_tooltip": "Skip this item if it's not actually part of the table of contents (e.g. preface or other irrelevant content) and use the next one as the base."
   },
@@ -168,5 +169,37 @@
     "beta": "It's beta now, maybe beta forever",
     "hide_graph": "Hide Entry",
     "export_graph": "Export Knowledge Board"
+  },
+  "error": {
+    "no_page_ranges": "No page ranges provided.",
+    "pdf_service_not_init": "PDF Service not initialized",
+    "too_many_pages": "Too many pages selected. Max allowed is {max} pages.",
+    "payload_too_large": "Total size too large (>5MB). Please reduce page range or lower resolution.",
+    "no_valid_pages": "No valid pages selected.",
+    "ai_failed": "AI processing failed.",
+    "try_other_model": "{provider}: {message} You can try other model in API settings.",
+    "not_a_toc": "The selected pages don't look like a ToC. Please try adjusting the page range.",
+    "request_too_large": "Request too large. Please reduce the page range or lower the resolution.",
+    "daily_limit_exceeded": "Daily limit exceeded. Please try again tomorrow or input your own API key in API settings."
+  },
+  "toast": {
+    "load_failed": "Failed to load core components. Please refresh and try again.",
+    "components_not_loaded": "Components not loaded. Please reupload your file.",
+    "toc_insert_hint": "ToC pages will be inserted at page {page}. You can change it in Settings.",
+    "pdf_corrupted": "The PDF structure is too old or corrupted to generate a preview.",
+    "error_updating_pdf": "Error updating PDF: {msg}",
+    "error_generating_preview": "Error generating preview: {msg}",
+    "raw_toc_imported": "The raw ToC has been imported from the PDF.",
+    "error_loading_pdf": "Error loading PDF: {msg}",
+    "exporting": "Exporting file...",
+    "no_pdf_to_export": "Error: No PDF document to export.",
+    "export_success": "Export Successful!",
+    "error_exporting": "Error exporting PDF: {msg}",
+    "load_pdf_first": "Please load a PDF first.",
+    "no_valid_toc": "We could not find a valid ToC on these pages.",
+    "error_generating_toc": "Error generating ToC from AI: {msg}",
+    "unknown_async_error": "Unknown Async Error",
+    "unknown_error": "Unknown Error"
   }
 }
+

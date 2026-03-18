@@ -206,7 +206,7 @@
           }}
           on:keydown={handleTitleKeydown}
           on:keypress={(e) => e.key === 'Enter' && (e.target as HTMLElement).blur()}
-          placeholder={prefix === '' ? $t('toc.new_section_default') : ($t('toc.new_item_default') || 'New Item')}
+          placeholder={prefix === '' ? $t('toc.new_chapter_default') : ($t('toc.new_item_default') || 'New Item')}
           class="toc-item-title border-2 border-black rounded px-2 py-1 text-sm myfocus focus:outline-none focus:ring-2 focus:ring-blue-500 flex-1 min-w-[100px] placeholder:text-gray-400 "
         />
       </div>

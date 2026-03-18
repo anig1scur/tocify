@@ -136,13 +136,13 @@
         event.preventDefault();
         return;
       }
-      const msg = event.reason?.message || event.reason || 'Unknown Async Error';
+      const msg = event.reason?.message || event.reason || $t('toast.unknown_async_error');
       toastProps = {show: true, message: msg, type: 'error'};
       event.preventDefault();
     };
 
     const handleSyncError = (event: ErrorEvent) => {
-      const msg = event.message || 'Unknown Error';
+      const msg = event.message || $t('toast.unknown_error');
       toastProps = {show: true, message: msg, type: 'error'};
     };
 
@@ -240,7 +240,7 @@
     if (!hasShownTocHint && addPhysicalTocPage && $tocItems.length > 0) {
       toastProps = {
         show: true,
-        message: `ToC pages will be inserted at page ${config.insertAtPage || 2}. You can change it in Settings.`,
+        message: $t('toast.toc_insert_hint', {values: {page: config.insertAtPage || 2}}),
         type: 'info',
       };
       setTimeout(() => {
@@ -277,7 +277,7 @@
       console.error('Failed to load PDF libraries:', error);
       toastProps = {
         show: true,
-        message: 'Failed to load core components. Please refresh and try again.',
+        message: $t('toast.load_failed'),
         type: 'error',
       };
       throw new Error('Failed to load PDF libraries', {cause: error});
@@ -307,7 +307,7 @@
 
     if (!pdfjs || !PdfLib) {
       console.error('PDF libraries not loaded.');
-      toastProps = {show: true, message: 'Components not loaded. Please reupload your file.', type: 'error'};
+      toastProps = {show: true, message: $t('toast.components_not_loaded'), type: 'error'};
       return;
     }
 
@@ -426,9 +426,9 @@
       console.error('Error updating PDF:', error);
       const msg =
         error.name === 'InvalidPDFException'
-          ? 'The PDF structure is too old or corrupted to generate a preview.'
+          ? $t('toast.pdf_corrupted')
           : error.message;
-      toastProps = {show: true, message: `Error updating PDF: ${msg}`, type: 'error'};
+      toastProps = {show: true, message: $t('toast.error_updating_pdf', {values: {msg}}), type: 'error'};
     } finally {
       if (isPreviewLoading && !isFileLoading) {
         // Only reset if we are not in another loading state, though simply false is usually fine here
@@ -452,7 +452,7 @@
         await tick();
       } catch (error: any) {
         console.error('Error generating preview:', error);
-        toastProps = {show: true, message: `Error generating preview: ${error.message}`, type: 'error'};
+        toastProps = {show: true, message: $t('toast.error_generating_preview', {values: {msg: error.message}}), type: 'error'};
         isPreviewMode = false;
       } finally {
         isPreviewLoading = false;
@@ -604,7 +604,7 @@
             tocItems.set(importedItems);
             updateTocField('pageOffset', 0);
 
-            toastProps = {show: true, message: 'The raw ToC has been imported from the PDF.', type: 'info'};
+            toastProps = {show: true, message: $t('toast.raw_toc_imported'), type: 'info'};
           } else {
             tocItems.set([]);
             updateTocField('pageOffset', 0);
@@ -630,7 +630,7 @@
       }
     } catch (error: any) {
       console.error('Error loading PDF:', error);
-      toastProps = {show: true, message: `Error loading PDF: ${error.message}`, type: 'error'};
+      toastProps = {show: true, message: $t('toast.error_loading_pdf', {values: {msg: error.message}}), type: 'error'};
     } finally {
       updateViewerInstance();
       await tick();
@@ -670,11 +670,11 @@
         }
       }
 
-      toastProps = {show: true, message: 'Exporting file...', type: 'info'};
+      toastProps = {show: true, message: $t('toast.exporting'), type: 'info'};
 
       await updatePDF(true);
       if (!pdfState.newDoc) {
-        toastProps = {show: true, message: 'Error: No PDF document to export.', type: 'error'};
+        toastProps = {show: true, message: $t('toast.no_pdf_to_export'), type: 'error'};
         return;
       }
       const pdfBytes = await pdfState.newDoc.save();
@@ -694,7 +694,7 @@
         document.body.removeChild(link);
         setTimeout(() => URL.revokeObjectURL(url), 1000);
       }
-      toastProps = {show: true, message: 'Export Successful!', type: 'success'};
+      toastProps = {show: true, message: $t('toast.export_success'), type: 'success'};
 
       setTimeout(() => {
         const isDismissed = localStorage.getItem('tocify_hide_star_request') === 'true';
@@ -704,7 +704,7 @@
       }, 1000);
     } catch (error: any) {
       console.error('Error exporting PDF:', error);
-      toastProps = {show: true, message: `Error exporting PDF: ${error.message}`, type: 'error'};
+      toastProps = {show: true, message: $t('toast.error_exporting', {values: {msg: error.message}}), type: 'error'};
     }
   };
 
@@ -712,7 +712,7 @@
     showNextStepHint = false;
 
     if (!originalPdfInstance) {
-      toastProps = {show: true, message: 'Please load a PDF first.', type: 'error'};
+      toastProps = {show: true, message: $t('toast.load_pdf_first'), type: 'error'};
       return;
     }
 
@@ -728,7 +728,7 @@
       });
 
       if (!res || res.length === 0) {
-        aiError = 'We could not find a valid ToC on these pages.';
+        aiError = $t('toast.no_valid_toc');
         return;
       }
 
