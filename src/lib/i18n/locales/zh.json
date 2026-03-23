@@ -193,7 +193,7 @@
   "toast": {
     "load_failed": "核心组件加载失败，请刷新页面后重试",
     "components_not_loaded": "组件未加载，请重新上传文件",
-    "toc_insert_hint": "目录页将插入到第 {page} 页。你可以在设置中修改",
+    "toc_insert_hint": "目录页将插入到第 {page} 页，你可以在设置中进行修改",
     "pdf_corrupted": "该 PDF 结构过于陈旧或已损坏，无法生成预览",
     "error_updating_pdf": "更新 PDF 出错：{msg}",
     "error_generating_preview": "生成预览出错：{msg}",

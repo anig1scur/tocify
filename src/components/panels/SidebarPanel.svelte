@@ -50,6 +50,7 @@
     on:toggleExpand={() => (isTocConfigExpanded = !isTocConfigExpanded)}
     on:updateField={(e) => dispatch('updateField', e.detail)}
     on:jumpToTocPage={() => dispatch('jumpToTocPage')}
+    on:jumpToPage={(e) => dispatch('jumpToPage', e.detail)}
   />
 
   {#if showNextStepHint && originalPdfInstance}

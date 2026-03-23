@@ -167,6 +167,7 @@
             <PageLabelSetting
               settings={config.pageLabelSettings}
               on:change={handlePageLabelChange}
+              on:jumpToPage={(e) => dispatch('jumpToPage', e.detail)}
             />
           </div>
         {/if}

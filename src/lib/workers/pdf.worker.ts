@@ -15,6 +15,7 @@ import fontkit from 'pdf-fontkit';
 import { isLegacyBrowser } from '$lib/utils';
 import { TOC_LAYOUT, CJK_REGEX, A4_WIDTH, A4_HEIGHT } from '../constants';
 import { setOutline } from '../pdf/outliner';
+import { formatPageLabel } from '../pdf/page-labels';
 
 const workerFileName = isLegacyBrowser() ? '/pdf.worker.legacy.min.mjs' : '/pdf.worker.min.mjs';
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerFileName;
@@ -224,10 +225,10 @@ async function generatePdf(items: any[], config: any, previewOnly = false, pageS
 
   const tocPageCount = currentTocPageIndex.value;
 
-  applyLinkAnnotations(doc, pendingAnnots, insertionStartIndex, tocPageCount);
+  applyLinkAnnotations(doc, pendingAnnots, { insertionStartIndex, tocPageCount });
 
   // Set Outline
-  await setOutline(doc, items, config.pageOffset, tocPageCount);
+  await setOutline(doc, items, { pageOffset: config.pageOffset, tocPageCount });
 
   const tocDoc = await PDFDocument.create();
   const indices = previewOnly
@@ -321,7 +322,12 @@ async function drawTocItems(
     }
 
     // Page Number
-    const pageNumText = String(item.to);
+    let pageNumText = String(item.to);
+    if (config.pageLabelSettings?.enabled) {
+      const originalTargetIndex = item.to + (config.pageOffset ?? 0) - 1;
+      pageNumText = formatPageLabel(originalTargetIndex, config.pageLabelSettings);
+    }
+    
     const pageNumWidth = currentFont.widthOfTextAtSize(pageNumText, fontSize);
     const pageNumPad = pageWidth * TOC_LAYOUT.ITEM.PAGE_NUM_WIDTH_PAD_RATIO;
     const pageNumX =
@@ -344,7 +350,7 @@ async function drawTocItems(
 
       const dotsRightPad = pageWidth * TOC_LAYOUT.ITEM.DOT_LEADER.RIGHT_PAD_RATIO;
       const dotsXEnd = pageWidth - marginX -
-        dotsRightPad;
+        dotsRightPad - pageNumWidth - pageNumPad - 5;
       const maxDotsWidth = dotsXEnd - dotsXStart;
 
       if (maxDotsWidth > 0) {
@@ -418,7 +424,10 @@ function splitTextIntoLines(
 
 function applyLinkAnnotations(
   doc: PDFDocument, pendingAnnots: PendingAnnot[],
-  insertionStartIndex: number, tocPageCount: number) {
+  options?: { insertionStartIndex?: number, tocPageCount?: number }) {
+  const insertionStartIndex = options?.insertionStartIndex || 0;
+  const tocPageCount = options?.tocPageCount || 0;
+  
   const allPages = doc.getPages();
   const totalPages = allPages.length;
 

@@ -48,6 +48,9 @@
   let isPreviewLoading = false;
   let isTocConfigExpanded = false;
   let showNextStepHint = false;
+  let addPhysicalTocPage = false;
+  
+  let highlightPageNum = 0;
   let hasShownTocHint = false;
 
   let showGraphDrawer = false;
@@ -86,7 +89,6 @@
   let tocRanges = [{start: 1, end: 1, id: 'default'}];
   let activeRangeIndex = 0;
   let tocPageCount = 0;
-  let addPhysicalTocPage = false;
   let isPreviewMode = false;
   let pendingTocItems: TocItem[] = [];
   let firstTocItem: TocItem | null = null;
@@ -369,8 +371,8 @@
         tocPageCount = 0;
       }
 
-      setOutline(newDoc!, tocItems_, config.pageOffset, tocPageCount);
-      setPageLabels(newDoc!, config.pageLabelSettings);
+      setOutline(newDoc!, tocItems_, { pageOffset: config.pageOffset, tocPageCount });
+      setPageLabels(newDoc!, config.pageLabelSettings, { tocPageCount, insertAtPage: config.insertAtPage || 2 });
 
       if (isFull) {
         const pdfBytes = await newDoc!.save({
@@ -699,7 +701,9 @@
       setTimeout(() => {
         const isDismissed = localStorage.getItem('tocify_hide_star_request') === 'true';
         if (!isDismissed) {
-          showStarRequestModal = true;
+          if (Math.random() < 0.25) {
+            showStarRequestModal = true;
+          }
         }
       }, 1000);
     } catch (error: any) {
@@ -817,12 +821,17 @@
     }
   };
 
-  const debouncedJumpToPage = debounce((page: number) => {
-    if (page > 0 && page <= pdfState.totalPages) {
-      pdfState.currentPage = page;
-      pdfState = {...pdfState};
+  const jumpToPage = (page: number) => {
+    if (page > 0 && page <= (pdfState.totalPages || originalPdfInstance?.numPages || Infinity)) {
+      if (isPreviewMode) {
+        pdfState.currentPage = page;
+        pdfState = {...pdfState};
+      } else {
+        highlightPageNum = page;
+      }
     }
-  }, 300);
+  };
+  const debouncedJumpToPage = debounce(jumpToPage, 300);
 
   const handleTocItemHover = (e: CustomEvent) => {
     if (!isPreviewMode) return;
@@ -886,7 +895,7 @@
     }
   };
 
-  const jumpToPage = async (logicalPage: number) => {
+  const jumpToLogicalPage = async (logicalPage: number) => {
     if (!isPreviewMode) {
       await togglePreviewMode();
     }
@@ -966,7 +975,7 @@
       {#key $curFileFingerprint}
         <TocRelation
           items={$tocItems}
-          onJumpToPage={jumpToPage}
+          onJumpToPage={jumpToLogicalPage}
           title={pdfState.filename ? `${pdfState.filename}`.replace('.pdf', '') : 'No file loaded'}
           onHide={() => {
             showGraphDrawer = false;
@@ -1031,7 +1040,14 @@
       on:updateField={(e) => updateTocField(e.detail.path, e.detail.value)}
       on:jumpToTocPage={jumpToTocPage}
       on:jumpToPage={(e) => {
-        jumpToPage(e.detail.to);
+        let physicalTarget = e.detail.page !== undefined ? e.detail.page : (e.detail.to + config.pageOffset);
+        let finalPage = physicalTarget;
+        if (isPreviewMode) {
+           if (physicalTarget >= (config.insertAtPage || 2)) {
+              finalPage = physicalTarget + tocPageCount;
+           }
+        }
+        jumpToPage(finalPage);
       }}
       on:generateAi={generateTocFromAI}
       on:hoveritem={handleTocItemHover}
@@ -1062,6 +1078,7 @@
       {jumpToTocPage}
       {currentTocPath}
       {prefetchPageNum}
+      bind:highlightPageNum
       bind:isDragging
       on:fileselect={(e) => loadPdfFile(e.detail)}
       on:viewerMessage={handleViewerMessage}

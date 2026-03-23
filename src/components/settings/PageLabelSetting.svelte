@@ -61,7 +61,13 @@
     {#if i > 0}
       <div class="border-t-2 border-dotted border-gray-300 mx-auto"></div>
     {/if}
-    <div class="relative">
+    <div 
+      class="relative group cursor-pointer hover:bg-gray-50 rounded-md p-1 -m-1 transition-colors" 
+      role="button"
+      tabindex="0"
+      on:keydown={(e) => e.key === 'Enter' && dispatch('jumpToPage', { page: seg.startPage })}
+      on:click={() => dispatch('jumpToPage', { page: seg.startPage })}
+    >
       <div class="flex justify-between items-center mb-1">
         <span class="text-xs font-bold text-gray-500 uppercase tracking-wider">{$t('label.segment_range_n', {values: {n: i + 1}})}</span>
         <button class="text-gray-400 hover:text-black p-1 hover:bg-gray-100 rounded transition-colors"

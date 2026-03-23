@@ -23,6 +23,7 @@
   export let tocPageCount: number;
   export let currentTocPath: any[] = []; // TocItem[]
   export let prefetchPageNum: number = 0;
+  export let highlightPageNum = 0;
 
   export let jumpToTocPage: () => Promise<void>;
 
@@ -96,6 +97,7 @@
           {addPhysicalTocPage}
           {currentTocPath}
           {prefetchPageNum}
+          bind:highlightPageNum
         />
 
         <input

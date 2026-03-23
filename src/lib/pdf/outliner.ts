@@ -59,10 +59,12 @@ const getOpeningCount = (outlines: readonly PDFOutline[]) => {
 };
 
 export const setOutline = async (
-    doc: PDFDocument, outlines: readonly PDFOutline[],
-    pageNumberingOffset: number, addedPagesCount: number
-
+    doc: PDFDocument, 
+    outlines: readonly PDFOutline[],
+    options?: { pageOffset?: number; tocPageCount?: number }
     ) => {
+  const pageNumberingOffset = options?.pageOffset || 0;
+  const addedPagesCount = options?.tocPageCount || 0;
   const rootRef = doc.context.nextRef();
   const refMap = new WeakMap<PDFOutline, PDFRef>();
 

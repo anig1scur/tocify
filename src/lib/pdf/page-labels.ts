@@ -75,10 +75,10 @@ const STYLE_MAP: Record<PageLabelStyle, string | undefined> = {
   none: undefined,
 };
 
-export function normalizePageLabelSegments(segments: PageLabelSegment[], totalPages?: number): PageLabelSegment[] {
+export function normalizePageLabelSegments(segments: PageLabelSegment[]): PageLabelSegment[] {
   return (segments || [])
     .map(seg => ({
-      startPage: Math.max(1, totalPages ? Math.min(Math.trunc(Number(seg.startPage) || 1), totalPages) : Math.trunc(Number(seg.startPage) || 1)),
+      startPage: Math.max(1, Math.trunc(Number(seg.startPage) || 1)),
       style: seg.style ?? 'decimal',
       prefix: seg.prefix ?? '',
       startAt: Math.max(1, Math.trunc(Number(seg.startAt) || 1)),
@@ -105,16 +105,25 @@ function findSegmentIndex(segments: PageLabelSegment[], pageNum: number): number
   return high >= 0 ? high : 0;
 }
 
-export function setPageLabels(doc: PDFDocument, settings?: PageLabelSettings) {
+export function setPageLabels(
+  doc: PDFDocument,
+  settings?: PageLabelSettings,
+  options?: { tocPageCount?: number; insertAtPage?: number }
+) {
   const key = PDFName.of('PageLabels');
   if (!settings?.enabled) return doc.catalog.delete(key);
 
-  const totalPages = doc.getPageCount();
-  const segments = normalizePageLabelSegments(settings.segments, totalPages);
+  const segments = normalizePageLabelSegments(settings.segments);
   if (segments.length === 0) return doc.catalog.delete(key);
 
+  const tocPageCount = options?.tocPageCount || 0;
+  const insertAtPage = options?.insertAtPage || 2;
+
   const nums = segments.flatMap(seg => {
-    const startIndex = seg.startPage - 1;
+    let startIndex = seg.startPage - 1;
+    if (tocPageCount > 0 && startIndex >= (insertAtPage - 1)) {
+      startIndex += tocPageCount;
+    }
     const labelDict: Record<string, any> = {};
     const pdfStyle = STYLE_MAP[seg.style];
     
@@ -130,12 +139,27 @@ export function setPageLabels(doc: PDFDocument, settings?: PageLabelSettings) {
   doc.catalog.set(key, doc.context.register(doc.context.obj({ Nums: nums })));
 }
 
-export function formatPageLabel(index: number, settings: PageLabelSettings, totalPages: number): string {
+export function formatPageLabel(
+  index: number, 
+  settings: PageLabelSettings,
+  options?: { tocPageCount?: number; insertAtPage?: number }
+): string {
   if (!settings.enabled) return (index + 1).toString();
-  const segments = normalizePageLabelSegments(settings.segments, totalPages);
-  if (segments.length === 0) return (index + 1).toString();
+  const rawSegments = normalizePageLabelSegments(settings.segments);
+  if (rawSegments.length === 0) return (index + 1).toString();
 
-  const seg = segments[findSegmentIndex(segments, index + 1)];
+  const tocPageCount = options?.tocPageCount || 0;
+  const insertAtPage = options?.insertAtPage || 2;
+
+  const shiftedSegments = rawSegments.map(seg => {
+    let startIndex = seg.startPage - 1;
+    if (tocPageCount > 0 && startIndex >= (insertAtPage - 1)) {
+      startIndex += tocPageCount;
+    }
+    return { ...seg, startPage: startIndex + 1 };
+  });
+
+  const seg = shiftedSegments[findSegmentIndex(shiftedSegments, index + 1)];
   const num = seg.startAt + (index - (seg.startPage - 1));
   
   const formatters: Record<PageLabelStyle, (n: number) => string> = {

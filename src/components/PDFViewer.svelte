@@ -21,6 +21,7 @@
   export let addPhysicalTocPage: boolean = false;
   export let currentTocPath: TocItem[] = [];
   export let prefetchPageNum: number = 0;
+  export let highlightPageNum: number = 0;
 
   const dispatch = createEventDispatcher();
 
@@ -110,7 +111,10 @@
   }
 
   $: currentPageLabel = (originalPdfInstance && $tocConfig.pageLabelSettings.enabled) 
-    ? formatPageLabel(currentPage - 1, $tocConfig.pageLabelSettings, activeTotalPages)
+    ? formatPageLabel(currentPage - 1, $tocConfig.pageLabelSettings, {
+        tocPageCount,
+        insertAtPage: $tocConfig.insertAtPage || 2
+      })
     : (pageLabels?.[currentPage - 1] || '');
 
   async function refreshPageLabels(pdfInstance: any) {
@@ -247,12 +251,8 @@
     gridPages = [];
   }
 
-  async function autoScrollToActiveRange() {
+  async function autoScrollToPage(targetPage: number) {
     if (mode !== 'grid' || !scrollContainer) return;
-    const range = tocRanges[activeRangeIndex];
-    if (!range) return;
-
-    const targetPage = range.start;
     await tick();
 
     const pageEl = scrollContainer.querySelector(`[data-page-num="${targetPage}"]`) as HTMLElement;
@@ -271,7 +271,17 @@
   }
 
   $: if (activeRangeIndex >= 0 && mode === 'grid') {
-    autoScrollToActiveRange();
+    const range = tocRanges[activeRangeIndex];
+    if (range) autoScrollToPage(range.start);
+  }
+
+  let highlightTimer: any;
+  $: if (highlightPageNum > 0 && mode === 'grid') {
+    autoScrollToPage(highlightPageNum);
+    if (highlightTimer) clearTimeout(highlightTimer);
+    highlightTimer = setTimeout(() => {
+      highlightPageNum = 0;
+    }, 2000);
   }
 
   function scrollLoop() {
@@ -704,6 +714,9 @@
           class:border-blue-500={isSelected && isActive}
           class:border-gray-500={(isSelected && !isActive) || !isSelected}
           class:scale-[1.02]={isSelected}
+          class:ring-4={highlightPageNum === page.pageNum}
+          class:ring-green-400={highlightPageNum === page.pageNum}
+          class:ring-offset-2={highlightPageNum === page.pageNum}
           style="-webkit-touch-callout: none;"
           on:mousedown={() => handleMouseDown(page.pageNum)}
           on:touchstart={() => handleTouchStart(page.pageNum)}
