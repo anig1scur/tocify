@@ -207,6 +207,10 @@ async function generatePdf(items: any[], config: any, previewOnly = false, pageS
     color: rgb(0, 0, 0),
   });
 
+  //  Prevent pdf-fontkit crash ("value argument is out of bounds")
+  firstTocPage.drawText('.', { x: -1000, y: -1000, size: 1, font: regularFont, opacity: 0 });
+  firstTocPage.drawText('.', { x: -1000, y: -1000, size: 1, font: boldFont, opacity: 0 });
+
   yOffset -= titleMarginBottom;
 
   const renderContext: TocRenderContext = {
@@ -286,7 +290,7 @@ async function drawTocItems(
     const marginX = pageWidth * TOC_LAYOUT.PAGE.MARGIN_X_RATIO;
     const titleX = marginX + indentation;
     const rightPad = pageWidth * TOC_LAYOUT.ITEM.RIGHT_PAD_RATIO;
-    const maxWidth = pageWidth - rightPad - indentation;
+    const maxWidth = pageWidth - marginX - rightPad - indentation;
     const currentFont = isFirstLevel ? boldFont : regularFont;
 
     const lines = splitTextIntoLines(title, fontSize, currentFont, maxWidth);
@@ -329,9 +333,7 @@ async function drawTocItems(
     }
     
     const pageNumWidth = currentFont.widthOfTextAtSize(pageNumText, fontSize);
-    const pageNumPad = pageWidth * TOC_LAYOUT.ITEM.PAGE_NUM_WIDTH_PAD_RATIO;
-    const pageNumX =
-      pageWidth - pageNumPad - pageNumWidth;
+    const pageNumX = pageWidth - marginX - pageNumWidth;
 
     currentWorkingPage.drawText(pageNumText, {
       x: pageNumX,
@@ -349,8 +351,7 @@ async function drawTocItems(
         titleX + titleWidth + TOC_LAYOUT.ITEM.DOT_LEADER.GAP_TITLE;
 
       const dotsRightPad = pageWidth * TOC_LAYOUT.ITEM.DOT_LEADER.RIGHT_PAD_RATIO;
-      const dotsXEnd = pageWidth - marginX -
-        dotsRightPad - pageNumWidth - pageNumPad - 5;
+      const dotsXEnd = pageWidth - marginX - pageNumWidth - dotsRightPad;
       const maxDotsWidth = dotsXEnd - dotsXStart;
 
       if (maxDotsWidth > 0) {
@@ -359,9 +360,9 @@ async function drawTocItems(
         const count = Math.floor(maxDotsWidth / step);
 
         if (count > 0) {
-          const oneDotWidth = regularFont.widthOfTextAtSize('.', dotSize);
+          const oneDotWidth = regularFont.widthOfTextAtSize(dotLeader, dotSize);
           const numDots = Math.floor(maxDotsWidth / oneDotWidth);
-          const finalDots = '.'.repeat(Math.max(0, numDots - TOC_LAYOUT.ITEM.DOT_LEADER.RESERVE_COUNT));
+          const finalDots = dotLeader.repeat(Math.max(0, numDots - TOC_LAYOUT.ITEM.DOT_LEADER.RESERVE_COUNT));
 
           currentWorkingPage.drawText(finalDots, {
             x: dotsXStart,
