@@ -50,8 +50,8 @@ export class PDFService {
 
   static FONT_URLS = {
     huiwen: {
-      regular: '/fonts/huiwen-mincho.ttf',
-      bold: '/fonts/huiwen-mincho.ttf',
+      regular: 'https://static.aeriszhu.com/huiwen-mincho.ttf',
+      bold: 'https://static.aeriszhu.com/huiwen-mincho.ttf',
     },
     hei: {
       regular: 'https://static.aeriszhu.com/SourceHanSansSC-Regular.woff2',
@@ -123,7 +123,6 @@ export class PDFService {
     if (!browser) return;
 
     if (!PDFService.regularFontBytes.has(family) || !PDFService.boldFontBytes.has(family)) {
-
       if (PDFService.fontLoadingPromises.has(family)) {
         await PDFService.fontLoadingPromises.get(family);
       } else {
@@ -131,7 +130,7 @@ export class PDFService {
           try {
             const urls = PDFService.FONT_URLS[family as keyof typeof PDFService.FONT_URLS];
             if (!urls) {
-              console.warn(`Unknown font family: ${ family }, falling back to huiwen`);
+              console.warn(`Unknown font family: ${family}, falling back to huiwen`);
               await this.loadFonts('huiwen');
               return;
             }
@@ -139,12 +138,14 @@ export class PDFService {
             const uniqueUrls = new Set([urls.regular, urls.bold]);
             const urlToBuffer = new Map<string, ArrayBuffer>();
 
-            await Promise.all(Array.from(uniqueUrls).map(async (url) => {
-              const res = await fetch(url);
-              if (!res.ok) throw new Error(`Failed to load ${ url }`);
-              const buffer = await res.arrayBuffer();
-              urlToBuffer.set(url, buffer);
-            }));
+            await Promise.all(
+              Array.from(uniqueUrls).map(async (url) => {
+                const res = await fetch(url, { credentials: 'omit' });
+                if (!res.ok) throw new Error(`Failed to load ${url}`);
+                const buffer = await res.arrayBuffer();
+                urlToBuffer.set(url, buffer);
+              })
+            );
 
             const regular = urlToBuffer.get(urls.regular);
             const bold = urlToBuffer.get(urls.bold);
@@ -154,7 +155,7 @@ export class PDFService {
               PDFService.boldFontBytes.set(family, bold);
             }
           } catch (e) {
-            console.error(`Failed to load fonts for ${ family }`, e);
+            console.error(`Failed to load fonts for ${family}`, e);
             throw e;
           } finally {
             PDFService.fontLoadingPromises.delete(family);

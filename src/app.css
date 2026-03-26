@@ -4,7 +4,7 @@
 
 @font-face {
   font-family: 'HuiwenMincho';
-  src: url('/fonts/huiwen-mincho.ttf') format('truetype');
+  src: url('https://static.aeriszhu.com/huiwen-mincho.ttf') format('truetype');
   font-display: swap;
 }
 
