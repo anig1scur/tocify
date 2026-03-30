@@ -25,16 +25,18 @@ function determineProvider(request: Request, userProvider?: string): string {
     return env.AI_PROVIDER.toLowerCase();
   }
 
-  const country = request.headers.get('x-vercel-ip-country') ||
-    request.headers.get('cf-ipcountry') ||
-    request.headers.get('x-country-code');
+  // const country = request.headers.get('x-vercel-ip-country') ||
+  //   request.headers.get('cf-ipcountry') ||
+  //   request.headers.get('x-country-code');
 
-  if (country === 'CN') {
-    // return randomChoice(['gemini', 'qwen', 'doubao', 'zhipu']);
-    return randomChoice(['gemini', 'qwen', 'doubao']);
-  }
+  return randomChoice(['gemini', 'qwen', 'doubao', 'zhipu']);
 
-  return 'gemini';
+  // if (country === 'CN') {
+  //   // return randomChoice(['gemini', 'qwen', 'doubao', 'zhipu']);
+  //   return randomChoice(['gemini', 'qwen', 'doubao']);
+  // }
+
+  // return 'gemini';
 }
 
 export const POST = withRateLimit(async ({ request }) => {
