@@ -117,7 +117,7 @@
   </button>
 
   {#if aiError}
-    <div class="my-2 p-3 bg-red-100 border-2 border-red-700 text-red-700 rounded-lg">
+    <div class="my-2 p-3 bg-red-100 border-2 border-red-700 text-red-700 rounded-lg whitespace-pre-line">
       {aiError}
     </div>
   {/if}

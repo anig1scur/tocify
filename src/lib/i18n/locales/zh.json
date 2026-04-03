@@ -116,7 +116,9 @@
   },
   "loading": {
     "extracting_pages": "正在从 {ranges} 页提取目录...",
-    "take_minutes": "这可能需要几分钟"
+    "take_minutes": "这可能需要几分钟",
+    "progress": "{current} / {total}",
+    "partial_failure_title": "部分页面请求失败"
   },
   "client": {
     "title": "在客户端运行",
@@ -188,7 +190,9 @@
     "try_other_model": "{provider}: {message} 您可以在 API 设置中尝试其他模型",
     "not_a_toc": "所选页面看起来不像是目录，请尝试调整页面范围",
     "request_too_large": "请求体过大，请减少页面范围或降低分辨率",
-    "daily_limit_exceeded": "已超过每日限制。请明天再试，或在 API 设置中输入您自己的 API Key"
+    "daily_limit_exceeded": "已超过每日限制。请明天再试，或在 API 设置中输入您自己的 API Key",
+    "needs_api_key": "请在 API 设置中填写您自己的 API Key 以继续。",
+    "chunk_failed": "第 {start}–{end} 页处理失败，原因：{reason}"
   },
   "toast": {
     "load_failed": "核心组件加载失败，请刷新页面后重试",

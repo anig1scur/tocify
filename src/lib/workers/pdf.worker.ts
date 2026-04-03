@@ -170,7 +170,7 @@ async function generatePdf(items: any[], config: any, previewOnly = false, pageS
     height = pageSize.height;
   } else {
     try {
-      const first = doc.getPage(1) || doc.getPage(0);
+      const first = doc.getPage(doc.getPageCount() > 1 ? 1 : 0);
       const size = first.getSize();
       width = size.width;
       height = size.height;

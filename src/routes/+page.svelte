@@ -14,7 +14,7 @@
   import {setOutline} from '../lib/pdf/outliner';
   import {debounce} from '$lib';
   import {buildTree, convertPdfJsOutlineToTocItems, setNestedValue, findActiveTocPath, cleanTocItems} from '$lib/utils';
-  import {generateToc} from '$lib/toc-service';
+  import {generateToc, ERROR_NEEDS_API_KEY} from '$lib/toc-service';
   import {applyCustomPrefix} from '$lib/utils/prefix';
   import {setPageLabels} from '$lib/pdf/page-labels';
 
@@ -94,6 +94,7 @@
   let pendingTocItems: TocItem[] = [];
   let firstTocItem: TocItem | null = null;
   let aiError: string | null = null;
+  let aiProgress: {current: number; total: number} | null = null;
   let config: TocConfig;
 
   let lastPdfContentJson = '';
@@ -566,7 +567,7 @@
         lastInsertAtPage = initPage;
         await $pdfService.initPreview(pdfState.doc);
 
-        const firstPage = pdfState.doc.getPage(1) || pdfState.doc.getPage(0);
+        const firstPage = pdfState.doc.getPage(pdfState.doc.getPageCount() > 1 ? 1 : 0);
         const {width} = firstPage.getSize();
         const autoLayout = PDFService.getAutoLayout(width);
 
@@ -729,6 +730,7 @@
 
     isAiLoading = true;
     aiError = null;
+    aiProgress = null;
 
     try {
       const res = await generateToc({
@@ -736,14 +738,27 @@
         ranges: tocRanges,
         apiKey: customApiConfig.apiKey,
         provider: customApiConfig.provider,
+        doubaoEndpointIdText: customApiConfig.doubaoEndpointIdText,
+        doubaoEndpointIdVision: customApiConfig.doubaoEndpointIdVision,
+        onProgress: (current, total) => {
+          aiProgress = { current, total };
+        },
       });
 
-      if (!res || res.length === 0) {
+      const { items, chunkFailures: failures } = res;
+
+      if (failures.length > 0) {
+        aiError = failures
+          .map(f => $t('error.chunk_failed', { values: { start: f.start, end: f.end, reason: f.error } }))
+          .join('\n');
+      }
+
+      if (!items || items.length === 0) {
         aiError = $t('toast.no_valid_toc');
         return;
       }
 
-      const nestedTocItems = buildTree(res);
+      const nestedTocItems = buildTree(items);
 
       pendingTocItems = nestedTocItems;
       firstTocItem = nestedTocItems.length > 0 ? nestedTocItems[0] : null;
@@ -758,10 +773,16 @@
       }
     } catch (error: any) {
       console.error('Error generating ToC from AI:', error);
-      aiError = error.message;
-      toastProps = {show: true, message: error.message, type: 'error'};
+      if (error.code === ERROR_NEEDS_API_KEY) {
+        isTocConfigExpanded = false;
+        toastProps = {show: true, message: error.message, type: 'error', duration: 6000};
+      } else {
+        aiError = error.message;
+        toastProps = {show: true, message: error.message, type: 'error'};
+      }
     } finally {
       isAiLoading = false;
+      aiProgress = null;
     }
   };
   
@@ -1102,6 +1123,7 @@
   <AiLoadingModal
     {isAiLoading}
     {tocRanges}
+    {aiProgress}
   />
 
   <OffsetModal

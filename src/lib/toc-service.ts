@@ -4,6 +4,17 @@ import {_} from 'svelte-i18n';
 
 import {pdfService} from '../stores';
 
+export const LARGE_PAGE_THRESHOLD = 8;
+export const CHUNK_SIZE = 8;
+
+export const ERROR_NEEDS_API_KEY = 'NEEDS_API_KEY';
+
+export interface ChunkFailure {
+  start: number;
+  end: number;
+  error: string;
+}
+
 interface AiTocOptions {
   pdfInstance: PdfjsLibTypes.PDFDocumentProxy;
   ranges?: { start: number; end: number }[];
@@ -13,14 +24,59 @@ interface AiTocOptions {
   provider?: string;
   doubaoEndpointIdText?: string;
   doubaoEndpointIdVision?: string;
+  onProgress?: (current: number, total: number) => void;
+}
+
+export interface GenerateTocResult {
+  items: any[];
+  chunkFailures: ChunkFailure[];
 }
 
 function t(key: string, values?: Record<string, string | number>): string {
   return get(_)(key, { values }) as string;
 }
 
+async function fetchChunk(
+  images: string[],
+  apiKey: string | undefined,
+  provider: string | undefined,
+  doubaoEndpointIdText: string | undefined,
+  doubaoEndpointIdVision: string | undefined,
+): Promise<any[]> {
+  const response = await fetch('/api/process-toc', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      images,
+      apiKey,
+      provider,
+      doubaoEndpointIdText,
+      doubaoEndpointIdVision,
+    }),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    let friendlyMessage = err.message || t('error.ai_failed');
+
+    if (response.status >= 500 && response.status < 600) {
+      const p = provider || 'Unknown Provider';
+      const providerName = p.charAt(0).toUpperCase() + p.slice(1);
+      friendlyMessage = t('error.try_other_model', { provider: providerName, message: friendlyMessage });
+    } else if (response.status === 413) {
+      friendlyMessage = t('error.request_too_large');
+    } else if (response.status === 429) {
+      friendlyMessage = t('error.daily_limit_exceeded');
+    }
+    throw new Error(friendlyMessage);
+  }
+
+  return response.json();
+}
+
 export async function generateToc(
-  { pdfInstance, ranges, startPage, endPage, apiKey, provider, doubaoEndpointIdText, doubaoEndpointIdVision }: AiTocOptions) {
+  { pdfInstance, ranges, startPage, endPage, apiKey, provider, doubaoEndpointIdText, doubaoEndpointIdVision, onProgress }: AiTocOptions
+): Promise<GenerateTocResult> {
 
   // Normalize ranges
   let finalRanges: { start: number; end: number }[] = [];
@@ -37,68 +93,89 @@ export async function generateToc(
     throw new Error(t('error.pdf_service_not_init'));
   }
 
-  const imagesBase64: string[] = [];
+  // Collect all page images with their physical page numbers
+  interface PageEntry { pageNum: number; image: string }
+  const pageEntries: PageEntry[] = [];
   let currentTotalSize = 0;
   const MAX_PAYLOAD_SIZE = 5 * 1024 * 1024;
-  let totalPageCount = 0;
 
   for (const range of finalRanges) {
-    if (range.end < range.start) {
-      continue; // Skip invalid ranges
-    }
-
-    for (let pageNum = range.start;pageNum <= range.end;pageNum++) {
-      totalPageCount++;
-      if (totalPageCount > 10) {
-        throw new Error(t('error.too_many_pages', { max: 10 }));
-      }
-
+    if (range.end < range.start) continue;
+    for (let pageNum = range.start; pageNum <= range.end; pageNum++) {
       const image = await service.getPageAsImage(pdfInstance, pageNum);
-
       currentTotalSize += image.length;
-      if (currentTotalSize > MAX_PAYLOAD_SIZE) {
+      if (currentTotalSize > MAX_PAYLOAD_SIZE * CHUNK_SIZE) {
         throw new Error(t('error.payload_too_large'));
       }
-
-      imagesBase64.push(image);
+      pageEntries.push({ pageNum, image });
     }
   }
 
-  if (imagesBase64.length === 0) {
+  if (pageEntries.length === 0) {
     throw new Error(t('error.no_valid_pages'));
   }
 
-  const response = await fetch('/api/process-toc', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({
-      images: imagesBase64,
-      apiKey: apiKey,
-      provider: provider,
-      doubaoEndpointIdText,
-      doubaoEndpointIdVision,
-    }),
-  });
+  const totalPages = pageEntries.length;
 
-  if (!response.ok) {
-    const err = await response.json();
-    let friendlyMessage = err.message || t('error.ai_failed');
-
-    if (response.status >= 500 && response.status < 600) {
-      const p = provider || 'Unknown Provider';
-      const providerName = p.charAt(0).toUpperCase() + p.slice(1);
-      friendlyMessage = t('error.try_other_model', { provider: providerName, message: friendlyMessage });
-    } else if (friendlyMessage.includes('No valid ToC') ||
-        friendlyMessage.includes('parsing error') ||
-        friendlyMessage.includes('structure')) {
-      friendlyMessage = t('error.not_a_toc');
-    } else if (response.status === 413) {
-      friendlyMessage = t('error.request_too_large');
-    } else if (response.status === 429) {
-      friendlyMessage = t('error.daily_limit_exceeded');
-    }
-    throw new Error(friendlyMessage);
+  if (totalPages > LARGE_PAGE_THRESHOLD && !apiKey) {
+    const err = new Error(t('error.needs_api_key')) as any;
+    err.code = ERROR_NEEDS_API_KEY;
+    throw err;
   }
 
-  return await response.json();
+  if (totalPages <= CHUNK_SIZE) {
+    onProgress?.(1, 1);
+    const items = await fetchChunk(
+      pageEntries.map(e => e.image),
+      apiKey, provider, doubaoEndpointIdText, doubaoEndpointIdVision
+    );
+    return { items: Array.isArray(items) ? items : [], chunkFailures: [] };
+  }
+
+  const chunks: PageEntry[][] = [];
+  for (let i = 0; i < pageEntries.length; i += CHUNK_SIZE) {
+    chunks.push(pageEntries.slice(i, i + CHUNK_SIZE));
+  }
+
+  const totalChunks = chunks.length;
+  const allItems: (any[] | null)[] = new Array(totalChunks).fill(null);
+  const chunkFailures: ChunkFailure[] = [];
+  let completedChunks = 0;
+
+  const chunkPromises = chunks.map(async (chunk, i) => {
+    const chunkStart = chunk[0].pageNum;
+    const chunkEnd = chunk[chunk.length - 1].pageNum;
+    const images = chunk.map(e => e.image);
+
+    let result: any[] | null = null;
+
+    // First attempt
+    try {
+      result = await fetchChunk(images, apiKey, provider, doubaoEndpointIdText, doubaoEndpointIdVision);
+    } catch (_firstErr) {
+      // Retry once
+      try {
+        result = await fetchChunk(images, apiKey, provider, doubaoEndpointIdText, doubaoEndpointIdVision);
+      } catch (retryErr: any) {
+        chunkFailures.push({
+          start: chunkStart,
+          end: chunkEnd,
+          error: retryErr.message || t('error.ai_failed'),
+        });
+      }
+    }
+
+    if (result && Array.isArray(result)) {
+      allItems[i] = result;
+    }
+
+    completedChunks++;
+    onProgress?.(completedChunks, totalChunks);
+  });
+
+  await Promise.allSettled(chunkPromises);
+
+  const mergedItems = allItems.flatMap(r => (Array.isArray(r) ? r : []));
+
+  return { items: mergedItems, chunkFailures };
 }

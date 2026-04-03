@@ -120,7 +120,9 @@
   },
   "loading": {
     "extracting_pages": "Extracting ToC from pages {ranges}...",
-    "take_minutes": "This may take minutes"
+    "take_minutes": "This may take minutes",
+    "progress": "{current} / {total}",
+    "partial_failure_title": "Some page ranges failed"
   },
   "seo": {
     "why_title": "Why Choose Tocify?",
@@ -180,7 +182,9 @@
     "try_other_model": "{provider}: {message} You can try other model in API settings.",
     "not_a_toc": "The selected pages don't look like a ToC. Please try adjusting the page range.",
     "request_too_large": "Request too large. Please reduce the page range or lower the resolution.",
-    "daily_limit_exceeded": "Daily limit exceeded. Please try again tomorrow or input your own API key in API settings."
+    "daily_limit_exceeded": "Daily limit exceeded. Please try again tomorrow or input your own API key in API settings.",
+    "needs_api_key": "Please add your own API key in API Settings to continue.",
+    "chunk_failed": "Pages {start}–{end} failed: {reason}"
   },
   "toast": {
     "load_failed": "Failed to load core components. Please refresh and try again.",
