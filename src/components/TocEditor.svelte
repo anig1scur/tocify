@@ -1,13 +1,23 @@
 <script lang="ts">
   import {onDestroy, tick, createEventDispatcher} from 'svelte';
   import ShortUniqueId from 'short-unique-id';
-  import {Sparkles, Loader2, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown} from 'lucide-svelte';
+  import {
+    Sparkles,
+    Loader2,
+    ChevronsDownUp,
+    ChevronsUpDown,
+    ArrowUp,
+    ArrowDown,
+    Hash,
+    X,
+  } from 'lucide-svelte';
   import {t} from 'svelte-i18n';
   import TocItem from './TocItem.svelte';
   import Tooltip from './Tooltip.svelte';
   import {tocItems, maxPage, autoSaveEnabled, dragDisabled, curFileFingerprint} from '../stores';
+  import type {TocItem as TocEntry} from '$lib/pdf/service';
 
-  import {dndzone} from 'svelte-dnd-action';
+  import {dndzone, SHADOW_ITEM_MARKER_PROPERTY_NAME} from 'svelte-dnd-action';
   import {flip} from 'svelte/animate';
   import {fly} from 'svelte/transition';
 
@@ -20,16 +30,24 @@
   export let apiConfig = {provider: '', apiKey: ''};
   const dispatch = createEventDispatcher();
 
+  type FlatTocItem = Omit<TocEntry, 'children'> & {
+    level: number;
+    parentId: string | null;
+  };
+
   let flipDurationMs = 200;
 
   let text = ``;
   let isUpdatingFromEditor = false;
   let isProcessing = false;
-  let debounceTimer;
+  let debounceTimer: ReturnType<typeof setTimeout> | undefined = undefined;
+  let batchOffsetInput = '';
+  let showBatchOffsetEditor = false;
+  let selectedIds = new Set<string>();
+  let selectionAnchorId: string | null = null;
 
-  // Undo/Redo State
-  let historyStack = [];
-  let futureStack = [];
+  let historyStack: TocEntry[][] = [];
+  let futureStack: TocEntry[][] = [];
   const maxHistory = 20;
 
   export function saveHistory() {
@@ -39,7 +57,6 @@
       historyStack.shift();
     }
     futureStack = [];
-    historyStack = historyStack; // update
   }
 
   function undo() {
@@ -47,9 +64,8 @@
     const current = JSON.parse(JSON.stringify($tocItems));
     futureStack.push(current);
     const prev = historyStack.pop();
+    if (!prev) return;
     $tocItems = prev;
-    historyStack = historyStack;
-    futureStack = futureStack;
   }
 
   function redo() {
@@ -57,14 +73,21 @@
     const current = JSON.parse(JSON.stringify($tocItems));
     historyStack.push(current);
     const next = futureStack.pop();
+    if (!next) return;
     $tocItems = next;
-    historyStack = historyStack;
-    futureStack = futureStack;
   }
 
-  function handleKeydown(e) {
-    const tagName = e.target.tagName;
-    if (tagName === 'INPUT' || tagName === 'TEXTAREA' || e.target.isContentEditable) return;
+  function clearSelection() {
+    selectedIds = new Set();
+    selectionAnchorId = null;
+    showBatchOffsetEditor = false;
+    batchOffsetInput = '';
+  }
+
+  function handleKeydown(e: KeyboardEvent) {
+    const target = e.target as HTMLElement | null;
+    const tagName = target?.tagName;
+    if (tagName === 'INPUT' || tagName === 'TEXTAREA' || target?.isContentEditable) return;
 
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
       if (e.shiftKey) {
@@ -77,11 +100,14 @@
     } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'y') {
       e.preventDefault();
       redo();
+    } else if (e.key === 'Escape' && selectedIds.size > 0) {
+      e.preventDefault();
+      clearSelection();
     }
   }
 
   let isDragging = false;
-  let textGenTimer;
+  let textGenTimer: ReturnType<typeof setTimeout> | undefined = undefined;
 
   let showNavHint = false;
   let navHintTimer: ReturnType<typeof setTimeout> | undefined = undefined;
@@ -111,45 +137,271 @@
     unsubscribe();
     clearTimeout(textGenTimer);
     clearTimeout(debounceTimer);
+    clearTimeout(navHintTimer);
   });
 
   $: if ($curFileFingerprint) {
     historyStack = [];
     futureStack = [];
+    clearSelection();
   }
 
-  function buildTree(items) {
-    const root = [];
-    const stack = [];
+  const flattenTocItems = (
+    items: TocEntry[],
+    level = 1,
+    parentId: string | null = null,
+  ): FlatTocItem[] =>
+    items.flatMap((item) => [
+      {
+        id: item.id,
+        title: item.title,
+        to: item.to,
+        open: item.open,
+        level,
+        parentId,
+      },
+      ...flattenTocItems(item.children || [], level + 1, item.id),
+    ]);
+
+  function normalizeFlatLevels(items: FlatTocItem[]): FlatTocItem[] {
+    return items.map((item, index) => {
+      let level = Math.max(1, Math.floor(item.level) || 1);
+      if (index === 0) {
+        level = 1;
+      } else {
+        level = Math.min(level, items[index - 1].level + 1);
+      }
+      return {...item, level};
+    });
+  }
+
+  function assignParentIdsFromLevels(items: FlatTocItem[]): FlatTocItem[] {
+    const stack: {id: string; level: number}[] = [];
+
+    return normalizeFlatLevels(items).map((item) => {
+      while (stack.length > 0 && stack[stack.length - 1].level >= item.level) {
+        stack.pop();
+      }
+
+      const parentId = stack.length > 0 ? stack[stack.length - 1].id : null;
+      const nextItem = {...item, parentId};
+      stack.push({id: item.id, level: item.level});
+      return nextItem;
+    });
+  }
+
+  function buildTree(items: {title: string; level: number; page: number}[]) {
+    const root: TocEntry[] = [];
+    const stack: {node: TocEntry; level: number}[] = [];
     const uid = new ShortUniqueId({length: 10});
 
     items.forEach((item) => {
-      const newItem = {
+      const newItem: TocEntry = {
         id: uid.randomUUID(),
         title: item.title,
-        to: parseInt(item.page as any) || 1,
+        to: Number(item.page) || 1,
         children: [],
         open: true,
       };
 
       if (item.page > $maxPage) $maxPage = item.page;
 
-      const level = item.level;
-
-      while (stack.length > 0 && stack[stack.length - 1].level >= level) {
+      while (stack.length > 0 && stack[stack.length - 1].level >= item.level) {
         stack.pop();
       }
 
       if (stack.length === 0) {
         root.push(newItem);
       } else {
-        const parent = stack[stack.length - 1].node;
-        parent.children = parent.children || [];
-        parent.children.push(newItem);
+        stack[stack.length - 1].node.children.push(newItem);
       }
-      stack.push({node: newItem, level: level});
+
+      stack.push({node: newItem, level: item.level});
     });
+
     return root;
+  }
+
+  function buildTreeFromFlat(items: FlatTocItem[], forceOpenIds: Set<string> = new Set()): TocEntry[] {
+    const root: TocEntry[] = [];
+    const stack: {level: number; node: TocEntry}[] = [];
+
+    for (const item of assignParentIdsFromLevels(items)) {
+      const node: TocEntry = {
+        id: item.id,
+        title: item.title,
+        to: item.to,
+        open: forceOpenIds.has(item.id) ? true : (item.open ?? true),
+        children: [],
+      };
+
+      while (stack.length > 0 && stack[stack.length - 1].level >= item.level) {
+        stack.pop();
+      }
+
+      if (stack.length === 0) {
+        root.push(node);
+      } else {
+        stack[stack.length - 1].node.children.push(node);
+      }
+
+      stack.push({level: item.level, node});
+    }
+
+    return root;
+  }
+
+  function getFlatIndexMap(items: FlatTocItem[]) {
+    return new Map(items.map((item, index) => [item.id, index]));
+  }
+
+  function getParentMap(items: FlatTocItem[]) {
+    return new Map(items.map((item) => [item.id, item.parentId]));
+  }
+
+  function hasSelectedAncestor(
+    id: string,
+    selected: Set<string>,
+    parentMap: Map<string, string | null>,
+  ) {
+    let currentId = parentMap.get(id) ?? null;
+
+    while (currentId) {
+      if (selected.has(currentId)) {
+        return true;
+      }
+      currentId = parentMap.get(currentId) ?? null;
+    }
+
+    return false;
+  }
+
+  function getSelectedRootIds(items: FlatTocItem[], selected: Set<string>) {
+    const parentMap = getParentMap(items);
+    return items
+      .filter((item) => selected.has(item.id) && !hasSelectedAncestor(item.id, selected, parentMap))
+      .map((item) => item.id);
+  }
+
+  function getSubtreeEndIndex(items: FlatTocItem[], startIndex: number) {
+    const startLevel = items[startIndex].level;
+    let endIndex = startIndex + 1;
+
+    while (endIndex < items.length && items[endIndex].level > startLevel) {
+      endIndex += 1;
+    }
+
+    return endIndex;
+  }
+
+  function getAncestorIds(items: FlatTocItem[], ids: Iterable<string>) {
+    const parentMap = getParentMap(items);
+    const ancestorIds = new Set<string>();
+
+    for (const id of ids) {
+      let currentId = parentMap.get(id) ?? null;
+      while (currentId) {
+        ancestorIds.add(currentId);
+        currentId = parentMap.get(currentId) ?? null;
+      }
+    }
+
+    return ancestorIds;
+  }
+
+  function handleSelectItem(item: TocEntry, event: MouseEvent) {
+    const flatItems = flattenTocItems($tocItems);
+    const indexMap = getFlatIndexMap(flatItems);
+    const clickedIndex = indexMap.get(item.id);
+
+    if (clickedIndex === undefined) return;
+
+    if (event.shiftKey) {
+      const anchorId =
+        selectionAnchorId && indexMap.has(selectionAnchorId) ? selectionAnchorId : item.id;
+      const anchorIndex = indexMap.get(anchorId) ?? clickedIndex;
+      const start = Math.min(anchorIndex, clickedIndex);
+      const end = Math.max(anchorIndex, clickedIndex);
+      const rangeIds = flatItems.slice(start, end + 1).map((flatItem) => flatItem.id);
+      const nextSelection = new Set(selectedIds);
+
+      rangeIds.forEach((id) => nextSelection.add(id));
+      selectedIds = nextSelection;
+      selectionAnchorId = anchorId;
+      return;
+    }
+
+    const nextSelection = new Set(selectedIds);
+    if (nextSelection.has(item.id)) {
+      nextSelection.delete(item.id);
+    } else {
+      nextSelection.add(item.id);
+    }
+    selectedIds = nextSelection;
+    selectionAnchorId = item.id;
+  }
+
+  function adjustSelectedPageOffset(delta: number) {
+    if (!delta || selectedIds.size < 2) return;
+
+    saveHistory();
+    const flatItems = flattenTocItems($tocItems);
+    const selectedRootIds = new Set(getSelectedRootIds(flatItems, selectedIds));
+
+    const updateRecursive = (items: TocEntry[], inSelectedSubtree = false): TocEntry[] =>
+      items.map((item) => {
+        const shouldApply = inSelectedSubtree || selectedRootIds.has(item.id);
+        return {
+          ...item,
+          to: shouldApply ? Math.max(1, item.to + delta) : item.to,
+          children: item.children?.length ? updateRecursive(item.children, shouldApply) : [],
+        };
+      });
+
+    $tocItems = updateRecursive($tocItems);
+  }
+
+  function applyBatchOffset() {
+    const delta = parseInt(batchOffsetInput, 10);
+    if (Number.isNaN(delta) || delta === 0) return;
+
+    adjustSelectedPageOffset(delta);
+    batchOffsetInput = '';
+    showBatchOffsetEditor = false;
+  }
+
+  function adjustSelectedLevels(delta: -1 | 1) {
+    if (selectedIds.size < 2) return;
+
+    const flatItems = normalizeFlatLevels(flattenTocItems($tocItems));
+    const selectedRootIds = getSelectedRootIds(flatItems, selectedIds);
+    const indexMap = getFlatIndexMap(flatItems);
+    let hasChanges = false;
+
+    for (const id of selectedRootIds) {
+      const startIndex = indexMap.get(id);
+      if (startIndex === undefined) continue;
+
+      if (delta === -1 && flatItems[startIndex].level <= 1) continue;
+      if (delta === 1 && startIndex === 0) continue;
+
+      const endIndex = getSubtreeEndIndex(flatItems, startIndex);
+      for (let index = startIndex; index < endIndex; index += 1) {
+        flatItems[index] = {
+          ...flatItems[index],
+          level: flatItems[index].level + delta,
+        };
+      }
+      hasChanges = true;
+    }
+
+    if (!hasChanges) return;
+
+    const nextFlatItems = assignParentIdsFromLevels(flatItems);
+    const forceOpenIds = getAncestorIds(nextFlatItems, selectedRootIds);
+
+    saveHistory();
+    $tocItems = buildTreeFromFlat(nextFlatItems, forceOpenIds);
   }
 
   async function handleAiFormat() {
@@ -191,12 +443,12 @@
     }
   }
 
-  function parseText(text) {
+  function parseText(text: string) {
     const lines = text
       .split('\n')
       .map((line) => line.trim())
       .filter(Boolean);
-    const items = [];
+    const items: TocEntry[] = [];
     const stack = [{level: 0, item: {children: items}}];
     const uid = new ShortUniqueId({length: 10});
 
@@ -205,9 +457,9 @@
       if (match) {
         const [, number, title, pageStr] = match;
         const level = number.split('.').length;
-        const page = parseInt(pageStr);
+        const page = parseInt(pageStr, 10);
 
-        const newItem = {
+        const newItem: TocEntry = {
           id: uid.randomUUID(),
           title,
           to: page,
@@ -225,7 +477,7 @@
     return items;
   }
 
-  function generateText(items, prefix = '') {
+  function generateText(items: TocEntry[], prefix = '') {
     return items
       .map((item, index) => {
         const number = prefix ? `${prefix}.${index + 1}` : `${index + 1}`;
@@ -236,9 +488,9 @@
       .join('\n');
   }
 
-  function handleInput(e) {
+  function handleInput(e: Event) {
     isUpdatingFromEditor = true;
-    text = e.target.value;
+    text = (e.target as HTMLTextAreaElement).value;
 
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => {
@@ -273,18 +525,34 @@
     $dragDisabled = true;
   }
 
-  function handleDndConsider(e) {
+  function handleDndConsider(e: CustomEvent<{items: TocEntry[]}>) {
     handleDragStart();
     $tocItems = e.detail.items;
   }
 
-  function handleDndFinalize(e) {
+  function handleDndFinalize(e: CustomEvent<{items: TocEntry[]}>) {
     $tocItems = e.detail.items;
     handleDragEnd();
   }
 
+  $: if (!isDragging) {
+    const allIds = new Set(flattenTocItems($tocItems).map((item) => item.id));
+    const nextSelection = new Set([...selectedIds].filter((id) => allIds.has(id)));
+    const selectionChanged =
+      nextSelection.size !== selectedIds.size ||
+      [...nextSelection].some((id) => !selectedIds.has(id));
+
+    if (selectionChanged) {
+      selectedIds = nextSelection;
+    }
+
+    if (selectionAnchorId && !allIds.has(selectionAnchorId)) {
+      selectionAnchorId = null;
+    }
+  }
+
   $: firstItemWithChildrenId = (() => {
-    const findFirst = (items) => {
+    const findFirst = (items: TocEntry[]): string | null => {
       for (const item of items) {
         if (item.children?.length > 0) return item.id;
         if (item.children) {
@@ -297,22 +565,22 @@
     return findFirst($tocItems);
   })();
 
-  const addMultipleTocItems = (count) => {
+  const addMultipleTocItems = (count: number) => {
     saveHistory();
     const currentItems = $tocItems;
     let startPage;
 
     if (currentItems.length > 0) {
-      startPage = Math.max(...currentItems.map((i) => i.to)) + 1;
+      startPage = Math.max(...currentItems.map((item) => item.to)) + 1;
     } else {
       startPage = ($maxPage || 0) + 1;
     }
 
     const uid = new ShortUniqueId({length: 10});
-    const newItems = Array.from({length: count}, (_, i) => ({
+    const newItems = Array.from({length: count}, (_, index) => ({
       id: uid.randomUUID(),
       title: '',
-      to: startPage + i,
+      to: startPage + index,
       children: [],
       open: true,
     }));
@@ -322,7 +590,7 @@
 
   const toggleAll = (open: boolean) => {
     flipDurationMs = 0;
-    const updateRecursive = (items: any[]): any[] =>
+    const updateRecursive = (items: TocEntry[]): TocEntry[] =>
       items.map((item) => ({
         ...item,
         open,
@@ -339,17 +607,22 @@
   const expandAll = () => toggleAll(true);
   const collapseAll = () => toggleAll(false);
 
-  $: hasAnyExpanded = $tocItems.some((item: any) => item.open);
+  $: hasAnyExpanded = $tocItems.some((item: TocEntry) => item.open);
+  $: selectedCount = selectedIds.size;
+  $: if (selectedCount < 2) {
+    showBatchOffsetEditor = false;
+    batchOffsetInput = '';
+  }
 
   const addTocItem = () => {
     addMultipleTocItems(1);
   };
 
-  const updateTocItem = (item, updates, skipHistory = false) => {
+  const updateTocItem = (item: TocEntry, updates: Partial<TocEntry>, skipHistory = false) => {
     if (!skipHistory) {
       saveHistory();
     }
-    const updateItemRecursive = (items) =>
+    const updateItemRecursive = (items: TocEntry[]): TocEntry[] =>
       items.map((currentItem) => {
         if (currentItem.id === item.id) return {...currentItem, ...updates};
         if (currentItem.children?.length) {
@@ -360,14 +633,16 @@
     $tocItems = updateItemRecursive($tocItems);
   };
 
-  const deleteTocItem = (itemToDelete) => {
+  const deleteTocItem = (itemToDelete: TocEntry) => {
     saveHistory();
-    const deleteItemRecursive = (items) =>
-      items.filter((item) => {
-        if (item.id === itemToDelete.id) return false;
-        if (item.children?.length) item.children = deleteItemRecursive(item.children);
-        return true;
-      });
+    const deleteItemRecursive = (items: TocEntry[]): TocEntry[] =>
+      items
+        .filter((item) => item.id !== itemToDelete.id)
+        .map((item) => ({
+          ...item,
+          children: item.children?.length ? deleteItemRecursive(item.children) : [],
+        }));
+
     $tocItems = deleteItemRecursive($tocItems);
   };
 
@@ -428,7 +703,7 @@
     {/if}
   </div>
 
-  <div class="-ml-8 group/toc-list pt-2 relative">
+  <div class="md:-ml-12 -ml-6 group/toc-list pt-2 relative">
     {#if $tocItems.length > 0}
       <div
         class="flex items-center gap-1 sticky top-12 z-20 opacity-0 group-hover/toc-list:opacity-100 transition-all duration-300 translate-y-1 group-hover/toc-list:translate-y-0 pointer-events-none"
@@ -456,9 +731,84 @@
         {/if}
       </div>
 
+      {#if selectedCount >= 1}
+        <div class="sticky top-12 z-30 mb-3 ml-12 pointer-events-none">
+          <div class="pointer-events-auto flex flex-wrap items-center gap-2 bg-white/35 backdrop-blur-sm border-2 border-black/95 rounded-lg px-3 py-2">
+       
+            <span class="text-xs font-semibold text-gray-700">
+             
+             
+           {$t('toc.batch_operations')} 
+
+              {$t('toc.selected_count', {values: {count: selectedCount}})}
+            </span>
+            <button
+              on:click={clearSelection}
+              class="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold border-2 border-transparent rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+              title={$t('toc.clear_selection')}
+            >
+              <X size={14} />
+              {$t('toc.clear_selection')}
+            </button>
+            <div class="flex items-center gap-2">
+              <button
+                on:click={() => adjustSelectedLevels(-1)}
+                title={$t('toc.promote_selected_hint')}
+                class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-blue-400 text-black border-2 border-black rounded-lg shadow-[1px_1px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
+              >
+                <ArrowUp size={14} />
+                {$t('toc.promote_selected')}
+              </button>
+              <button
+                on:click={() => adjustSelectedLevels(1)}
+                title={$t('toc.demote_selected_hint')}
+                class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-lime-400 text-black border-2 border-black rounded-lg shadow-[1px_1px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
+              >
+                <ArrowDown size={14} />
+                {$t('toc.demote_selected')}
+              </button>
+
+              {#if showBatchOffsetEditor}
+                <div class="flex items-center gap-2">
+                  <input
+                    type="number"
+                    bind:value={batchOffsetInput}
+                    placeholder={$t('toc.offset_placeholder')}
+                    on:keydown={(e) => e.key === 'Enter' && applyBatchOffset()}
+                    class="w-20 border-2 border-black rounded px-2 py-1.5 text-xs myfocus focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <button
+                    on:click={applyBatchOffset}
+                    title={$t('toc.apply_offset_hint')}
+                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-yellow-400 text-black border-2 border-black rounded-lg shadow-[1px_1px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
+                  >
+                    <Hash size={14} />
+                    {$t('toc.apply_offset')}
+                  </button>
+                </div>
+              {:else}
+                <button
+                  on:click={() => {
+                    showBatchOffsetEditor = true;
+                    batchOffsetInput = '';
+                  }}
+                  title={$t('toc.offset_selected_hint')}
+                  class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-yellow-400 text-black border-2 border-black rounded-lg shadow-[1px_1px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
+                >
+                  <Hash size={14} />
+                  {$t('toc.offset_selected')}
+                </button>
+              {/if}
+
+            </div>
+
+          </div>
+        </div>
+      {/if}
+
       {#if showNavHint}
         <div class="absolute right-0 top-0 z-50 h-6 flex justify-center pointer-events-none">
-          <div 
+          <div
             transition:fly={{y: -10, duration: 300}}
             class="bg-black/50 backdrop-blur-sm text-white text-xs px-2 py-1 rounded-lg pointer-events-none"
           >
@@ -478,21 +828,22 @@
         on:finalize={handleDndFinalize}
         class="min-h-[20px]"
       >
-        {#each $tocItems as item, i (item.id)}
+        {#each $tocItems as item, i (`${item.id}${item[SHADOW_ITEM_MARKER_PROPERTY_NAME] ? `_${item[SHADOW_ITEM_MARKER_PROPERTY_NAME]}` : ''}`)}
           <div animate:flip={{duration: flipDurationMs}}>
             <TocItem
               {item}
               {flipDurationMs}
-              showTooltip={item.id === firstItemWithChildrenId}
               onUpdate={updateTocItem}
               onDelete={deleteTocItem}
               onDragStart={handleDragStart}
               onDragEnd={handleDragEnd}
+              onSelect={handleSelectItem}
               {currentPage}
               {isPreview}
               {pageOffset}
               {insertAtPage}
               {tocPageCount}
+              {selectedIds}
               on:showNavHint={handleShowNavHint}
               on:hoveritem
               on:jumpToPage={(e) => {
@@ -505,7 +856,7 @@
       </section>
     {/if}
 
-    <div class="flex items-center gap-2 ml-8 mt-3 mb-4">
+    <div class="flex items-center gap-2 ml-12 mt-3 mb-4">
       <button
         on:click={addTocItem}
         class="btn font-bold bg-yellow-400 text-black border-2 border-black rounded-lg px-4 py-2 shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all"

@@ -60,7 +60,22 @@
     "expand_all": "Expand All",
     "collapse_all": "Collapse All",
     "nav_hint": "Use up and down arrow keys for quick navigation",
-    "outline_placeholder": "1. Please load your PDF first\n2. Drag to select the ToC page range\n3. Click the Generate ToC button above"
+    "outline_placeholder": "1. Please load your PDF first\n2. Drag to select the ToC page range\n3. Click the Generate ToC button above",
+    "batch_operations": "Batch Operations",
+    "selected_count": "{count} selected",
+    "promote_selected": "Up",
+    "promote_selected_hint": "Move selected items up one level",
+    "demote_selected": "Down",
+    "demote_selected_hint": "Move selected items down one level",
+    "offset_selected": "Offset",
+    "offset_selected_hint": "Adjust the page-number offset for the selected items",
+    "apply_offset": "Apply",
+    "apply_offset_hint": "Apply the page-number offset",
+    "offset_placeholder": "-3",
+    "clear_selection": "Clear",
+    "select_item": "Select item",
+    "add_child": "Add child",
+    "delete_item": "Delete item"
   },
   "btn": {
     "generate_toc_ai": "Generate ToC from Pages",
@@ -149,7 +164,7 @@
     "faq_4_q": "Can Tocify run on the client side?",
     "faq_4_a": "Yes, we provide clients for <b>macOS</b> and <b>Windows</b>.<br>You can download them from the GitHub Releases page:<br><a href='https://github.com/anig1scur/tocify/releases' target='_blank' class='text-blue-600 hover:underline'>Download Releases</a>",
     "faq_5_q": "Which shortcuts does Tocify support?",
-    "faq_5_a": "• <b>Ctrl/Cmd + Z</b>: Undo<br>• <b>Ctrl/Cmd + Shift + Z</b>: Redo<br>• <b>Up/Down Arrows</b>: Quickly switch navigation input<br>• <b>Mouse Drag</b>: Drag TOC items / groups"
+    "faq_5_a": "• <b>Ctrl/Cmd + Z</b>: Undo<br>• <b>Ctrl/Cmd + Shift + Z</b>: Redo<br>• <b>Click the dot or blank area</b>: Select a TOC item<br>• <b>Shift + Click</b>: Select a TOC range<br>• <b>Up/Down Arrows</b>: Quickly switch navigation input<br>• <b>Drag the handle</b>: Drag TOC items / groups"
   },
   "star_request": {
     "title": "Enjoying Tocify?",
@@ -206,4 +221,3 @@
     "unknown_error": "Unknown Error"
   }
 }
-

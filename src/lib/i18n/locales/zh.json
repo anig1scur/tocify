@@ -56,7 +56,22 @@
     "expand_all": "展开全部",
     "collapse_all": "折叠全部",
     "nav_hint": "可以使用上下方向键进行快速移动",
-    "outline_placeholder": "1. 请先加载 PDF\n2. 拖动选择目录页面范围\n3. 点击上方生成目录按钮"
+    "outline_placeholder": "1. 请先加载 PDF\n2. 拖动选择目录页面范围\n3. 点击上方生成目录按钮",
+    "batch_operations": "批量操作",
+    "selected_count": "已选 {count} 项",
+    "promote_selected": "升级",
+    "promote_selected_hint": "将选中项上移一级",
+    "demote_selected": "降级",
+    "demote_selected_hint": "将选中项下移一级",
+    "offset_selected": "偏移",
+    "offset_selected_hint": "为选中项调整页码偏移",
+    "apply_offset": "应用",
+    "apply_offset_hint": "应用页码偏移",
+    "offset_placeholder": "-3",
+    "clear_selection": "清空",
+    "select_item": "选中目录项",
+    "add_child": "添加子项",
+    "delete_item": "删除目录项"
   },
   "btn": {
     "generate_toc_ai": "从所选页面生成目录",
@@ -157,7 +172,7 @@
     "faq_4_q": "Tocify 是否可以在客户端运行？",
     "faq_4_a": "是的，我们提供 <b>macOS</b> 和 <b>Windows</b> 客户端。<br>您可以前往 GitHub Releases 页面下载：<br><a href='https://github.com/anig1scur/tocify/releases' target='_blank' class='text-blue-600 hover:underline'>Download Releases</a>",
     "faq_5_q": "Tocify 支持哪些快捷键？",
-    "faq_5_a": "• <b>Ctrl/Cmd + Z</b>: 撤销<br>• <b>Ctrl/Cmd + Shift + Z</b>: 重做 (撤销撤销)<br>• <b>上下键</b>: 快速切换 导航输入框<br>• <b>鼠标 Drag</b>: 拖拽目录项 / 目录组"
+    "faq_5_a": "• <b>Ctrl/Cmd + Z</b>: 撤销<br>• <b>Ctrl/Cmd + Shift + Z</b>: 重做 (撤销撤销)<br>• <b>单击圆点或空白区域</b>: 选中目录项<br>• <b>Shift + 单击</b>: 区间选择目录项<br>• <b>上下键</b>: 快速切换 导航输入框<br>• <b>拖动拖拽柄</b>: 拖拽目录项 / 目录组"
   },
   "star_request": {
     "title": "喜欢 Tocify 吗？",

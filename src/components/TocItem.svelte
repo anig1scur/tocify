@@ -5,29 +5,34 @@
   import {maxPage, tocConfig, dragDisabled} from '../stores';
   import {createEventDispatcher} from 'svelte';
   import {t} from 'svelte-i18n';
-  import {dndzone} from 'svelte-dnd-action';
+  import {
+    dndzone,
+    SHADOW_ITEM_MARKER_PROPERTY_NAME,
+    SHADOW_PLACEHOLDER_ITEM_ID,
+  } from 'svelte-dnd-action';
   import {flip} from 'svelte/animate';
-  import type { TocItem } from '$lib/pdf/service';
+  import type {TocItem} from '$lib/pdf/service';
 
   export let item: TocItem;
   export let onUpdate: (item: TocItem, updates: Partial<TocItem>, skipHistory?: boolean) => void;
   export let onDelete: (item: TocItem) => void;
   export let onDragStart: () => void = () => {};
   export let onDragEnd: () => void = () => {};
+  export let onSelect: (item: TocItem, event: MouseEvent) => void = () => {};
+  export let selectedIds: Set<string> = new Set();
 
   export let currentPage = 1;
   export let isPreview = false;
   export let pageOffset = 0;
   export let insertAtPage = 2;
   export let tocPageCount = 0;
-  
-  // Numbering props
+
   export let prefix = '';
   export let index = 0;
 
   const dispatch = createEventDispatcher<{
-    hoveritem: { to: number };
-    jumpToPage: { to: number };
+    hoveritem: {to: number};
+    jumpToPage: {to: number};
     showNavHint: void;
   }>();
   export let flipDurationMs = 200;
@@ -36,8 +41,11 @@
   let editPage = item ? item.to : 1;
   let isFocused = false;
   let isPageFocused = false;
-  
+
   $: currentNumber = prefix ? `${prefix}.${index}` : `${index}`;
+  $: isSelected = selectedIds.has(item.id);
+  $: isShadowItem = Boolean(item?.[SHADOW_ITEM_MARKER_PROPERTY_NAME]);
+  $: nestedChildren = item?.id === SHADOW_PLACEHOLDER_ITEM_ID ? [] : (item.children || []);
 
   $: if (item && !isFocused && item.title !== editTitle) {
     editTitle = item.title;
@@ -71,7 +79,7 @@
 
   function handlePageInput(e: Event) {
     const target = e.target as HTMLInputElement;
-    const val = parseInt(target.value);
+    const val = parseInt(target.value, 10);
     if (!isNaN(val) && val > 0) {
       dispatch('jumpToPage', {to: val});
     }
@@ -82,7 +90,7 @@
     let startPage;
 
     if (currentChildren.length > 0) {
-      startPage = Math.max(...currentChildren.map((c) => c.to)) + 1;
+      startPage = Math.max(...currentChildren.map((child) => child.to)) + 1;
     } else {
       startPage = item.to + 1;
     }
@@ -94,7 +102,7 @@
       children: [],
       open: true,
     };
-    
+
     const updatedChildren = [...currentChildren, newChild];
     onUpdate(item, {children: updatedChildren, open: true});
   }
@@ -107,7 +115,7 @@
   }
 
   function handleDeleteChild(childItem: TocItem) {
-    const updatedChildren = (item.children || []).filter((c) => c.id !== childItem.id);
+    const updatedChildren = (item.children || []).filter((child) => child.id !== childItem.id);
     onUpdate(item, {children: updatedChildren});
   }
 
@@ -135,12 +143,12 @@
       e.preventDefault();
       const allInputs = Array.from(document.querySelectorAll<HTMLInputElement>('.toc-item-title'));
       const target = e.target as HTMLInputElement;
-      const index = allInputs.indexOf(target);
-      if (index !== -1) {
-        if (e.key === 'ArrowUp' && index > 0) {
-          allInputs[index - 1].focus();
-        } else if (e.key === 'ArrowDown' && index < allInputs.length - 1) {
-          allInputs[index + 1].focus();
+      const inputIndex = allInputs.indexOf(target);
+      if (inputIndex !== -1) {
+        if (e.key === 'ArrowUp' && inputIndex > 0) {
+          allInputs[inputIndex - 1].focus();
+        } else if (e.key === 'ArrowDown' && inputIndex < allInputs.length - 1) {
+          allInputs[inputIndex + 1].focus();
         }
       }
     }
@@ -151,37 +159,62 @@
     const expiryStr = localStorage.getItem('tocify_edit_title_toast_until');
     const now = Date.now();
     if (!expiryStr || now > parseInt(expiryStr, 10)) {
-       dispatch('showNavHint');
-       const newExpiry = now + 30 * 24 * 60 * 60 * 1000;
-       localStorage.setItem('tocify_edit_title_toast_until', newExpiry.toString());
+      dispatch('showNavHint');
+      const newExpiry = now + 30 * 24 * 60 * 60 * 1000;
+      localStorage.setItem('tocify_edit_title_toast_until', newExpiry.toString());
     }
+  }
+
+  function enableDrag() {
+    $dragDisabled = false;
+  }
+
+  function isSelectionBlockedTarget(target: EventTarget | null) {
+    const element = target as HTMLElement | null;
+    return Boolean(element?.closest('button,input,textarea,label,a,[data-drag-handle]'));
+  }
+
+  function handleRowClick(event: MouseEvent) {
+    if (isSelectionBlockedTarget(event.target)) return;
+    onSelect(item, event);
   }
 </script>
 
 {#if item}
   <div>
     <div
-      class="flex items-center gap-1 py-1.5 rounded-md group -mr-1"
-      on:mouseenter={handleMouseEnter}
+      class="flex items-center gap-1 py-1.5 rounded-md group -mr-1 border-2 border-transparent"
       class:bg-blue-200={isActive}
       class:font-bold={isActive}
+      class:border-amber-400={isSelected}
+      class:bg-amber-50={isSelected && !isActive}
+      data-is-dnd-shadow-item-hint={isShadowItem}
+      on:mouseenter={handleMouseEnter}
+      on:click={handleRowClick}
     >
-      <div 
+      <div
         class="flex items-center gap-1 flex-1 min-w-0 h-full"
-        on:mousedown={() => ($dragDisabled = false)}
-        on:touchstart={() => ($dragDisabled = false)}
       >
+        <button
+          on:click|stopPropagation={(e) => onSelect(item, e)}
+          class="w-3 h-3 rounded-full border-2 flex-shrink-0 transition-all duration-150 {isSelected ? 'bg-amber-400 border-amber-500 scale-100' : 'border-gray-300 scale-90 opacity-0 group-hover:opacity-60 hover:!opacity-100 hover:!scale-100 hover:!border-amber-400'}"
+          title={$t('toc.select_item')}
+          aria-label={$t('toc.select_item')}
+        ></button>
         <div
-          class="cursor-grab active:cursor-grabbing text-gray-400 transition-opacity opacity-100 md:opacity-0 md:group-hover:opacity-100"
+          data-drag-handle
+          class="cursor-grab active:cursor-grabbing rounded-md p-0.5 transition-opacity opacity-100 md:opacity-0 md:group-hover:opacity-100 text-gray-400"
+          on:mousedown={enableDrag}
+          on:touchstart={enableDrag}
         >
-          <GripVertical size={14} />
+          <GripVertical size={12} />
         </div>
 
         <button
           on:click|stopPropagation={handleToggle}
-          class=" hover:bg-gray-200 rounded-md text-gray-500 ml-[-4px]"
+          class="hover:bg-gray-200 rounded-md text-gray-500 ml-[-4px]"
           class:invisible={!item.children || item.children.length === 0}
-          title="Toggle"
+          title={$t('settings.toggle_expand')}
         >
           {#if item.open}
             <ChevronDown size={16} />
@@ -207,10 +240,9 @@
           on:keydown={handleTitleKeydown}
           on:keypress={(e) => e.key === 'Enter' && (e.target as HTMLElement).blur()}
           placeholder={prefix === '' ? $t('toc.new_chapter_default') : ($t('toc.new_item_default') || 'New Item')}
-          class="toc-item-title border-2 border-black rounded px-2 py-1 text-sm myfocus focus:outline-none focus:ring-2 focus:ring-blue-500 flex-1 min-w-[100px] placeholder:text-gray-400 "
+          class="toc-item-title border-2 border-black rounded px-2 py-1 text-sm myfocus focus:outline-none focus:ring-2 focus:ring-blue-500 flex-1 min-w-[100px] placeholder:text-gray-400"
         />
       </div>
-
 
       <input
         type="number"
@@ -229,33 +261,33 @@
         <button
           on:click={handleAddChild}
           class="p-1 hover:bg-gray-200 rounded-md"
-          title="Add Child"
+          title={$t('toc.add_child')}
         >
-          <Plus size={16} />
+          <Plus size={14} />
         </button>
         <button
           on:click={() => onDelete(item)}
           class="px-1 hover:bg-gray-200 rounded-md text-black"
-          title="Delete"
+          title={$t('toc.delete_item')}
         >
-          <Trash size={16} />
+          <Trash size={14} />
         </button>
       </div>
     </div>
 
-    {#if item.open}
+    {#if item.open && nestedChildren.length > 0}
       <div
         class="ml-6 pl-2 border-transparent hover:border-gray-200 transition-colors"
         use:dndzone={{
-          items: item.children || [],
+          items: nestedChildren,
           flipDurationMs,
           dragDisabled: $dragDisabled,
-          dropTargetStyle: item.children?.length > 0 ? {outline: '2px dashed #000', borderRadius: '4px'} : {},
+          dropTargetStyle: nestedChildren.length > 0 ? {outline: '2px dashed #000', borderRadius: '4px'} : {},
         }}
         on:consider={handleDndConsider}
         on:finalize={handleDndFinalize}
       >
-        {#each item.children || [] as child, i (child.id)}
+        {#each nestedChildren as child, i (`${child.id}${child[SHADOW_ITEM_MARKER_PROPERTY_NAME] ? `_${child[SHADOW_ITEM_MARKER_PROPERTY_NAME]}` : ''}`)}
           <div animate:flip={{duration: flipDurationMs}}>
             <Self
               prefix={currentNumber}
@@ -266,6 +298,8 @@
               onDelete={handleDeleteChild}
               {onDragStart}
               {onDragEnd}
+              {onSelect}
+              {selectedIds}
               {currentPage}
               {isPreview}
               {pageOffset}
