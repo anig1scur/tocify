@@ -3,20 +3,18 @@
   import {slide} from 'svelte/transition';
   import {t} from 'svelte-i18n';
   import {ExternalLink, Eye, EyeOff, KeyRound, Sparkles} from 'lucide-svelte';
+  import {KNOWN_PROVIDER_MODELS, createEmptyApiConfig, requiresUserApiKeyForModel, normalizeModelOverrides} from '$lib/llm/core';
 
   export let isExpanded = false;
 
   const dispatch = createEventDispatcher();
 
-  let config = {
-    provider: '',
-    apiKey: '',
-    doubaoEndpointIdText: '',
-    doubaoEndpointIdVision: '',
-  };
+  let config = createEmptyApiConfig();
 
   let isSaved = false;
   let showApiKey = false;
+  let showCustomModelNotice = false;
+  let customModelNoticeVersion = 0;
   const providerLinks = {
     gemini: {
       label: 'Gemini',
@@ -43,15 +41,50 @@
         apiKey: '',
         doubaoEndpointIdText: '',
         doubaoEndpointIdVision: '',
+        modelOverrides: undefined,
       };
     }
 
-    return {...config};
+    return {
+      ...config,
+      modelOverrides: normalizeModelOverrides(config.modelOverrides),
+    };
+  }
+
+  function getSingleModelValue(provider: string) {
+    switch (provider) {
+      case 'gemini':
+        return config.modelOverrides.geminiModel;
+      case 'qwen':
+        return config.modelOverrides.qwenVisionModel || config.modelOverrides.qwenTextModel;
+      case 'zhipu':
+        return config.modelOverrides.zhipuVisionModel || config.modelOverrides.zhipuTextModel;
+      default:
+        return '';
+    }
+  }
+
+  function setSingleModelValue(provider: string, value: string) {
+    if (provider === 'gemini') {
+      config.modelOverrides.geminiModel = value;
+      return;
+    }
+
+    if (provider === 'qwen') {
+      config.modelOverrides.qwenTextModel = value;
+      config.modelOverrides.qwenVisionModel = value;
+      return;
+    }
+
+    if (provider === 'zhipu') {
+      config.modelOverrides.zhipuTextModel = value;
+      config.modelOverrides.zhipuVisionModel = value;
+    }
   }
 
   function getVisibleProviderLinks() {
     if (config.provider && config.provider in providerLinks) {
-      return [providerLinks[config.provider]];
+      return [providerLinks[config.provider as keyof typeof providerLinks]];
     }
 
     return [];
@@ -61,7 +94,15 @@
     const savedConfig = localStorage.getItem('tocify_api_config');
     if (savedConfig) {
       try {
-        config = JSON.parse(savedConfig);
+        const parsed = JSON.parse(savedConfig);
+        config = {
+          ...createEmptyApiConfig(),
+          ...parsed,
+          modelOverrides: {
+            ...createEmptyApiConfig().modelOverrides,
+            ...(parsed.modelOverrides || {}),
+          },
+        };
         dispatch('change', getEffectiveConfig());
       } catch (e) {
         console.error('Failed to parse api config', e);
@@ -69,7 +110,22 @@
     }
   });
 
+  $: customModelNeedsUserApiKey = requiresUserApiKeyForModel(
+    config.provider,
+    config.apiKey,
+    config.modelOverrides,
+  );
+
+  function markDirty() {
+    isSaved = false;
+    showCustomModelNotice = false;
+  }
+
   function save() {
+    showCustomModelNotice = customModelNeedsUserApiKey;
+    if (customModelNeedsUserApiKey) {
+      customModelNoticeVersion += 1;
+    }
     localStorage.setItem('tocify_api_config', JSON.stringify(config));
     isSaved = true;
     const effectiveConfig = getEffectiveConfig();
@@ -81,7 +137,9 @@
     }, 1000);
 
     setTimeout(() => {
-      isExpanded = false;
+      if (!showCustomModelNotice) {
+        isExpanded = false;
+      }
     }, 400);
   }
 </script>
@@ -130,7 +188,7 @@
               id="llm_provider"
               class="w-full bg-white outline-none text-sm"
               bind:value={config.provider}
-              on:change={() => (isSaved = false)}
+              on:change={markDirty}
             >
               <option value="">Auto</option>
               <option value="gemini">Gemini</option>
@@ -153,6 +211,96 @@
           </div>
         </div>
 
+        {#if config.provider === 'gemini'}
+          <div
+            class="border-black border-2 rounded-md p-2 w-full"
+            transition:slide={{duration: 200}}
+          >
+            <label
+              class="block font-bold mb-1 text-sm"
+              for="gemini_model">{$t('settings.custom_model_label') || 'Custom Model'}</label
+            >
+            <input
+              id="gemini_model"
+              type="text"
+              name="gemini-model-input"
+              autocomplete="new-password"
+              autocapitalize="off"
+              autocorrect="off"
+              spellcheck="false"
+              data-1p-ignore="true"
+              data-lpignore="true"
+              class="w-full outline-none text-sm placeholder-gray-400"
+              placeholder={KNOWN_PROVIDER_MODELS.gemini.text[0]}
+              value={getSingleModelValue('gemini')}
+              on:input={(e) => {
+                setSingleModelValue('gemini', (e.currentTarget as HTMLInputElement).value);
+                markDirty();
+              }}
+            />
+          </div>
+        {/if}
+
+        {#if config.provider === 'qwen'}
+          <div
+            class="border-black border-2 rounded-md p-2 w-full"
+            transition:slide={{duration: 200}}
+          >
+            <label
+              class="block font-bold mb-1 text-sm"
+              for="qwen_model">{$t('settings.custom_model_label') || 'Custom Model'}</label
+            >
+            <input
+              id="qwen_model"
+              type="text"
+              name="qwen-model-input"
+              autocomplete="new-password"
+              autocapitalize="off"
+              autocorrect="off"
+              spellcheck="false"
+              data-1p-ignore="true"
+              data-lpignore="true"
+              class="w-full outline-none text-sm placeholder-gray-400"
+              placeholder={KNOWN_PROVIDER_MODELS.qwen.vision[0]}
+              value={getSingleModelValue('qwen')}
+              on:input={(e) => {
+                setSingleModelValue('qwen', (e.currentTarget as HTMLInputElement).value);
+                markDirty();
+              }}
+            />
+          </div>
+        {/if}
+
+        {#if config.provider === 'zhipu'}
+          <div
+            class="border-black border-2 rounded-md p-2 w-full"
+            transition:slide={{duration: 200}}
+          >
+            <label
+              class="block font-bold mb-1 text-sm"
+              for="zhipu_model">{$t('settings.custom_model_label') || 'Custom Model'}</label
+            >
+            <input
+              id="zhipu_model"
+              type="text"
+              name="zhipu-model-input"
+              autocomplete="new-password"
+              autocapitalize="off"
+              autocorrect="off"
+              spellcheck="false"
+              data-1p-ignore="true"
+              data-lpignore="true"
+              class="w-full outline-none text-sm placeholder-gray-400"
+              placeholder={KNOWN_PROVIDER_MODELS.zhipu.vision[0]}
+              value={getSingleModelValue('zhipu')}
+              on:input={(e) => {
+                setSingleModelValue('zhipu', (e.currentTarget as HTMLInputElement).value);
+                markDirty();
+              }}
+            />
+          </div>
+        {/if}
+
         {#if config.provider === 'doubao'}
           <div
             class="border-black border-2 rounded-md p-2 w-full"
@@ -168,7 +316,7 @@
               class="w-full outline-none text-sm placeholder-gray-400"
               placeholder="ep-..."
               bind:value={config.doubaoEndpointIdText}
-              on:input={() => (isSaved = false)}
+              on:input={markDirty}
             />
           </div>
 
@@ -186,7 +334,7 @@
               class="w-full outline-none text-sm placeholder-gray-400"
               placeholder="ep-..."
               bind:value={config.doubaoEndpointIdVision}
-              on:input={() => (isSaved = false)}
+              on:input={markDirty}
             />
           </div>
         {/if}
@@ -206,10 +354,17 @@
               <input
                 id="api_key"
                 type={showApiKey ? 'text' : 'password'}
+                name="provider-api-key"
+                autocomplete="new-password"
+                autocapitalize="off"
+                autocorrect="off"
+                spellcheck="false"
+                data-1p-ignore="true"
+                data-lpignore="true"
                 class="min-w-0 flex-1 outline-none placeholder:text-gray-400 placeholder:italic [&::placeholder]:text-xs "
                 placeholder={$t('settings.api_key_placeholder')}
                 bind:value={config.apiKey}
-                on:input={() => (isSaved = false)}
+                on:input={markDirty}
               />
               <button
                 type="button"
@@ -225,6 +380,13 @@
                 {/if}
               </button>
             </div>
+            {#if showCustomModelNotice}
+              {#key customModelNoticeVersion}
+                <p class="mt-2 rounded-md py-1.5 text-xs text-stone-600 animate-notice-shake">
+                  {$t('error.custom_model_needs_api_key')}
+                </p>
+              {/key}
+            {/if}
           </div>
         {/if}
 
@@ -239,3 +401,31 @@
     </div>
   {/if}
 </div>
+
+<style>
+  .animate-notice-shake {
+    animation: notice-shake 0.32s ease-in-out;
+    transform-origin: center;
+  }
+
+  @keyframes notice-shake {
+    0% {
+      transform: translateX(0);
+    }
+    20% {
+      transform: translateX(-3px);
+    }
+    40% {
+      transform: translateX(3px);
+    }
+    60% {
+      transform: translateX(-2px);
+    }
+    80% {
+      transform: translateX(2px);
+    }
+    100% {
+      transform: translateX(0);
+    }
+  }
+</style>

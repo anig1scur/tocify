@@ -20,6 +20,9 @@
     "api_settings_title": "API 设置",
     "api_key_hint": "仅存储在本地，不会上传到服务器",
     "api_key_placeholder": "网页内置 key，也可使用自定义 Key",
+    "custom_model_label": "自定义模型",
+    "custom_text_model_label": "自定义文本模型",
+    "custom_vision_model_label": "自定义视觉模型",
     "add_numbering": "添加编号",
     "style": "样式",
     "none": "无",
@@ -231,11 +234,12 @@
     "payload_too_large": "请求体过大 (>5MB)，请减少页面范围或降低分辨率",
     "no_valid_pages": "未选择有效目录页面",
     "ai_failed": "AI 处理失败",
-    "try_other_model": "{provider}: {message} 您可以在 API 设置中尝试其他模型",
+    "try_other_model": "{provider}: {message} 。您可以在 API 设置中尝试其他模型",
     "not_a_toc": "所选页面看起来不像是目录，请尝试调整页面范围",
     "request_too_large": "请求体过大，请减少页面范围或降低分辨率",
     "daily_limit_exceeded": "已超过每日限制。请明天再试，或在 API 设置中输入您自己的 API Key",
     "needs_api_key": "请在 API 设置中填写您自己的 API Key 以继续。",
+    "custom_model_needs_api_key": "自定义模型时，需填写您自己的 API Key。",
     "chunk_failed": "第 {start}–{end} 页处理失败，原因：{reason}"
   },
   "toast": {

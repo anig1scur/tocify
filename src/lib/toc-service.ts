@@ -3,6 +3,7 @@ import {get} from 'svelte/store';
 import {_} from 'svelte-i18n';
 
 import { processTocDirect } from '$lib/llm/client';
+import {requiresUserApiKeyForModel, type ModelOverrides} from '$lib/llm/core';
 
 import {pdfService} from '../stores';
 
@@ -26,6 +27,7 @@ interface AiTocOptions {
   provider?: string;
   doubaoEndpointIdText?: string;
   doubaoEndpointIdVision?: string;
+  modelOverrides?: ModelOverrides;
   onProgress?: (current: number, total: number) => void;
 }
 
@@ -44,7 +46,12 @@ async function fetchChunk(
   provider: string | undefined,
   doubaoEndpointIdText: string | undefined,
   doubaoEndpointIdVision: string | undefined,
+  modelOverrides: ModelOverrides | undefined,
 ): Promise<any[]> {
+  if (requiresUserApiKeyForModel(provider, apiKey, modelOverrides)) {
+    throw new Error(t('error.custom_model_needs_api_key'));
+  }
+
   if (apiKey) {
     return processTocDirect({
       images,
@@ -52,6 +59,7 @@ async function fetchChunk(
       provider,
       doubaoEndpointIdText,
       doubaoEndpointIdVision,
+      modelOverrides,
     });
   }
 
@@ -64,6 +72,7 @@ async function fetchChunk(
       provider,
       doubaoEndpointIdText,
       doubaoEndpointIdVision,
+      modelOverrides,
     }),
   });
 
@@ -87,7 +96,7 @@ async function fetchChunk(
 }
 
 export async function generateToc(
-  { pdfInstance, ranges, startPage, endPage, apiKey, provider, doubaoEndpointIdText, doubaoEndpointIdVision, onProgress }: AiTocOptions
+  { pdfInstance, ranges, startPage, endPage, apiKey, provider, doubaoEndpointIdText, doubaoEndpointIdVision, modelOverrides, onProgress }: AiTocOptions
 ): Promise<GenerateTocResult> {
 
   // Normalize ranges
@@ -139,7 +148,7 @@ export async function generateToc(
     onProgress?.(1, 1);
     const items = await fetchChunk(
       pageEntries.map(e => e.image),
-      apiKey, provider, doubaoEndpointIdText, doubaoEndpointIdVision
+      apiKey, provider, doubaoEndpointIdText, doubaoEndpointIdVision, modelOverrides
     );
     return { items: Array.isArray(items) ? items : [], chunkFailures: [] };
   }
@@ -163,11 +172,11 @@ export async function generateToc(
 
     // First attempt
     try {
-      result = await fetchChunk(images, apiKey, provider, doubaoEndpointIdText, doubaoEndpointIdVision);
+      result = await fetchChunk(images, apiKey, provider, doubaoEndpointIdText, doubaoEndpointIdVision, modelOverrides);
     } catch (_firstErr) {
       // Retry once
       try {
-        result = await fetchChunk(images, apiKey, provider, doubaoEndpointIdText, doubaoEndpointIdVision);
+        result = await fetchChunk(images, apiKey, provider, doubaoEndpointIdText, doubaoEndpointIdVision, modelOverrides);
       } catch (retryErr: any) {
         chunkFailures.push({
           start: chunkStart,

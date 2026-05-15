@@ -24,6 +24,9 @@
     "api_settings_title": "API Settings",
     "api_key_hint": "Stored locally only",
     "api_key_placeholder": "There's built-in keys, or use your own",
+    "custom_model_label": "Custom Model",
+    "custom_text_model_label": "Custom Text Model",
+    "custom_vision_model_label": "Custom Vision Model",
     "add_numbering": "Add Numbering",
     "style": "Style",
     "none": "None",
@@ -223,11 +226,12 @@
     "payload_too_large": "Total size too large (>5MB). Please reduce page range or lower resolution.",
     "no_valid_pages": "No valid pages selected.",
     "ai_failed": "AI processing failed.",
-    "try_other_model": "{provider}: {message} You can try other model in API settings.",
+    "try_other_model": "{provider}: {message}. You can try other model in API settings.",
     "not_a_toc": "The selected pages don't look like a ToC. Please try adjusting the page range.",
     "request_too_large": "Request too large. Please reduce the page range or lower the resolution.",
     "daily_limit_exceeded": "Daily limit exceeded. Please try again tomorrow or input your own API key in API settings.",
     "needs_api_key": "Please add your own API key in API Settings to continue.",
+    "custom_model_needs_api_key": "Custom models require your own API key.",
     "chunk_failed": "Pages {start}–{end} failed: {reason}"
   },
   "toast": {

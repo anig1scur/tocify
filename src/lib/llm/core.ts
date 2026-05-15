@@ -19,12 +19,35 @@ export interface ModelOverrides {
   doubaoVisionModel?: string;
 }
 
+export const KNOWN_PROVIDER_MODELS: Record<'gemini' | 'qwen' | 'zhipu', { text: readonly string[]; vision: readonly string[] }> = {
+  gemini: {
+    text: ['gemini-2.5-flash'],
+    vision: ['gemini-2.5-flash'],
+  },
+  qwen: {
+    text: ['qwen-plus'],
+    vision: ['qwen-vl-plus'],
+  },
+  zhipu: {
+    text: ['glm-4-flash'],
+    vision: ['glm-4v-flash'],
+  },
+} as const;
+
 export interface DirectApiConfig {
   provider?: string;
   apiKey: string;
   doubaoEndpointIdText?: string;
   doubaoEndpointIdVision?: string;
   modelOverrides?: ModelOverrides;
+}
+
+export interface UiApiConfig extends DirectApiConfig {
+  provider: string;
+  apiKey: string;
+  doubaoEndpointIdText: string;
+  doubaoEndpointIdVision: string;
+  modelOverrides: ModelOverrides;
 }
 
 export interface TocInputConfig extends DirectApiConfig {
@@ -86,6 +109,92 @@ export function requireProvider(provider?: string, missingMessage = 'Please sele
   }
 
   return normalized;
+}
+
+function normalizeModelName(model?: string): string | undefined {
+  const normalized = model?.trim();
+  return normalized ? normalized : undefined;
+}
+
+export function normalizeModelOverrides(modelOverrides?: ModelOverrides): ModelOverrides | undefined {
+  if (!modelOverrides) {
+    return undefined;
+  }
+
+  const sanitized: ModelOverrides = {};
+
+  for (const [key, value] of Object.entries(modelOverrides)) {
+    const normalized = normalizeModelName(value);
+    if (normalized) {
+      sanitized[key as keyof ModelOverrides] = normalized;
+    }
+  }
+
+  return Object.keys(sanitized).length > 0 ? sanitized : undefined;
+}
+
+export function hasUnknownCustomModel(provider?: string, modelOverrides?: ModelOverrides): boolean {
+  const normalizedProvider = normalizeProvider(provider);
+  const sanitizedOverrides = normalizeModelOverrides(modelOverrides);
+
+  if (!normalizedProvider || !sanitizedOverrides || normalizedProvider === 'doubao') {
+    return false;
+  }
+
+  switch (normalizedProvider) {
+    case 'gemini': {
+      const model = sanitizedOverrides.geminiModel;
+      return Boolean(model && !KNOWN_PROVIDER_MODELS.gemini.text.includes(model));
+    }
+    case 'qwen': {
+      const textModel = sanitizedOverrides.qwenTextModel;
+      const visionModel = sanitizedOverrides.qwenVisionModel;
+
+      if (textModel && visionModel && textModel === visionModel) {
+        return !KNOWN_PROVIDER_MODELS.qwen.text.includes(textModel)
+          && !KNOWN_PROVIDER_MODELS.qwen.vision.includes(textModel);
+      }
+
+      return Boolean(
+        (textModel && !KNOWN_PROVIDER_MODELS.qwen.text.includes(textModel)) ||
+        (visionModel && !KNOWN_PROVIDER_MODELS.qwen.vision.includes(visionModel))
+      );
+    }
+    case 'zhipu': {
+      const textModel = sanitizedOverrides.zhipuTextModel;
+      const visionModel = sanitizedOverrides.zhipuVisionModel;
+
+      if (textModel && visionModel && textModel === visionModel) {
+        return !KNOWN_PROVIDER_MODELS.zhipu.text.includes(textModel)
+          && !KNOWN_PROVIDER_MODELS.zhipu.vision.includes(textModel);
+      }
+
+      return Boolean(
+        (textModel && !KNOWN_PROVIDER_MODELS.zhipu.text.includes(textModel)) ||
+        (visionModel && !KNOWN_PROVIDER_MODELS.zhipu.vision.includes(visionModel))
+      );
+    }
+  }
+}
+
+export function requiresUserApiKeyForModel(provider?: string, apiKey?: string, modelOverrides?: ModelOverrides): boolean {
+  return !apiKey?.trim() && hasUnknownCustomModel(provider, modelOverrides);
+}
+
+export function createEmptyApiConfig(): UiApiConfig {
+  return {
+    provider: '',
+    apiKey: '',
+    doubaoEndpointIdText: '',
+    doubaoEndpointIdVision: '',
+    modelOverrides: {
+      geminiModel: '',
+      qwenTextModel: '',
+      qwenVisionModel: '',
+      zhipuTextModel: '',
+      zhipuVisionModel: '',
+    },
+  };
 }
 
 function stripCodeFences(text: string): string {
@@ -163,12 +272,13 @@ function getOpenAiCompatVisionModel(provider: Exclude<Provider, 'gemini'>, confi
 }
 
 async function fetchGeminiJson(
+  model: string,
   apiKey: string,
   body: Record<string, unknown>,
   fallbackMessage: string,
 ): Promise<string> {
   const response = await fetch(
-    'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',
+    `https://generativelanguage.googleapis.com/v1beta/models/${ encodeURIComponent(model) }:generateContent`,
     {
       method: 'POST',
       headers: {
@@ -215,6 +325,7 @@ async function requestTextJson(config: DirectApiConfig, systemPrompt: string, us
 
   if (provider === 'gemini') {
     return fetchGeminiJson(
+      getGeminiModel(config),
       config.apiKey,
       {
         systemInstruction: {
@@ -267,6 +378,7 @@ async function requestVisionJson(config: DirectApiConfig, systemPrompt: string, 
     });
 
     return fetchGeminiJson(
+      getGeminiModel(config),
       config.apiKey,
       {
         systemInstruction: {
@@ -349,6 +461,7 @@ export async function generateBoard(tocItems: GraphNodeInput[], config: DirectAp
 
   const jsonText = provider === 'gemini'
     ? await fetchGeminiJson(
+      getGeminiModel(config),
       config.apiKey,
       {
         generationConfig: {

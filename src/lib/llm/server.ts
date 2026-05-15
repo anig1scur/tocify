@@ -2,9 +2,12 @@ import { env } from '$env/dynamic/private';
 
 import {
   generateBoard,
+  requiresUserApiKeyForModel,
+  normalizeModelOverrides,
   normalizeProvider,
   processToc,
   type GraphNodeInput,
+  type ModelOverrides,
   type Provider,
 } from '$lib/llm/core';
 
@@ -47,6 +50,12 @@ function providerLabel(provider: Provider): string {
   return provider.charAt(0).toUpperCase() + provider.slice(1);
 }
 
+function createBadRequest(message: string) {
+  const error = new Error(message) as Error & { status?: number };
+  error.status = 400;
+  return error;
+}
+
 export async function processTocOnServer({
   request,
   images,
@@ -55,6 +64,7 @@ export async function processTocOnServer({
   provider,
   doubaoEndpointIdText,
   doubaoEndpointIdVision,
+  modelOverrides,
 }: {
   request: Request;
   images?: string[];
@@ -63,8 +73,15 @@ export async function processTocOnServer({
   provider?: string;
   doubaoEndpointIdText?: string;
   doubaoEndpointIdVision?: string;
+  modelOverrides?: ModelOverrides;
 }) {
   const resolvedProvider = determineProvider(request, provider);
+  const normalizedModelOverrides = normalizeModelOverrides(modelOverrides);
+
+  if (requiresUserApiKeyForModel(resolvedProvider, apiKey, normalizedModelOverrides)) {
+    throw createBadRequest('Custom models outside the built-in list require your own API key.');
+  }
+
   const resolvedApiKey = resolveApiKey(resolvedProvider, apiKey);
 
   if (!resolvedApiKey) {
@@ -86,6 +103,7 @@ export async function processTocOnServer({
       zhipuVisionModel: 'glm-4v-flash',
       doubaoTextModel: env.DOUBAO_ENDPOINT_ID_TEXT,
       doubaoVisionModel: env.DOUBAO_ENDPOINT_ID_VISION,
+      ...normalizedModelOverrides,
     },
   });
 }
@@ -96,14 +114,22 @@ export async function generateBoardOnServer({
   apiKey,
   provider,
   doubaoEndpointIdText,
+  modelOverrides,
 }: {
   request: Request;
   tocItems: GraphNodeInput[];
   apiKey?: string;
   provider?: string;
   doubaoEndpointIdText?: string;
+  modelOverrides?: ModelOverrides;
 }) {
   const resolvedProvider = determineProvider(request, provider);
+  const normalizedModelOverrides = normalizeModelOverrides(modelOverrides);
+
+  if (requiresUserApiKeyForModel(resolvedProvider, apiKey, normalizedModelOverrides)) {
+    throw createBadRequest('Custom models outside the built-in list require your own API key.');
+  }
+
   const resolvedApiKey = resolveApiKey(resolvedProvider, apiKey);
 
   if (!resolvedApiKey) {
@@ -119,6 +145,7 @@ export async function generateBoardOnServer({
       qwenTextModel: 'qwen-plus',
       zhipuTextModel: 'glm-4-flash',
       doubaoTextModel: env.DOUBAO_ENDPOINT_ID_TEXT,
+      ...normalizedModelOverrides,
     },
   });
 }

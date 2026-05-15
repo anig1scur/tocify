@@ -28,6 +28,7 @@
   import {generateToc, ERROR_NEEDS_API_KEY} from '$lib/toc-service';
   import {applyCustomPrefix} from '$lib/utils/prefix';
   import {setPageLabels} from '$lib/pdf/page-labels';
+  import {createEmptyApiConfig} from '$lib/llm/core';
 
   import Toast from '../components/Toast.svelte';
   import Footer from '../components/Footer.svelte';
@@ -117,12 +118,7 @@
   let lastConfigJson = '';
   let chapterExportItems: ExportableChapter[] = [];
 
-  let customApiConfig = {
-    provider: '',
-    apiKey: '',
-    doubaoEndpointIdText: '',
-    doubaoEndpointIdVision: '',
-  };
+  let customApiConfig = createEmptyApiConfig();
   let tocEditor: any;
 
   onMount(async () => {
@@ -874,6 +870,7 @@
         provider: customApiConfig.provider,
         doubaoEndpointIdText: customApiConfig.doubaoEndpointIdText,
         doubaoEndpointIdVision: customApiConfig.doubaoEndpointIdVision,
+        modelOverrides: customApiConfig.modelOverrides,
         onProgress: (current, total) => {
           aiProgress = { current, total };
         },

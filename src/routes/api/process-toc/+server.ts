@@ -14,7 +14,7 @@ export const POST = withRateLimit(async ({ request }) => {
   }
 
   try {
-    const { images, text, apiKey, provider, doubaoEndpointIdText, doubaoEndpointIdVision } = await request.json();
+    const { images, text, apiKey, provider, doubaoEndpointIdText, doubaoEndpointIdVision, modelOverrides } = await request.json();
 
     if ((!images || !Array.isArray(images) || images.length === 0) &&
       (!text || typeof text !== 'string' || !text.trim())) {
@@ -42,6 +42,7 @@ export const POST = withRateLimit(async ({ request }) => {
       provider,
       doubaoEndpointIdText,
       doubaoEndpointIdVision,
+      modelOverrides,
     });
 
     return json(tocData);

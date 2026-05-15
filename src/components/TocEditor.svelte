@@ -1,6 +1,7 @@
 <script lang="ts">
   import {onDestroy, tick, createEventDispatcher} from 'svelte';
   import ShortUniqueId from 'short-unique-id';
+  import {createEmptyApiConfig, requiresUserApiKeyForModel} from '$lib/llm/core';
   import {
     Sparkles,
     Loader2,
@@ -28,12 +29,7 @@
   export let insertAtPage = 2;
   export let tocPageCount = 0;
 
-  export let apiConfig = {
-    provider: '',
-    apiKey: '',
-    doubaoEndpointIdText: '',
-    doubaoEndpointIdVision: '',
-  };
+  export let apiConfig = createEmptyApiConfig();
   const dispatch = createEventDispatcher();
 
   type FlatTocItem = Omit<TocEntry, 'children'> & {
@@ -454,6 +450,10 @@
   async function handleAiFormat() {
     if (!text.trim()) return;
 
+    if (requiresUserApiKeyForModel(apiConfig.provider, apiConfig.apiKey, apiConfig.modelOverrides)) {
+      throw new Error($t('error.custom_model_needs_api_key'));
+    }
+
     const MAX_TEXT_SIZE = 128 * 1024;
     const byteSize = new TextEncoder().encode(text).length;
 
@@ -472,6 +472,7 @@
           provider: apiConfig.provider,
           doubaoEndpointIdText: apiConfig.doubaoEndpointIdText,
           doubaoEndpointIdVision: apiConfig.doubaoEndpointIdVision,
+          modelOverrides: apiConfig.modelOverrides,
         });
       } else {
         const response = await fetch('/api/process-toc', {
@@ -481,6 +482,7 @@
             text: text,
             apiKey: apiConfig.apiKey,
             provider: apiConfig.provider,
+            modelOverrides: apiConfig.modelOverrides,
           }),
         });
 

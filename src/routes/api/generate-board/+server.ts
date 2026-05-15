@@ -4,7 +4,7 @@ import { json } from '@sveltejs/kit';
 
 export const POST = withRateLimit(async ({ request }) => {
   try {
-    const { tocItems, apiKey, provider, doubaoEndpointIdText } = await request.json();
+    const { tocItems, apiKey, provider, doubaoEndpointIdText, modelOverrides } = await request.json();
 
     if (!tocItems || !Array.isArray(tocItems)) {
       return json({ error: 'Invalid tocItems' }, { status: 400 });
@@ -16,11 +16,12 @@ export const POST = withRateLimit(async ({ request }) => {
       apiKey,
       provider,
       doubaoEndpointIdText,
+      modelOverrides,
     });
 
     return json(graph);
   } catch (error: any) {
     console.error(error);
-    return json({ error: error.message }, { status: 500 });
+    return json({ error: error.message }, { status: error.status || 500 });
   }
 });

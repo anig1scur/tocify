@@ -3,6 +3,7 @@
   import {t} from 'svelte-i18n';
   import rough from 'roughjs';
   import {generateBoardDirect} from '$lib/llm/client';
+  import {createEmptyApiConfig, requiresUserApiKeyForModel} from '$lib/llm/core';
   import GraphNode from './GraphNode.svelte';
   import {
     Sparkles,
@@ -17,11 +18,7 @@
   } from 'lucide-svelte';
   import {CARD_W, CARD_H, getRandomPaperColor, computeHierarchicalLayout, getClosestPoints} from '$lib/utils/graph';
   export let items = [];
-  export let apiConfig = {
-    provider: '',
-    apiKey: '',
-    doubaoEndpointIdText: '',
-  };
+  export let apiConfig = createEmptyApiConfig();
 
   export let title = 'Untitled Book';
 
@@ -73,6 +70,12 @@
 
   async function handleGenerateGraph() {
     if (items.length === 0) return;
+
+    if (requiresUserApiKeyForModel(apiConfig.provider, apiConfig.apiKey, apiConfig.modelOverrides)) {
+      alert($t('error.custom_model_needs_api_key'));
+      return;
+    }
+
     isLoading = true;
     activeNodeId = null;
 
@@ -88,6 +91,7 @@
           apiKey: apiConfig.apiKey,
           provider: apiConfig.provider,
           doubaoEndpointIdText: apiConfig.doubaoEndpointIdText,
+          modelOverrides: apiConfig.modelOverrides,
         })
         : await (async () => {
           const response = await fetch('/api/generate-board', {
@@ -98,6 +102,7 @@
               apiKey: apiConfig.apiKey,
               provider: apiConfig.provider,
               doubaoEndpointIdText: apiConfig.doubaoEndpointIdText,
+              modelOverrides: apiConfig.modelOverrides,
             }),
           });
 
