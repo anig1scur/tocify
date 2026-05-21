@@ -126,7 +126,7 @@
 
 {#if showChapterExportModal}
   <div
-    class="fixed inset-0 bg-black/40 backdrop-blur-[1px] flex items-center justify-center z-50 p-4"
+    class="fixed inset-0 bg-black/40 backdrop-blur-md flex items-center justify-center z-50 p-4"
     transition:fade={{duration: 150}}
     on:click={() => (showChapterExportModal = false)}
   >
@@ -138,7 +138,6 @@
       <div class="flex justify-between items-start gap-4 mb-4">
         <div>
           <h2 class="text-xl md:text-2xl font-bold">{$t('chapter_export.title')}</h2>
-          <p class="text-sm text-gray-700 mt-1">{$t('chapter_export.description')}</p>
         </div>
         <button
           on:click={() => (showChapterExportModal = false)}

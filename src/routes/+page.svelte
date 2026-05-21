@@ -29,6 +29,7 @@
   import {applyCustomPrefix} from '$lib/utils/prefix';
   import {setPageLabels} from '$lib/pdf/page-labels';
   import {createEmptyApiConfig} from '$lib/llm/core';
+  import type {RecognitionIgnoreRegion} from '$lib/pdf/recognition-ignore';
 
   import Toast from '../components/Toast.svelte';
   import Footer from '../components/Footer.svelte';
@@ -103,6 +104,8 @@
   };
 
   let tocRanges = [{start: 1, end: 1, id: 'default'}];
+  let tocSelectionPageNumbers: number[] = [];
+  let recognitionIgnoreRegions: RecognitionIgnoreRegion[] = [];
   let activeRangeIndex = 0;
   let tocPageCount = 0;
   let isPreviewMode = false;
@@ -120,6 +123,30 @@
 
   let customApiConfig = createEmptyApiConfig();
   let tocEditor: any;
+
+  function expandTocRanges(ranges: {start: number; end: number; id: string}[], maxPage: number) {
+    const pages = new Set<number>();
+    const rangeMaxPage = Math.max(0, ...ranges.flatMap((range) => [Number(range.start) || 0, Number(range.end) || 0]));
+    const limit = Math.max(maxPage || 0, rangeMaxPage);
+
+    for (const range of ranges) {
+      const rawStart = Number(range.start) || 1;
+      const rawEnd = Number(range.end) || rawStart;
+      const start = Math.max(1, Math.min(limit || rawStart, Math.min(rawStart, rawEnd)));
+      const end = Math.max(start, Math.min(limit || rawEnd, Math.max(rawStart, rawEnd)));
+
+      for (let page = start; page <= end; page++) {
+        pages.add(page);
+      }
+    }
+
+    return [...pages].sort((a, b) => a - b);
+  }
+
+  $: tocSelectionPageNumbers = expandTocRanges(
+    tocRanges,
+    originalPdfInstance?.numPages || pdfState.totalPages || 0,
+  );
 
   onMount(async () => {
     init('A-US-0422911470', {
@@ -660,6 +687,7 @@
       tocPageCount = 0;
       pdfState.currentPage = 1;
       tocRanges = [{start: 1, end: 1, id: 'default'}];
+      recognitionIgnoreRegions = [];
       activeRangeIndex = 0;
 
       const session = localStorage.getItem(`toc_draft_${fingerprint}`);
@@ -871,6 +899,7 @@
         doubaoEndpointIdText: customApiConfig.doubaoEndpointIdText,
         doubaoEndpointIdVision: customApiConfig.doubaoEndpointIdVision,
         modelOverrides: customApiConfig.modelOverrides,
+        recognitionIgnoreRegions,
         onProgress: (current, total) => {
           aiProgress = { current, total };
         },
@@ -1231,6 +1260,8 @@
       {isPreviewMode}
       {isPreviewLoading}
       {tocRanges}
+      {tocSelectionPageNumbers}
+      {recognitionIgnoreRegions}
       {activeRangeIndex}
       {tocPageCount}
       {addPhysicalTocPage}
@@ -1245,6 +1276,7 @@
       on:togglePreview={togglePreviewMode}
       on:export={exportPDF}
       on:openChapterExport={openChapterExportModal}
+      on:recognitionIgnoreRegionsChange={(e) => (recognitionIgnoreRegions = e.detail)}
     />
   </div>
 

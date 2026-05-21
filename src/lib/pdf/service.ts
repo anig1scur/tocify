@@ -5,6 +5,7 @@ import * as pdfjsLib from 'pdfjs-dist';
 import { type TocConfig } from '../../stores';
 import { A4_WIDTH, BASE_FONT_SIZE_L1, BASE_FONT_SIZE_OTHER } from '../constants';
 import { isLegacyBrowser } from '$lib/utils';
+import type { RecognitionIgnoreRegion } from '$lib/pdf/recognition-ignore';
 
 export interface TocItem {
   id: string;
@@ -302,7 +303,8 @@ export class PDFService {
 
   async getPageAsImage(
     pdf: any, pageNum: number, targetScale: number = 1.5,
-    maxDimension: number = 2048): Promise<string> {
+    maxDimension: number = 2048,
+    ignoreRegions: RecognitionIgnoreRegion[] = []): Promise<string> {
     const page = await pdf.getPage(pageNum);
 
     let viewport = page.getViewport({ scale: targetScale });
@@ -330,6 +332,19 @@ export class PDFService {
     });
 
     await renderTask.promise.then(() => page.cleanup()).catch(() => page.cleanup());
+
+    const pageRegions = ignoreRegions.filter((region) => region.pageNum === pageNum);
+    if (pageRegions.length > 0) {
+      for (const region of pageRegions) {
+        context.fillStyle = region.fill === 'black' ? '#000000' : '#ffffff';
+        context.fillRect(
+          Math.floor(region.x * canvas.width),
+          Math.floor(region.y * canvas.height),
+          Math.ceil(region.width * canvas.width),
+          Math.ceil(region.height * canvas.height),
+        );
+      }
+    }
 
     return canvas.toDataURL('image/jpeg', 0.9);
   }

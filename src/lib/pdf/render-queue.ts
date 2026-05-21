@@ -12,7 +12,17 @@ export class RenderQueue {
   private activeCount = 0;
   private maxConcurrency = 6;
   private STANDARD_RENDER_SCALE = 1.5;
-  public cache = new Map<string, ImageBitmap | HTMLCanvasElement>();
+  private maxCacheItems = 80;
+  private cache = new Map<string, ImageBitmap | HTMLCanvasElement>();
+
+  getCached(id: string): ImageBitmap | HTMLCanvasElement | undefined {
+    const cached = this.cache.get(id);
+    if (!cached) return undefined;
+
+    this.cache.delete(id);
+    this.cache.set(id, cached);
+    return cached;
+  }
 
   enqueue(
     id: string,
@@ -20,8 +30,9 @@ export class RenderQueue {
     pageNum: number,
     priority: number = 1
   ): Promise<ImageBitmap | HTMLCanvasElement> {
-    if (this.cache.has(id)) {
-      return Promise.resolve(this.cache.get(id)!);
+    const cached = this.getCached(id);
+    if (cached) {
+      return Promise.resolve(cached);
     }
 
     return new Promise((resolve, reject) => {
@@ -60,8 +71,9 @@ export class RenderQueue {
   }
 
   private async processTask(task: RenderTask) {
-    if (this.cache.has(task.id)) {
-      task.resolve(this.cache.get(task.id)!);
+    const cached = this.getCached(task.id);
+    if (cached) {
+      task.resolve(cached);
       this.processNext();
       return;
     }
@@ -71,36 +83,39 @@ export class RenderQueue {
     try {
       const page = await task.pdfInstance.getPage(task.pageNum);
 
-      const viewport = page.getViewport({ scale: this.STANDARD_RENDER_SCALE });
+      try {
+        const viewport = page.getViewport({ scale: this.STANDARD_RENDER_SCALE });
 
-      let canvas: HTMLCanvasElement | OffscreenCanvas;
-      if (typeof OffscreenCanvas !== 'undefined') {
-        canvas = new OffscreenCanvas(viewport.width, viewport.height);
-      } else {
-        canvas = document.createElement('canvas');
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
+        let canvas: HTMLCanvasElement | OffscreenCanvas;
+        if (typeof OffscreenCanvas !== 'undefined') {
+          canvas = new OffscreenCanvas(viewport.width, viewport.height);
+        } else {
+          canvas = document.createElement('canvas');
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+        }
+
+        const ctx = canvas.getContext('2d', { alpha: false });
+        if (!ctx) throw new Error('Could not create canvas context');
+
+        await page.render({
+          canvasContext: ctx,
+          viewport: viewport,
+        }).promise;
+
+        let result: ImageBitmap | HTMLCanvasElement;
+        if (typeof createImageBitmap !== 'undefined') {
+          result = await createImageBitmap(canvas);
+        } else {
+          result = canvas as HTMLCanvasElement;
+        }
+
+        this.cache.set(task.id, result);
+        this.trimCache();
+        task.resolve(result);
+      } finally {
+        page.cleanup();
       }
-
-      const ctx = canvas.getContext('2d', { alpha: false });
-      if (!ctx) throw new Error('Could not create canvas context');
-
-      await page.render({
-        canvasContext: ctx,
-        viewport: viewport,
-      }).promise;
-
-      let result: ImageBitmap | HTMLCanvasElement;
-      if (typeof createImageBitmap !== 'undefined') {
-        result = await createImageBitmap(canvas);
-      } else {
-        result = canvas as HTMLCanvasElement;
-      }
-
-      this.cache.set(task.id, result);
-      task.resolve(result);
-
-      page.cleanup();
     } catch (e: any) {
       if (e?.name !== 'RenderingCancelledException') {
         console.error(`RenderQueue Error (Page ${ task.pageNum }):`, e);
@@ -120,6 +135,19 @@ export class RenderQueue {
       }
     }
     this.cache.clear();
+  }
+
+  private trimCache() {
+    while (this.cache.size > this.maxCacheItems) {
+      const oldestKey = this.cache.keys().next().value;
+      if (!oldestKey) return;
+
+      const oldest = this.cache.get(oldestKey);
+      if (oldest && 'close' in oldest) {
+        (oldest as ImageBitmap).close();
+      }
+      this.cache.delete(oldestKey);
+    }
   }
 }
 

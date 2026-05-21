@@ -52,6 +52,18 @@
     "range_n": "范围 {n}",
     "segment_range_n": "范围 {n}"
   },
+  "recognition_ignore": {
+    "title": "忽略区域",
+    "open": "编辑忽略区域",
+    "close": "关闭",
+    "instruction": "拖拽擦除识别前要忽略的内容",
+    "current_page_regions": "当前页区域",
+    "apply_all_pages": "应用到所有页",
+    "region_n": "区域 {n}",
+    "empty_hint": "在页面上拖拽即可添加忽略区域",
+    "clear_page": "清空当前页区域",
+    "done": "完成"
+  },
   "toc": {
     "prompt_intro": "AI Format 仅当书本没有影印目录，只能找文本内容时使用。将不符合格式的文本粘贴到框内，它将智能处理目录文本为目标格式。\n\n或者，你可以自行通过下列提示词获取目标文本:\n\n1 Food Categories I Love 1\n2 Fruits 2\n2.1 Strawberry 3\n\n将下方的目录整理为目标格式，并移除无用的注释\n${YOUR_TOCS_COPY_FROM_ANYWHERE}",
     "new_chapter_default": "新章节",
@@ -123,7 +135,6 @@
   },
   "chapter_export": {
     "title": "按章节导出",
-    "description": "选择要导出的章节，会自动应用页码偏移。",
     "close": "关闭章节导出",
     "select_all": "全选",
     "clear_selection": "清空",

@@ -1,5 +1,32 @@
-<script>
+<script lang="ts">
+  import {onMount} from 'svelte';
+
   const year = new Date().getFullYear();
+  const THEME_KEY = 'tocify_theme';
+
+  let theme: 'neo' | 'miro' = 'neo';
+
+  function applyTheme(nextTheme: 'neo' | 'miro') {
+    theme = nextTheme;
+
+    if (nextTheme === 'miro') {
+      localStorage.setItem(THEME_KEY, nextTheme);
+      document.documentElement.dataset.theme = nextTheme;
+    } else {
+      localStorage.removeItem(THEME_KEY);
+      document.documentElement.dataset.theme = 'neo';
+    }
+
+    window.dispatchEvent(new CustomEvent('tocify-theme-change'));
+  }
+
+  function toggleTheme() {
+    applyTheme(theme === 'miro' ? 'neo' : 'miro');
+  }
+
+  onMount(() => {
+    theme = localStorage.getItem(THEME_KEY) === 'miro' ? 'miro' : 'neo';
+  });
 </script>
 <footer class="w-full py-4 px-6 text-center text-sm text-gray-400 select-none">
   <p>
@@ -30,5 +57,14 @@
     >
       Buy me a coffee
     </a>
+
+    <button
+      class="ml-2 text-[10px] uppercase tracking-wider opacity-35 hover:opacity-100 hover:text-black transition-opacity"
+      on:click={toggleTheme}
+      title={theme === 'miro' ? 'Switch to Neo Brutalism theme' : 'Switch to Miro draft theme'}
+      aria-label={theme === 'miro' ? 'Switch to Neo Brutalism theme' : 'Switch to Miro draft theme'}
+    >
+      {theme === 'miro' ? 'neo' : 'miro'}
+    </button>
   </p>
 </footer>
