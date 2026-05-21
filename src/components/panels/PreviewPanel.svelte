@@ -7,6 +7,8 @@
   import DropzoneView from '../DropzoneView.svelte';
   import PDFViewer from '../PDFViewer.svelte';
   import PDFControls from '../PDFControls.svelte';
+  import RecognitionIgnoreEditor from '../RecognitionIgnoreEditor.svelte';
+  import type {RecognitionIgnoreRegion} from '$lib/pdf/recognition-ignore';
 
   export let isFileLoading = false;
   export let isDragging = false;
@@ -18,6 +20,8 @@
   export let isPreviewLoading = false;
 
   export let tocRanges: {start: number; end: number; id: string}[];
+  export let tocSelectionPageNumbers: number[] = [];
+  export let recognitionIgnoreRegions: RecognitionIgnoreRegion[] = [];
   export let activeRangeIndex: number;
   export let addPhysicalTocPage: boolean;
   export let tocPageCount: number;
@@ -29,6 +33,8 @@
 
   const dispatch = createEventDispatcher();
   let fileInputRef: HTMLInputElement;
+  let recognitionIgnoreEditor: any;
+
 
   function handleFileInputChange(e: Event) {
     const target = e.target as HTMLInputElement;
@@ -48,6 +54,10 @@
 
   function forwardFileLoadedEvent(e: CustomEvent) {
     dispatch('viewerMessage', e.detail);
+  }
+
+  function openRecognitionIgnoreEditor(e: CustomEvent<{pageNum: number}>) {
+    recognitionIgnoreEditor?.openEditor(e.detail.pageNum);
   }
 </script>
 
@@ -90,14 +100,26 @@
           {tocPdfInstance}
           {tocPageCount}
           {tocRanges}
+          {recognitionIgnoreRegions}
           {activeRangeIndex}
           on:updateActiveRange
+          on:openRecognitionIgnore={openRecognitionIgnoreEditor}
           on:fileloaded={forwardFileLoadedEvent}
           {jumpToTocPage}
           {addPhysicalTocPage}
           {currentTocPath}
           {prefetchPageNum}
           bind:highlightPageNum
+        />
+
+        <RecognitionIgnoreEditor
+          bind:this={recognitionIgnoreEditor}
+          pdfInstance={originalPdfInstance}
+          {tocRanges}
+          {tocSelectionPageNumbers}
+          ignoreRegions={recognitionIgnoreRegions}
+          totalPages={originalPdfInstance?.numPages || pdfState.totalPages}
+          on:change={(e) => dispatch('recognitionIgnoreRegionsChange', e.detail)}
         />
 
         <input

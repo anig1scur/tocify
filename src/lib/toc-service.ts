@@ -4,6 +4,7 @@ import {_} from 'svelte-i18n';
 
 import { processTocDirect } from '$lib/llm/client';
 import {requiresUserApiKeyForModel, type ModelOverrides} from '$lib/llm/core';
+import type {RecognitionIgnoreRegion} from '$lib/pdf/recognition-ignore';
 
 import {pdfService} from '../stores';
 
@@ -28,6 +29,7 @@ interface AiTocOptions {
   doubaoEndpointIdText?: string;
   doubaoEndpointIdVision?: string;
   modelOverrides?: ModelOverrides;
+  recognitionIgnoreRegions?: RecognitionIgnoreRegion[];
   onProgress?: (current: number, total: number) => void;
 }
 
@@ -96,7 +98,7 @@ async function fetchChunk(
 }
 
 export async function generateToc(
-  { pdfInstance, ranges, startPage, endPage, apiKey, provider, doubaoEndpointIdText, doubaoEndpointIdVision, modelOverrides, onProgress }: AiTocOptions
+  { pdfInstance, ranges, startPage, endPage, apiKey, provider, doubaoEndpointIdText, doubaoEndpointIdVision, modelOverrides, recognitionIgnoreRegions = [], onProgress }: AiTocOptions
 ): Promise<GenerateTocResult> {
 
   // Normalize ranges
@@ -123,7 +125,7 @@ export async function generateToc(
   for (const range of finalRanges) {
     if (range.end < range.start) continue;
     for (let pageNum = range.start; pageNum <= range.end; pageNum++) {
-      const image = await service.getPageAsImage(pdfInstance, pageNum);
+      const image = await service.getPageAsImage(pdfInstance, pageNum, 1.5, 2048, recognitionIgnoreRegions);
       currentTotalSize += image.length;
       if (currentTotalSize > MAX_PAYLOAD_SIZE * CHUNK_SIZE) {
         throw new Error(t('error.payload_too_large'));

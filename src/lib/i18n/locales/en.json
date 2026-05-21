@@ -56,6 +56,18 @@
     "range_n": "Range {n}",
     "segment_range_n": "Segment {n}"
   },
+  "recognition_ignore": {
+    "title": "Ignore Areas",
+    "open": "Edit ignore areas",
+    "close": "Close",
+    "instruction": "Drag to erase content before recognition",
+    "current_page_regions": "Current Page Areas",
+    "apply_all_pages": "Apply to all pages",
+    "region_n": "Area {n}",
+    "empty_hint": "Drag on the page to add an ignore area",
+    "clear_page": "Clear current page areas",
+    "done": "Done"
+  },
   "toc": {
     "prompt_intro": "The 'AI Format' button is used when the book lacks a scanned table of contents. Paste the unformatted text into the box, and it will intelligently convert it to the target format.\n\nAlternatively, you can use the following prompt to generate the formatted text yourself:\n\n1 Food Categories I Love 1\n2 Fruits 2\n2.1 Strawberry 3\n\nReformat the table of contents below into the target format and remove unnecessary comments \n\n${YOUR_TOCS_COPY_FROM_ANYWHERE}",
     "new_chapter_default": "New Chapter",
@@ -127,7 +139,6 @@
   },
   "chapter_export": {
     "title": "Export Chapters",
-    "description": "Select chapters to export. Page offsets are applied automatically.",
     "close": "Close chapter export",
     "select_all": "Select All",
     "clear_selection": "Clear",

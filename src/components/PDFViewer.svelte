@@ -1,12 +1,13 @@
 <script lang="ts">
   import {createEventDispatcher, tick, onDestroy} from 'svelte';
-  import {ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCw, ListOrdered} from 'lucide-svelte';
+  import {ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCw, ListOrdered, Eraser} from 'lucide-svelte';
   import {t} from 'svelte-i18n';
 
   import { pdfService, tocConfig } from '../stores';
   import { type PDFService, type PDFState, type TocItem } from '$lib/pdf/service';
   import { renderQueue } from '$lib/pdf/render-queue';
   import { formatPageLabel } from '$lib/pdf/page-labels';
+  import type {RecognitionIgnoreRegion} from '$lib/pdf/recognition-ignore';
   import type { RenderTask } from 'pdfjs-dist';
 
   export let pdfState: PDFState;
@@ -15,6 +16,7 @@
   export let tocPageCount: number = 0;
   export let mode: 'single' | 'grid' = 'single';
   export let tocRanges: {start: number; end: number; id: string}[];
+  export let recognitionIgnoreRegions: RecognitionIgnoreRegion[] = [];
   export let activeRangeIndex: number = 0;
 
   export let jumpToTocPage: (() => Promise<void>) | undefined = undefined;
@@ -108,6 +110,35 @@
       return `toc-${tocVersion}-${localPageNum}`;
     }
     return `orig-${localPageNum}`;
+  }
+
+  function drawIgnoreRegions(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, pageNum: number) {
+    const pageRegions = recognitionIgnoreRegions.filter((region) => region.pageNum === pageNum);
+    if (pageRegions.length === 0) return;
+
+    for (const region of pageRegions) {
+      ctx.fillStyle = region.fill === 'black' ? '#000000' : '#ffffff';
+      ctx.fillRect(
+        Math.floor(region.x * canvas.width),
+        Math.floor(region.y * canvas.height),
+        Math.ceil(region.width * canvas.width),
+        Math.ceil(region.height * canvas.height),
+      );
+    }
+  }
+
+  function repaintGridCanvasFromCache(canvas: HTMLCanvasElement, pageNum: number) {
+    if (pageNum <= 0 || canvas.width === 0 || canvas.height === 0) return;
+
+    const bitmap = renderQueue.getCached(getPageId(pageNum));
+    if (!bitmap) return;
+
+    const ctx = canvas.getContext('2d', { alpha: false });
+    if (!ctx) return;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    drawIgnoreRegions(ctx, canvas, pageNum);
   }
 
   $: currentPageLabel = (originalPdfInstance && $tocConfig.pageLabelSettings.enabled) 
@@ -449,6 +480,45 @@
     selectionStartPage = 0;
   }
 
+  async function renderGridCanvas(canvas: HTMLCanvasElement, pageNum: number) {
+    if (pageNum <= 0 || !originalPdfInstance) return;
+
+    const { instance, localPageNum } = getVirtualPageInfo(pageNum);
+    if (!instance) return;
+
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const canvasWidth = canvas.clientWidth;
+    if (!canvasWidth) return;
+
+    const page = await instance.getPage(localPageNum);
+
+    try {
+      const viewport = page.getViewport({ scale: 1.0 });
+      const scale = canvasWidth / viewport.width;
+      const pageId = getPageId(pageNum);
+      await renderQueue.enqueue(pageId, instance, localPageNum, 1);
+
+      canvas.width = Math.floor(viewport.width * scale * dpr);
+      canvas.height = Math.floor(viewport.height * scale * dpr);
+      canvas.style.width = `${canvasWidth}px`;
+      canvas.style.height = 'auto';
+
+      repaintGridCanvasFromCache(canvas, pageNum);
+    } finally {
+      page.cleanup();
+    }
+  }
+
+  $: if (mode === 'grid' && scrollContainer && originalPdfInstance) {
+    recognitionIgnoreRegions;
+    const canvases = Array.from(scrollContainer.querySelectorAll<HTMLCanvasElement>('canvas[data-page-num]'));
+    for (const canvas of canvases) {
+      if (canvas.width > 0) {
+        repaintGridCanvasFromCache(canvas, parseInt(canvas.dataset.pageNum || '0', 10));
+      }
+    }
+  }
+
 
   function observeViewport(node: HTMLElement) {
     scrollContainer = node;
@@ -463,34 +533,7 @@
             const pageNum = parseInt(canvas.dataset.pageNum || '0', 10);
 
             if (pageNum > 0 && originalPdfInstance) {
-              const { instance, localPageNum } = getVirtualPageInfo(pageNum);
-              if (!instance) return;
-
-              const dpr = Math.min(window.devicePixelRatio || 1, 2);
-              const canvasWidth = canvas.clientWidth;
-              
-              // Determine scale for grid view (thumbnails)
-              // We'll use a fixed width for the scale calculation to be consistent
-              const page = await instance.getPage(localPageNum);
-              const viewport = page.getViewport({ scale: 1.0 });
-              const scale = canvasWidth / viewport.width;
-              
-              const pageId = getPageId(pageNum);
-              
-              const bitmap = await renderQueue.enqueue(pageId, instance, localPageNum, 1);
-              
-              const ctx = canvas.getContext('2d', { alpha: false });
-              if (!ctx) return;
-              
-              canvas.width = Math.floor(viewport.width * scale * dpr);
-              canvas.height = Math.floor(viewport.height * scale * dpr);
-              canvas.style.width = `${canvasWidth}px`;
-              canvas.style.height = 'auto';
-
-              ctx.clearRect(0, 0, canvas.width, canvas.height);
-              ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-
-              page.cleanup();
+              await renderGridCanvas(canvas, pageNum);
 
               if (intersectionObserver) {
                 intersectionObserver.unobserve(canvas);
@@ -541,6 +584,7 @@
       },
     };
   }
+
 </script>
 
 <svelte:window
@@ -704,10 +748,9 @@
         {@const isActive = rangeIndex === activeRangeIndex}
         {@const isStart = tocRanges.some((r) => r.start === page.pageNum)}
         {@const isEnd = tocRanges.some((r) => r.end === page.pageNum)}
-
         <div
           data-page-num={page.pageNum}
-          class="relative rounded-lg overflow-hidden border-t-[2px] border-l-[2px] cursor-pointer bg-white transition-all duration-150 transform border-2"
+          class="group relative rounded-lg overflow-hidden border-t-[2px] border-l-[2px] cursor-pointer bg-white transition-all duration-150 transform border-2"
           class:shadow-[3px_3px_0px]={isSelected}
           class:shadow-blue-400={isSelected && isActive}
           class:shadow-gray-400={isSelected && !isActive}
@@ -725,6 +768,19 @@
           role="gridcell"
           tabindex="0"
         >
+          {#if isSelected}
+            <button
+              class="absolute right-2 top-2 z-20 inline-flex h-8 w-8 items-center justify-center rounded-md bg-white/90 text-black shadow-sm opacity-0 transition-all hover:bg-gray-50 hover:opacity-100 focus:opacity-100 group-hover:opacity-100"
+              on:mousedown|stopPropagation
+              on:touchstart|stopPropagation
+              on:click|stopPropagation={() => dispatch('openRecognitionIgnore', {pageNum: page.pageNum})}
+              title={$t('recognition_ignore.open')}
+              aria-label={$t('recognition_ignore.open')}
+            >
+              <Eraser size={15} />
+            </button>
+          {/if}
+
           {#if isStart}
             <span
               class="absolute -top-2.5 -left-2.5 z-10 rounded-full pr-2 pl-3 pt-3 text-xs font-bold text-white shadow-lg {isActive
