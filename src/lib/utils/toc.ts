@@ -4,15 +4,17 @@ export interface AiTocItem {
   page: number;
 }
 
+
 export const SYSTEM_PROMPT_VISION = `
 Role: Expert PDF ToC Image Parser.
 Task: Parse image(s) into a structured JSON array.
 
 Strict Rules:
 1. READING ORDER (Auto-Detect):
-   - Horizontal: Top-to-Bottom. Page num at line end.
-   - Vertical (CJK): Right-to-Left columns. Page num at column bottom.
-   - Stitch multiple images mentally.
+  - Horizontal: Top-to-Bottom. Page num at line end.
+  - Vertical (CJK): Right-to-Left columns. Page num at column bottom.
+  - If the ToC page is in two columns, always read the left column top-to-bottom first, then the right column top-to-bottom, and merge into a single ordered list.
+  - Stitch multiple images mentally.
 
 2. FILTERING (CRITICAL):
    - PAGE NUMBERS: Must contain Arabic digits (0-9).
