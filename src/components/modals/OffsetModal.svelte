@@ -115,10 +115,10 @@
           </div>
         </div>
         <div class="w-full md:w-[50%]">
-          <div class="border-2 border-black rounded-lg overflow-hidden bg-gray-50 h-[70vh]">
+          <div class="border-2 border-black rounded-lg overflow-hidden bg-gray-50 h-[70vh] flex items-center justify-center">
             <canvas
               id="offset-preview-canvas"
-              class="w-96 h-full mx-auto"
+              class="max-w-full max-h-full object-contain block"
             ></canvas>
           </div>
         </div>
