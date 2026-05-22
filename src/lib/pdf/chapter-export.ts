@@ -1,4 +1,9 @@
 import type {TocItem} from './service';
+import {
+  DEFAULT_PAGE_MAPPING_MODE,
+  getPhysicalPageNumber,
+  type PageMappingMode,
+} from './page-mapping';
 
 export type ExportableChapter = {
   id: string;
@@ -66,6 +71,7 @@ export function filterSelectedChapterRoots(
 export function buildChapterExportItems(
   items: TocItem[],
   pageOffset: number,
+  pageMappingMode: PageMappingMode = DEFAULT_PAGE_MAPPING_MODE,
   totalPages: number,
   untitledLabel: string,
 ): ExportableChapter[] {
@@ -74,14 +80,14 @@ export function buildChapterExportItems(
   const flatItems = flattenTocItemsForExport(items);
 
   return flatItems.map((item, index) => {
-    const startPage = clampPage(item.to + pageOffset, totalPages);
+    const startPage = clampPage(getPhysicalPageNumber(item.to, pageOffset, pageMappingMode), totalPages);
     let endPage = totalPages;
 
     for (let nextIndex = index + 1; nextIndex < flatItems.length; nextIndex += 1) {
       if (flatItems[nextIndex].level <= item.level) {
         endPage = Math.max(
           startPage,
-          clampPage(flatItems[nextIndex].to + pageOffset - 1, totalPages),
+          clampPage(getPhysicalPageNumber(flatItems[nextIndex].to, pageOffset, pageMappingMode) - 1, totalPages),
         );
         break;
       }
@@ -149,13 +155,14 @@ export function buildOutlineTreeForExport(
   item: TocItem,
   pageMap: Map<number, number>,
   pageOffset: number,
+  pageMappingMode: PageMappingMode = DEFAULT_PAGE_MAPPING_MODE,
 ): TocItem | null {
-  const sourcePage = item.to + pageOffset;
+  const sourcePage = getPhysicalPageNumber(item.to, pageOffset, pageMappingMode);
   const exportedPage = pageMap.get(sourcePage);
   if (!exportedPage) return null;
 
   const children = (item.children || [])
-    .map((child) => buildOutlineTreeForExport(child, pageMap, pageOffset))
+    .map((child) => buildOutlineTreeForExport(child, pageMap, pageOffset, pageMappingMode))
     .filter(Boolean) as TocItem[];
 
   return {

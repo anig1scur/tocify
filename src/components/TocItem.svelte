@@ -12,6 +12,7 @@
   } from 'svelte-dnd-action';
   import {flip} from 'svelte/animate';
   import type {TocItem} from '$lib/pdf/service';
+  import { getPreviewTargetPage, type PageMappingMode } from '$lib/pdf/page-mapping';
 
   export let item: TocItem;
   export let onUpdate: (item: TocItem, updates: Partial<TocItem>, skipHistory?: boolean) => void;
@@ -22,8 +23,10 @@
   export let selectedIds: Set<string> = new Set();
 
   export let currentPage = 1;
+  export let hoveredLogicalPage: number | null = null;
   export let isPreview = false;
   export let pageOffset = 0;
+  export let pageMappingMode: PageMappingMode = 'single';
   export let insertAtPage = 2;
   export let tocPageCount = 0;
 
@@ -32,6 +35,7 @@
 
   const dispatch = createEventDispatcher<{
     hoveritem: {to: number};
+    hoverend: void;
     jumpToPage: {to: number};
     showNavHint: void;
   }>();
@@ -42,9 +46,13 @@
   let isFocused = false;
   let isPageFocused = false;
 
+  function getShadowMarker(entry: TocItem) {
+    return (entry as TocItem & Record<string, unknown>)[SHADOW_ITEM_MARKER_PROPERTY_NAME];
+  }
+
   $: currentNumber = prefix ? `${prefix}.${index}` : `${index}`;
   $: isSelected = selectedIds.has(item.id);
-  $: isShadowItem = Boolean(item?.[SHADOW_ITEM_MARKER_PROPERTY_NAME]);
+  $: isShadowItem = Boolean(item && getShadowMarker(item));
   $: nestedChildren = item?.id === SHADOW_PLACEHOLDER_ITEM_ID ? [] : (item.children || []);
 
   $: if (item && !isFocused && item.title !== editTitle) {
@@ -55,11 +63,17 @@
     editPage = item.to;
   }
 
-  $: physicalContentPage = item.to + pageOffset;
-  $: targetPageInPreview =
-    physicalContentPage >= insertAtPage ? physicalContentPage + tocPageCount : physicalContentPage;
+  $: targetPageInPreview = getPreviewTargetPage(item.to, {
+    pageOffset,
+    pageMappingMode,
+    addPhysicalTocPage: true,
+    tocPageCount,
+    insertAtPage,
+  });
 
-  $: isActive = isPreview && currentPage === targetPageInPreview;
+  $: isActive = isPreview && (
+    hoveredLogicalPage !== null ? hoveredLogicalPage === item.to : currentPage === targetPageInPreview
+  );
 
   function handleToggle() {
     item.open = !item.open;
@@ -123,6 +137,10 @@
     if (item) {
       dispatch('hoveritem', {to: item.to});
     }
+  }
+
+  function handleMouseLeave() {
+    dispatch('hoverend');
   }
 
   function handleDndConsider(e: CustomEvent<{items: TocItem[]}>) {
@@ -202,6 +220,7 @@
       class:bg-amber-50={isSelected && !isActive}
       data-is-dnd-shadow-item-hint={isShadowItem}
       on:mouseenter={handleMouseEnter}
+      on:mouseleave={handleMouseLeave}
       on:mousedown={handleRowMouseDown}
       on:click={handleRowClick}
     >
@@ -304,7 +323,7 @@
         on:consider={handleDndConsider}
         on:finalize={handleDndFinalize}
       >
-        {#each nestedChildren as child, i (`${child.id}${child[SHADOW_ITEM_MARKER_PROPERTY_NAME] ? `_${child[SHADOW_ITEM_MARKER_PROPERTY_NAME]}` : ''}`)}
+        {#each nestedChildren as child, i (`${child.id}${getShadowMarker(child) ? `_${getShadowMarker(child)}` : ''}`)}
           <div animate:flip={{duration: flipDurationMs}}>
             <Self
               prefix={currentNumber}
@@ -318,12 +337,14 @@
               {onSelect}
               {selectedIds}
               {currentPage}
+              {hoveredLogicalPage}
               {isPreview}
               {pageOffset}
               {insertAtPage}
               {tocPageCount}
               on:showNavHint
               on:hoveritem
+              on:hoverend
               on:jumpToPage={(e: CustomEvent<{to: number}>) => dispatch('jumpToPage', e.detail)}
             />
           </div>

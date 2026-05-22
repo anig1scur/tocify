@@ -6,6 +6,11 @@ import type {PDFDocument, PDFRef} from 'pdf-lib';
 // external dependency will make failure in the standalone binary.
 // @see https://github.com/marp-team/marp-cli/issues/373
 import {PDFHexString, PDFName, PDFString} from 'pdf-lib';
+import {
+  DEFAULT_PAGE_MAPPING_MODE,
+  getPageJumpTarget,
+  type PageMappingMode,
+} from './page-mapping';
 
 // --- Outline ---
 
@@ -61,10 +66,11 @@ const getOpeningCount = (outlines: readonly PDFOutline[]) => {
 export const setOutline = async (
     doc: PDFDocument, 
     outlines: readonly PDFOutline[],
-    options?: { pageOffset?: number; tocPageCount?: number }
+    options?: { pageOffset?: number; tocPageCount?: number; pageMappingMode?: PageMappingMode }
     ) => {
   const pageNumberingOffset = options?.pageOffset || 0;
   const addedPagesCount = options?.tocPageCount || 0;
+  const pageMappingMode = options?.pageMappingMode || DEFAULT_PAGE_MAPPING_MODE;
   const rootRef = doc.context.nextRef();
   const refMap = new WeakMap<PDFOutline, PDFRef>();
 
@@ -84,17 +90,11 @@ export const setOutline = async (
     return refs;
   })();
 
-  const getFinalPageIndex = (labeledPageNum: number): number => {
-    // 1. Start with the labeled page number (e.g., "1" from the ToC)
-    // 2. Add the user-confirmed offset (e.g., physical page 5 is labeled "1" ->
-    // offset is 4)
-    // 3. Add the number of new physical ToC pages we inserted at the front
-    const finalPageNum = labeledPageNum + pageNumberingOffset + addedPagesCount;
-
-    // Convert 1-based page number to 0-based index
+  const getFinalJumpTarget = (labeledPageNum: number) => {
+    const mappedTarget = getPageJumpTarget(labeledPageNum, pageNumberingOffset, pageMappingMode);
+    const finalPageNum = mappedTarget.pageNumber + addedPagesCount;
     const finalIndex = Math.max(0, finalPageNum - 1);
 
-    // Clamp the index to be within the valid range of the document's pages
     return Math.min(finalIndex, pageRefs.length - 1);
   };
 
@@ -110,10 +110,10 @@ export const setOutline = async (
           return { A: { S: PDFName.of('URI'), URI: PDFHexString.fromText(outline.to) } };
         } else if (typeof outline.to === 'number' || (typeof outline.to === 'string' && !isNaN(Number(outline.to)))) {
           const pageNum = typeof outline.to === 'number' ? outline.to : Number(outline.to);
-          const finalIndex = getFinalPageIndex(pageNum);
+          const finalIndex = getFinalJumpTarget(pageNum);
           return { Dest: [pageRefs[finalIndex], PDFName.of('Fit')] };
         } else if (Array.isArray(outline.to)) {
-          const finalIndex = getFinalPageIndex(outline.to[0]);
+          const finalIndex = getFinalJumpTarget(outline.to[0]);
           const page = doc.getPage(finalIndex);  // Use correct index
           const width = page.getWidth();
           const height = page.getHeight();

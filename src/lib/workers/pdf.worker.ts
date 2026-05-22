@@ -16,6 +16,7 @@ import { isLegacyBrowser } from '$lib/utils';
 import { TOC_LAYOUT, CJK_REGEX, A4_WIDTH, A4_HEIGHT } from '../constants';
 import { setOutline } from '../pdf/outliner';
 import { formatPageLabel } from '../pdf/page-labels';
+import { getPageJumpTarget } from '../pdf/page-mapping';
 
 const workerFileName = isLegacyBrowser() ? '/pdf.worker.legacy.min.mjs' : '/pdf.worker.min.mjs';
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerFileName;
@@ -232,7 +233,11 @@ async function generatePdf(items: any[], config: any, previewOnly = false, pageS
   applyLinkAnnotations(doc, pendingAnnots, { insertionStartIndex, tocPageCount });
 
   // Set Outline
-  await setOutline(doc, items, { pageOffset: config.pageOffset, tocPageCount });
+  await setOutline(doc, items, {
+    pageOffset: config.pageOffset,
+    tocPageCount,
+    pageMappingMode: config.pageMappingMode,
+  });
 
   const tocDoc = await PDFDocument.create();
   const indices = previewOnly
@@ -328,7 +333,11 @@ async function drawTocItems(
     // Page Number
     let pageNumText = String(item.to);
     if (config.pageLabelSettings?.enabled) {
-      const originalTargetIndex = item.to + (config.pageOffset ?? 0) - 1;
+      const originalTargetIndex = getPageJumpTarget(
+        item.to,
+        config.pageOffset ?? 0,
+        config.pageMappingMode,
+      ).pageNumber - 1;
       pageNumText = formatPageLabel(originalTargetIndex, config.pageLabelSettings);
     }
     
@@ -385,7 +394,11 @@ async function drawTocItems(
     pendingAnnots.push({
       tocPage: currentWorkingPage,
       rect: annotRect,
-      targetPageNum: item.to + (config.pageOffset ?? 0),
+      targetPageNum: getPageJumpTarget(
+        item.to,
+        config.pageOffset ?? 0,
+        config.pageMappingMode,
+      ).pageNumber,
     });
 
     yOffset -= lineHeight;

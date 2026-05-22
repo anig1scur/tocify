@@ -2,6 +2,7 @@ import {browser} from '$app/environment';
 import { PDFService } from '$lib/pdf/service';
 import { type LevelConfig, DEFAULT_PREFIX_CONFIG } from '$lib/utils/prefix';
 import { type PageLabelSettings, createDefaultPageLabelSettings } from '$lib/pdf/page-labels';
+import { DEFAULT_PAGE_MAPPING_MODE, type PageMappingMode } from '$lib/pdf/page-mapping';
 import {get, writable} from 'svelte/store';
 
 export type StyleConfig = {
@@ -13,11 +14,12 @@ export type TocConfig = {
   otherLevels: StyleConfig;
   prefixSettings: {enabled: boolean; configs: LevelConfig[];};
   pageLabelSettings: PageLabelSettings;
+  pageMappingMode: PageMappingMode;
   fontFamily?: 'hei' | 'song' | 'huiwen';
 };
 
 type TocSession = {
-  items: any[]; pageOffset: number; updatedAt?: number;
+  items: any[]; pageOffset: number; pageMappingMode?: PageMappingMode; updatedAt?: number;
 };
 
 export const maxPage = writable(0);
@@ -33,6 +35,7 @@ export const tocConfig = writable<TocConfig>({
     configs: DEFAULT_PREFIX_CONFIG,
   },
   pageLabelSettings: createDefaultPageLabelSettings(),
+  pageMappingMode: DEFAULT_PAGE_MAPPING_MODE,
   fontFamily: 'huiwen',
   pageOffset: 0,
   insertAtPage: 2,
@@ -68,6 +71,7 @@ if (browser) {
           const session: TocSession = {
             items,
             pageOffset: config.pageOffset,
+            pageMappingMode: config.pageMappingMode,
             updatedAt: Date.now(),
           };
           try {

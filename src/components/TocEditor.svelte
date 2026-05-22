@@ -18,14 +18,17 @@
   import Tooltip from './Tooltip.svelte';
   import {tocItems, maxPage, autoSaveEnabled, dragDisabled, curFileFingerprint} from '../stores';
   import type {TocItem as TocEntry} from '$lib/pdf/service';
+  import type { PageMappingMode } from '$lib/pdf/page-mapping';
 
   import {dndzone, SHADOW_ITEM_MARKER_PROPERTY_NAME} from 'svelte-dnd-action';
   import {flip} from 'svelte/animate';
   import {fly} from 'svelte/transition';
 
   export let currentPage = 1;
+  export let hoveredLogicalPage: number | null = null;
   export let isPreview = false;
   export let pageOffset = 0;
+  export let pageMappingMode: PageMappingMode = 'single';
   export let insertAtPage = 2;
   export let tocPageCount = 0;
 
@@ -898,13 +901,16 @@
               onDragEnd={handleDragEnd}
               onSelect={handleSelectItem}
               {currentPage}
+              {hoveredLogicalPage}
               {isPreview}
               {pageOffset}
+              {pageMappingMode}
               {insertAtPage}
               {tocPageCount}
               {selectedIds}
               on:showNavHint={handleShowNavHint}
               on:hoveritem
+              on:hoverend
               on:jumpToPage={(e) => {
                 dispatch('jumpToPage', e.detail);
               }}

@@ -28,6 +28,13 @@
   import {generateToc, ERROR_NEEDS_API_KEY} from '$lib/toc-service';
   import {applyCustomPrefix} from '$lib/utils/prefix';
   import {setPageLabels} from '$lib/pdf/page-labels';
+  import {
+    getLogicalPageForPhysicalTarget,
+    getPageOffsetForTarget,
+    getPhysicalPageNumber,
+    getPreviewTargetPage,
+    normalizePageMappingMode,
+  } from '$lib/pdf/page-mapping';
   import {createEmptyApiConfig} from '$lib/llm/core';
   import type {RecognitionIgnoreRegion} from '$lib/pdf/recognition-ignore';
 
@@ -106,6 +113,7 @@
   let tocRanges = [{start: 1, end: 1, id: 'default'}];
   let tocSelectionPageNumbers: number[] = [];
   let recognitionIgnoreRegions: RecognitionIgnoreRegion[] = [];
+  let hoveredLogicalPage: number | null = null;
   let activeRangeIndex = 0;
   let tocPageCount = 0;
   let isPreviewMode = false;
@@ -276,15 +284,19 @@
   $: currentTocPath = findActiveTocPath(
     $tocItems,
     pdfState.currentPage,
-    $tocConfig.pageOffset || 0,
-    addPhysicalTocPage,
-    tocPageCount,
-    config.insertAtPage,
+    {
+      pageOffset: $tocConfig.pageOffset || 0,
+      pageMappingMode: $tocConfig.pageMappingMode,
+      addPhysicalTocPage,
+      tocPageCount,
+      insertAtPage: config.insertAtPage,
+    },
   );
 
   $: chapterExportItems = buildChapterExportItems(
     $tocItems,
     $tocConfig.pageOffset || 0,
+    $tocConfig.pageMappingMode,
     originalPdfInstance?.numPages || 0,
     get(t)('chapter_export.untitled'),
   );
@@ -467,7 +479,11 @@
         tocPageCount = 0;
       }
 
-      setOutline(newDoc!, tocItems_, { pageOffset: config.pageOffset, tocPageCount });
+      setOutline(newDoc!, tocItems_, {
+        pageOffset: config.pageOffset,
+        tocPageCount,
+        pageMappingMode: config.pageMappingMode,
+      });
       setPageLabels(newDoc!, config.pageLabelSettings, { tocPageCount, insertAtPage: config.insertAtPage || 2 });
 
       if (isFull) {
@@ -577,14 +593,14 @@
       const containerHeight = canvas.parentElement?.clientHeight || 0;
       const containerWidth = canvas.parentElement?.clientWidth || 0;
 
-      if (containerHeight === 0) {
+      if (containerHeight === 0 || containerWidth === 0) {
         setTimeout(() => renderOffsetPreviewPage(pageNum), 50);
         return;
       }
 
-      const aspectRatio = bitmap.width / bitmap.height;
-      const displayHeight = containerHeight;
-      const displayWidth = displayHeight * aspectRatio;
+      const scale = Math.min(containerWidth / bitmap.width, containerHeight / bitmap.height);
+      const displayWidth = bitmap.width * scale;
+      const displayHeight = bitmap.height * scale;
 
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
       canvas.width = Math.floor(displayWidth * dpr);
@@ -592,6 +608,7 @@
       canvas.style.width = `${Math.floor(displayWidth)}px`;
       canvas.style.height = `${Math.floor(displayHeight)}px`;
 
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
     }
   };
@@ -693,9 +710,10 @@
       const session = localStorage.getItem(`toc_draft_${fingerprint}`);
 
       if (session) {
-        const {items, pageOffset} = JSON.parse(session);
+        const {items, pageOffset, pageMappingMode} = JSON.parse(session);
         tocItems.set(cleanTocItems(items));
         updateTocField('pageOffset', pageOffset);
+        updateTocField('pageMappingMode', normalizePageMappingMode(pageMappingMode));
       } else {
         try {
           const existingOutline = await originalPdfInstance.getOutline();
@@ -704,16 +722,19 @@
             const importedItems = await convertPdfJsOutlineToTocItems(existingOutline, originalPdfInstance);
             tocItems.set(importedItems);
             updateTocField('pageOffset', 0);
+            updateTocField('pageMappingMode', 'single');
 
             toastProps = {show: true, message: $t('toast.raw_toc_imported'), type: 'info'};
           } else {
             tocItems.set([]);
             updateTocField('pageOffset', 0);
+            updateTocField('pageMappingMode', 'single');
           }
         } catch (err: any) {
           console.warn('PDF load outline error:', err);
           tocItems.set([]);
           updateTocField('pageOffset', 0);
+          updateTocField('pageMappingMode', 'single');
         }
       }
 
@@ -828,7 +849,14 @@
         const mergedOutline = selectedRootChapters
           .map((chapter) => findTocItemById($tocItems, chapter.id))
           .filter(Boolean)
-          .map((item) => buildOutlineTreeForExport(item as TocItem, pageMap, $tocConfig.pageOffset || 0))
+          .map((item) =>
+            buildOutlineTreeForExport(
+              item as TocItem,
+              pageMap,
+              $tocConfig.pageOffset || 0,
+              $tocConfig.pageMappingMode,
+            )
+          )
           .filter(Boolean) as TocItem[];
 
         if (mergedOutline.length > 0) {
@@ -855,7 +883,12 @@
           ]);
           const chapterItem = findTocItemById($tocItems, chapter.id);
           const chapterOutline = chapterItem
-            ? buildOutlineTreeForExport(chapterItem, pageMap, $tocConfig.pageOffset || 0)
+            ? buildOutlineTreeForExport(
+              chapterItem,
+              pageMap,
+              $tocConfig.pageOffset || 0,
+              $tocConfig.pageMappingMode,
+            )
             : null;
 
           if (chapterOutline) {
@@ -964,22 +997,28 @@
     if (!firstTocItem) return;
     const labeledPage = firstTocItem.to;
     const physicalPage = offsetPreviewPageNum;
-    const offset = physicalPage - labeledPage;
+    const offset = getPageOffsetForTarget(labeledPage, physicalPage, config.pageMappingMode);
     updateTocField('pageOffset', offset);
 
     const hasChinese = pendingTocItems.some((item) => /[\u4e00-\u9fa5]/.test(item.title));
     const rootTitle = hasChinese ? '目录' : 'Contents';
-    const firstTitleNormalized = pendingTocItems[0]?.title?.trim().toLowerCase();
+    const firstTitleNormalized = (pendingTocItems[0]?.title || '')
+      .trim()
+      .toLowerCase()
+      .replace(/[\s._:;!?()\[\]{}-]+/g, ' ')
+      .trim();
     const isDuplicate =
       firstTitleNormalized === '目录' ||
+      firstTitleNormalized === 'content' ||
       firstTitleNormalized === 'contents' ||
+      firstTitleNormalized === 'table of content' ||
       firstTitleNormalized === 'table of contents';
 
     if (!isDuplicate) {
       const rootNode: TocItem = {
         id: `root-${Date.now()}`,
         title: rootTitle,
-        to: (tocRanges[0]?.start || 1) - offset,
+        to: getLogicalPageForPhysicalTarget(tocRanges[0]?.start || 1, offset, config.pageMappingMode),
         children: [],
         open: true,
       };
@@ -1024,13 +1063,19 @@
   const handleTocItemHover = (e: CustomEvent) => {
     if (!isPreviewMode) return;
     const logicalPage = e.detail.to as number;
-    const physicalContentPage = logicalPage + config.pageOffset;
-    if (physicalContentPage >= (config.insertAtPage || 2)) {
-      prefetchPageNum = physicalContentPage + tocPageCount;
-    } else {
-      prefetchPageNum = physicalContentPage;
-    }
+    hoveredLogicalPage = logicalPage;
+    prefetchPageNum = getPreviewTargetPage(logicalPage, {
+      pageOffset: config.pageOffset,
+      pageMappingMode: config.pageMappingMode,
+      addPhysicalTocPage: true,
+      tocPageCount,
+      insertAtPage: config.insertAtPage || 2,
+    });
     debouncedJumpToPage(prefetchPageNum);
+  };
+
+  const handleTocItemHoverEnd = () => {
+    hoveredLogicalPage = null;
   };
 
   const handleUpdateActiveRange = (e: CustomEvent) => {
@@ -1087,13 +1132,13 @@
     if (!isPreviewMode) {
       await togglePreviewMode();
     }
-    const physicalContentPage = logicalPage + config.pageOffset;
-    let targetPage: number;
-    if (physicalContentPage >= (config.insertAtPage || 2)) {
-      targetPage = physicalContentPage + tocPageCount;
-    } else {
-      targetPage = physicalContentPage;
-    }
+    const targetPage = getPreviewTargetPage(logicalPage, {
+      pageOffset: config.pageOffset,
+      pageMappingMode: config.pageMappingMode,
+      addPhysicalTocPage: true,
+      tocPageCount,
+      insertAtPage: config.insertAtPage || 2,
+    });
     debouncedJumpToPage(targetPage);
   };
 
@@ -1217,6 +1262,7 @@
       {customApiConfig}
       {tocPageCount}
       {isPreviewMode}
+      {hoveredLogicalPage}
       bind:tocRanges
       bind:activeRangeIndex
       bind:addPhysicalTocPage
@@ -1228,7 +1274,9 @@
       on:updateField={(e) => updateTocField(e.detail.path, e.detail.value)}
       on:jumpToTocPage={jumpToTocPage}
       on:jumpToPage={(e) => {
-        let physicalTarget = e.detail.page !== undefined ? e.detail.page : (e.detail.to + config.pageOffset);
+        let physicalTarget = e.detail.page !== undefined
+          ? e.detail.page
+          : getPhysicalPageNumber(e.detail.to, config.pageOffset, config.pageMappingMode);
         let finalPage = physicalTarget;
         if (isPreviewMode) {
            if (physicalTarget >= (config.insertAtPage || 2)) {
@@ -1239,6 +1287,7 @@
       }}
       on:generateAi={generateTocFromAI}
       on:hoveritem={handleTocItemHover}
+      on:hoverend={handleTocItemHoverEnd}
       on:fileselect={(e) => loadPdfFile(e.detail)}
       on:viewerMessage={handleViewerMessage}
       on:togglePreview={togglePreviewMode}

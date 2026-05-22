@@ -1,32 +1,45 @@
 import type {TocItem} from '../pdf/service';
 import type * as PdfjsLibTypes from 'pdfjs-dist';
 import ShortUniqueId from 'short-unique-id';
+import {
+  DEFAULT_PAGE_MAPPING_MODE,
+  getPreviewTargetPage,
+  type PageMappingMode,
+} from '../pdf/page-mapping';
 
 export function findActiveTocPath(
   items: TocItem[],
   current: number,
-  pageOffset: number,
-  addPhysicalTocPage: boolean = false,
-  tocPageCount: number = 0,
-  insertAtPage: number = 2,
+  options?: {
+    pageOffset?: number;
+    pageMappingMode?: PageMappingMode;
+    addPhysicalTocPage?: boolean;
+    tocPageCount?: number;
+    insertAtPage?: number;
+  },
   currentPath: TocItem[] = []
 ): TocItem[] {
   let bestPath: TocItem[] = [];
+  const pageOffset = options?.pageOffset ?? 0;
+  const pageMappingMode = options?.pageMappingMode ?? DEFAULT_PAGE_MAPPING_MODE;
+  const addPhysicalTocPage = options?.addPhysicalTocPage ?? false;
+  const tocPageCount = options?.tocPageCount ?? 0;
+  const insertAtPage = options?.insertAtPage ?? 2;
 
   for (const item of items) {
-    let itemPage = item.to + pageOffset;
-    if (addPhysicalTocPage && itemPage >= insertAtPage) {
-      itemPage += tocPageCount;
-    }
+    const itemPage = getPreviewTargetPage(item.to, {
+      pageOffset,
+      pageMappingMode,
+      addPhysicalTocPage,
+      tocPageCount,
+      insertAtPage,
+    });
 
     if (itemPage <= current) {
       const childPath = findActiveTocPath(
         item.children || [],
         current,
-        pageOffset,
-        addPhysicalTocPage,
-        tocPageCount,
-        insertAtPage,
+        options,
         [...currentPath, item]
       );
 

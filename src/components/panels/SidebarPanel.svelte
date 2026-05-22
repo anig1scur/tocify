@@ -27,6 +27,7 @@
   export let customApiConfig: any;
   export let tocPageCount: number;
   export let isPreviewMode: boolean;
+  export let hoveredLogicalPage: number | null = null;
 
   const dispatch = createEventDispatcher();
   export let tocEditor: any = undefined;
@@ -128,12 +129,15 @@
   {#key $curFileFingerprint}
     <TocEditor
       on:hoveritem
+      on:hoverend
       on:jumpToPage={(e) => dispatch('jumpToPage', e.detail)}
       on:aiFormatResponse
       bind:this={tocEditor}
       currentPage={pdfState.currentPage}
+      {hoveredLogicalPage}
       isPreview={isPreviewMode}
       pageOffset={config.pageOffset}
+      pageMappingMode={config.pageMappingMode}
       insertAtPage={config.insertAtPage}
       apiConfig={customApiConfig}
       {tocPageCount}

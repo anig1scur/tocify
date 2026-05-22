@@ -355,6 +355,25 @@
           </div>
         {/if}
       </div>
+
+      <div class="border-gray-600 border-2 rounded-md my-2 p-2 w-full">
+        <div class="flex gap-2 items-center">
+          <label
+            class="whitespace-nowrap text-sm"
+            for="page_mapping_mode">{$t('settings.page_mapping_mode')}</label
+          >
+          <select
+            id="page_mapping_mode"
+            class="flex-1 min-w-0 border-2 border-gray-300 rounded px-1 py-1 focus:outline-none focus:bg-gray-50 transition-colors text-sm"
+            value={config.pageMappingMode}
+            on:change={(e) => updateField('pageMappingMode', (e.target as HTMLSelectElement).value)}
+          >
+            <option value="single">{$t('settings.page_mapping_single')}</option>
+            <option value="two_up_side_by_side_left_first">{$t('settings.page_mapping_two_up_side_by_side_left_first')}</option>
+            <option value="two_up_side_by_side_right_first">{$t('settings.page_mapping_two_up_side_by_side_right_first')}</option>
+          </select>
+        </div>
+      </div>
     </div>
   {/if}
 </div>
