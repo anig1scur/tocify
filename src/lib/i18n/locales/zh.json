@@ -23,6 +23,8 @@
     "custom_model_label": "自定义模型",
     "custom_text_model_label": "自定义文本模型",
     "custom_vision_model_label": "自定义视觉模型",
+    "vision_prompt_label": "目录结构补充说明",
+    "vision_prompt_placeholder": "补充说明目录页的结构特征，例如阅读顺序、双栏、竖排、从右到左等",
     "add_numbering": "添加编号",
     "style": "样式",
     "none": "无",
@@ -84,6 +86,8 @@
     "apply_offset_hint": "应用页码偏移",
     "offset_placeholder": "-3",
     "clear_selection": "清空",
+    "search_placeholder": "搜索目录...",
+    "clear_search": "清空搜索",
     "select_item": "选中目录项",
     "add_child": "添加子项",
     "delete_item": "删除目录项"

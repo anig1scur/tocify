@@ -19,7 +19,10 @@
   export let onDragStart: () => void = () => {};
   export let onDragEnd: () => void = () => {};
   export let onSelect: (item: TocItem, event: MouseEvent) => void = () => {};
+  export let onSelectionDragStart: (item: TocItem, event: MouseEvent) => void = () => {};
+  export let onSelectionDragEnter: (item: TocItem) => void = () => {};
   export let selectedIds: Set<string> = new Set();
+  export let searchQuery = '';
 
   export let currentPage = 1;
   export let isPreview = false;
@@ -41,10 +44,14 @@
   let editPage = item ? item.to : 1;
   let isFocused = false;
   let isPageFocused = false;
+  let suppressNextRowClick = false;
 
   $: currentNumber = prefix ? `${prefix}.${index}` : `${index}`;
   $: isSelected = selectedIds.has(item.id);
-  $: isShadowItem = Boolean(item?.[SHADOW_ITEM_MARKER_PROPERTY_NAME]);
+  $: normalizedSearchQuery = searchQuery.trim().toLowerCase();
+  $: shouldHighlightTitle = Boolean(normalizedSearchQuery && !isFocused);
+  $: highlightedTitleParts = getHighlightedParts(editTitle, normalizedSearchQuery);
+  $: isShadowItem = Boolean(getDndMarker(item));
   $: nestedChildren = item?.id === SHADOW_PLACEHOLDER_ITEM_ID ? [] : (item.children || []);
 
   $: if (item && !isFocused && item.title !== editTitle) {
@@ -175,13 +182,38 @@
   }
 
   function handleRowClick(event: MouseEvent) {
+    if (suppressNextRowClick) {
+      suppressNextRowClick = false;
+      return;
+    }
+
     if (isSelectionBlockedTarget(event.target)) return;
     onSelect(item, event);
   }
 
   function handleRowMouseDown(event: MouseEvent) {
     if (isSelectionBlockedTarget(event.target)) return;
+
+    if (event.shiftKey) {
+      event.preventDefault();
+      return;
+    }
+
     event.preventDefault();
+    suppressNextRowClick = true;
+    onSelectionDragStart(item, event);
+  }
+
+  function handleSelectionDotMouseDown(event: MouseEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (event.shiftKey) {
+      onSelect(item, event);
+      return;
+    }
+
+    onSelectionDragStart(item, event);
   }
 
   function handleShiftSelectFromInput(event: MouseEvent) {
@@ -189,6 +221,46 @@
     event.preventDefault();
     event.stopPropagation();
     onSelect(item, event);
+  }
+
+  function getDndMarker(tocItem: TocItem) {
+    return (tocItem as TocItem & Record<string, unknown>)[SHADOW_ITEM_MARKER_PROPERTY_NAME];
+  }
+
+  function getHighlightedParts(text: string, query: string) {
+    if (!query) return [{text, matched: false}];
+
+    const lowerText = text.toLowerCase();
+    const firstMatchIndex = lowerText.indexOf(query);
+
+    if (firstMatchIndex === -1) {
+      return [{text, matched: false}];
+    }
+
+    const contextLength = 16;
+    const start = Math.max(0, firstMatchIndex - contextLength);
+    const end = Math.min(text.length, firstMatchIndex + query.length + contextLength);
+    const displayText = `${start > 0 ? '...' : ''}${text.slice(start, end)}${end < text.length ? '...' : ''}`;
+    const lowerDisplayText = displayText.toLowerCase();
+    const parts: {text: string; matched: boolean}[] = [];
+    let cursor = 0;
+    let matchIndex = lowerDisplayText.indexOf(query);
+
+    while (matchIndex !== -1) {
+      if (matchIndex > cursor) {
+        parts.push({text: displayText.slice(cursor, matchIndex), matched: false});
+      }
+
+      parts.push({text: displayText.slice(matchIndex, matchIndex + query.length), matched: true});
+      cursor = matchIndex + query.length;
+      matchIndex = lowerDisplayText.indexOf(query, cursor);
+    }
+
+    if (cursor < displayText.length) {
+      parts.push({text: displayText.slice(cursor), matched: false});
+    }
+
+    return parts.length > 0 ? parts : [{text: displayText, matched: false}];
   }
 </script>
 
@@ -201,21 +273,15 @@
       class:border-amber-400={isSelected}
       class:bg-amber-50={isSelected && !isActive}
       data-is-dnd-shadow-item-hint={isShadowItem}
+      data-toc-item-id={item.id}
       on:mouseenter={handleMouseEnter}
+      on:mouseover={() => onSelectionDragEnter(item)}
       on:mousedown={handleRowMouseDown}
       on:click={handleRowClick}
     >
       <div
         class="flex items-center gap-1 flex-1 min-w-0 h-full"
       >
-        <button
-          type="button"
-          on:click|stopPropagation={(e) => onSelect(item, e)}
-          on:mousedown|preventDefault
-          class="w-3 h-3 rounded-full border-2 flex-shrink-0 transition-all duration-150 {isSelected ? 'bg-amber-400 border-amber-500 scale-100' : 'border-gray-400 scale-90 opacity-0 group-hover:opacity-60 hover:!opacity-100 hover:!scale-100 hover:!border-amber-400'}"
-          title={$t('toc.select_item')}
-          aria-label={$t('toc.select_item')}
-        ></button>
         <div
           data-drag-handle
           class="cursor-grab active:cursor-grabbing rounded-md p-0.5 transition-opacity opacity-100 md:opacity-0 md:group-hover:opacity-100 text-gray-400"
@@ -224,6 +290,14 @@
         >
           <GripVertical size={12} />
         </div>
+        <button
+          type="button"
+          on:click|stopPropagation
+          on:mousedown={handleSelectionDotMouseDown}
+          class="relative -left-0.5 w-3 h-3 rounded-full border-2 flex-shrink-0 transition-all duration-150 {isSelected ? 'bg-amber-400 border-amber-500 scale-100' : 'border-gray-400 scale-90 opacity-0 group-hover:opacity-60 hover:!opacity-100 hover:!scale-100 hover:!border-amber-400'}"
+          title={$t('toc.select_item')}
+          aria-label={$t('toc.select_item')}
+        ></button>
 
         <button
           on:click|stopPropagation={handleToggle}
@@ -244,20 +318,36 @@
           </span>
         {/if}
 
-        <input
-          type="text"
-          bind:value={editTitle}
-          on:mousedown={handleShiftSelectFromInput}
-          on:focus={handleTitleFocus}
-          on:blur={() => {
-            isFocused = false;
-            handleUpdateTitle();
-          }}
-          on:keydown={handleTitleKeydown}
-          on:keypress={(e) => e.key === 'Enter' && (e.target as HTMLElement).blur()}
-          placeholder={prefix === '' ? $t('toc.new_chapter_default') : ($t('toc.new_item_default') || 'New Item')}
-          class="toc-item-title border-2 border-black rounded px-2 py-1 text-sm myfocus focus:outline-none focus:ring-2 focus:ring-blue-500 flex-1 min-w-[100px] placeholder:text-gray-400"
-        />
+        <div class="relative flex-1 min-w-[100px]">
+          {#if shouldHighlightTitle}
+            <div
+              class="absolute inset-0 px-2 py-1 text-sm leading-6 truncate pointer-events-none"
+              aria-hidden="true"
+            >
+              {#each highlightedTitleParts as part}
+                {#if part.matched}
+                  <mark class="bg-yellow-300 text-black rounded-sm px-0.5">{part.text}</mark>
+                {:else}
+                  <span>{part.text}</span>
+                {/if}
+              {/each}
+            </div>
+          {/if}
+          <input
+            type="text"
+            bind:value={editTitle}
+            on:mousedown={handleShiftSelectFromInput}
+            on:focus={handleTitleFocus}
+            on:blur={() => {
+              isFocused = false;
+              handleUpdateTitle();
+            }}
+            on:keydown={handleTitleKeydown}
+            on:keypress={(e) => e.key === 'Enter' && (e.target as HTMLElement).blur()}
+            placeholder={prefix === '' ? $t('toc.new_chapter_default') : ($t('toc.new_item_default') || 'New Item')}
+            class="toc-item-title relative w-full bg-transparent border-2 border-black rounded px-2 py-1 text-sm myfocus focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-gray-400 {shouldHighlightTitle ? 'text-transparent caret-black' : ''}"
+          />
+        </div>
       </div>
 
       <input
@@ -298,13 +388,13 @@
         use:dndzone={{
           items: nestedChildren,
           flipDurationMs,
-          dragDisabled: $dragDisabled,
+          dragDisabled: $dragDisabled || Boolean(normalizedSearchQuery),
           dropTargetStyle: nestedChildren.length > 0 ? {outline: '2px dashed #000', borderRadius: '4px'} : {},
         }}
         on:consider={handleDndConsider}
         on:finalize={handleDndFinalize}
       >
-        {#each nestedChildren as child, i (`${child.id}${child[SHADOW_ITEM_MARKER_PROPERTY_NAME] ? `_${child[SHADOW_ITEM_MARKER_PROPERTY_NAME]}` : ''}`)}
+        {#each nestedChildren as child, i (`${child.id}${getDndMarker(child) ? `_${getDndMarker(child)}` : ''}`)}
           <div animate:flip={{duration: flipDurationMs}}>
             <Self
               prefix={currentNumber}
@@ -316,7 +406,10 @@
               {onDragStart}
               {onDragEnd}
               {onSelect}
+              {onSelectionDragStart}
+              {onSelectionDragEnter}
               {selectedIds}
+              {searchQuery}
               {currentPage}
               {isPreview}
               {pageOffset}

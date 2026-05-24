@@ -11,6 +11,7 @@
     ArrowDown,
     Hash,
     X,
+    Search,
   } from 'lucide-svelte';
   import {t} from 'svelte-i18n';
   import {processTocDirect} from '$lib/llm/client';
@@ -47,6 +48,10 @@
   let showBatchOffsetEditor = false;
   let selectedIds = new Set<string>();
   let selectionAnchorId: string | null = null;
+  let isSelectionDragging = false;
+  let selectionDragAnchorId: string | null = null;
+  let selectionDragMode: 'add' | 'remove' = 'add';
+  let tocSearchQuery = '';
 
   let historyStack: TocEntry[][] = [];
   let futureStack: TocEntry[][] = [];
@@ -345,7 +350,31 @@
     return ancestorIds;
   }
 
+  function selectRange(anchorId: string, targetId: string, mode: 'add' | 'remove' = 'add') {
+    const flatItems = flattenTocItems($tocItems);
+    const indexMap = getFlatIndexMap(flatItems);
+    const anchorIndex = indexMap.get(anchorId);
+    const targetIndex = indexMap.get(targetId);
+
+    if (anchorIndex === undefined || targetIndex === undefined) return;
+
+    const start = Math.min(anchorIndex, targetIndex);
+    const end = Math.max(anchorIndex, targetIndex);
+    const nextSelection = new Set(selectedIds);
+    flatItems.slice(start, end + 1).forEach((flatItem) => {
+      if (mode === 'remove') {
+        nextSelection.delete(flatItem.id);
+      } else {
+        nextSelection.add(flatItem.id);
+      }
+    });
+    selectedIds = nextSelection;
+    selectionAnchorId = anchorId;
+  }
+
   function handleSelectItem(item: TocEntry, event: MouseEvent) {
+    window.getSelection()?.removeAllRanges();
+
     const flatItems = flattenTocItems($tocItems);
     const indexMap = getFlatIndexMap(flatItems);
     const clickedIndex = indexMap.get(item.id);
@@ -355,15 +384,7 @@
     if (event.shiftKey) {
       const anchorId =
         selectionAnchorId && indexMap.has(selectionAnchorId) ? selectionAnchorId : item.id;
-      const anchorIndex = indexMap.get(anchorId) ?? clickedIndex;
-      const start = Math.min(anchorIndex, clickedIndex);
-      const end = Math.max(anchorIndex, clickedIndex);
-      const rangeIds = flatItems.slice(start, end + 1).map((flatItem) => flatItem.id);
-      const nextSelection = new Set(selectedIds);
-
-      rangeIds.forEach((id) => nextSelection.add(id));
-      selectedIds = nextSelection;
-      selectionAnchorId = anchorId;
+      selectRange(anchorId, item.id, selectedIds.has(item.id) ? 'remove' : 'add');
       return;
     }
 
@@ -375,6 +396,34 @@
     }
     selectedIds = nextSelection;
     selectionAnchorId = item.id;
+  }
+
+  function handleSelectionDragStart(item: TocEntry, event: MouseEvent) {
+    isSelectionDragging = true;
+    selectionDragAnchorId = item.id;
+    selectionAnchorId = item.id;
+    selectionDragMode = selectedIds.has(item.id) ? 'remove' : 'add';
+
+    selectRange(item.id, item.id, selectionDragMode);
+
+    window.getSelection()?.removeAllRanges();
+  }
+
+  function handleSelectionDragEnter(item: TocEntry) {
+    if (!isSelectionDragging || !selectionDragAnchorId) return;
+    selectRange(selectionDragAnchorId, item.id, selectionDragMode);
+  }
+
+  function handleSelectionDragMove(event: MouseEvent) {
+    if (!isSelectionDragging || !selectionDragAnchorId) return;
+
+    const element = document
+      .elementFromPoint(event.clientX, event.clientY)
+      ?.closest<HTMLElement>('[data-toc-item-id]');
+    const itemId = element?.dataset.tocItemId;
+
+    if (!itemId) return;
+    selectRange(selectionDragAnchorId, itemId, selectionDragMode);
   }
 
   function adjustSelectedPageOffset(delta: number) {
@@ -587,6 +636,8 @@
 
   function handleMouseUp() {
     $dragDisabled = true;
+    isSelectionDragging = false;
+    selectionDragAnchorId = null;
   }
 
   function handleDndConsider(e: CustomEvent<{items: TocEntry[]}>) {
@@ -671,6 +722,42 @@
   const expandAll = () => toggleAll(true);
   const collapseAll = () => toggleAll(false);
 
+  $: flatTocItems = flattenTocItems($tocItems);
+  $: tocMaxLevel = flatTocItems.reduce((max, item) => Math.max(max, item.level), 0);
+  $: showTocSearch = flatTocItems.length > 10 && tocMaxLevel >= 2;
+  $: normalizedTocSearch = tocSearchQuery.trim().toLowerCase();
+  $: searchMatchedIds = new Set(
+    normalizedTocSearch
+      ? flatTocItems
+          .filter((item) => `${item.title} ${item.to}`.toLowerCase().includes(normalizedTocSearch))
+          .map((item) => item.id)
+      : [],
+  );
+  $: searchOpenIds = normalizedTocSearch ? getAncestorIds(flatTocItems, searchMatchedIds) : new Set<string>();
+  $: displayedTocItems = normalizedTocSearch
+    ? filterTocItemsForSearch($tocItems, searchMatchedIds, searchOpenIds)
+    : $tocItems;
+
+  function filterTocItemsForSearch(
+    items: TocEntry[],
+    matchedIds: Set<string>,
+    ancestorIds: Set<string>,
+  ): TocEntry[] {
+    return items.flatMap((item) => {
+      if (!matchedIds.has(item.id) && !ancestorIds.has(item.id)) {
+        return [];
+      }
+
+      return [{
+        ...item,
+        open: ancestorIds.has(item.id) ? true : item.open,
+        children: item.children?.length
+          ? filterTocItemsForSearch(item.children, matchedIds, ancestorIds)
+          : [],
+      }];
+    });
+  }
+
   $: hasAnyExpanded = $tocItems.some((item: TocEntry) => item.open);
   $: selectedCount = selectedIds.size;
   $: if (selectedCount === 0) {
@@ -724,6 +811,7 @@
 
 <svelte:window
   on:keydown={handleKeydown}
+  on:mousemove={handleSelectionDragMove}
   on:mouseup={handleMouseUp}
   on:touchend={handleMouseUp}
   bind:innerWidth
@@ -795,72 +883,96 @@
         {/if}
       </div>
 
-      {#if selectedCount >= 1}
+      {#if selectedCount >= 1 || showTocSearch}
         <div class="sticky top-12 z-30 mb-3 ml-12 pointer-events-none">
-          <div class="pointer-events-auto flex flex-wrap items-center gap-2 bg-white/35 backdrop-blur-sm border-2 border-black/95 rounded-lg px-3 py-2">
-            <span class="text-xs font-semibold text-gray-700">
-              {$t('toc.batch_operations')} {$t('toc.selected_count', {values: {count: selectedCount}})}
-            </span>
-            <button
-              on:click={clearSelection}
-              class="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold border-2 border-transparent rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
-              title={$t('toc.clear_selection')}
-            >
-              <X size={14} />
-              {$t('toc.clear_selection')}
-            </button>
-            <div class="flex items-center gap-2">
-              <button
-                on:click={() => adjustSelectedLevels(-1)}
-                title={$t('toc.promote_selected_hint')}
-                class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-blue-400 text-black border-2 border-black rounded-lg shadow-[1px_1px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
-              >
-                <ArrowUp size={14} />
-                {$t('toc.promote_selected')}
-              </button>
-              <button
-                on:click={() => adjustSelectedLevels(1)}
-                title={$t('toc.demote_selected_hint')}
-                class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-lime-400 text-black border-2 border-black rounded-lg shadow-[1px_1px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
-              >
-                <ArrowDown size={14} />
-                {$t('toc.demote_selected')}
-              </button>
-
-              {#if showBatchOffsetEditor}
-                <div class="flex items-center gap-2">
-                  <input
-                    type="number"
-                    bind:value={batchOffsetInput}
-                    placeholder={$t('toc.offset_placeholder')}
-                    on:keydown={(e) => e.key === 'Enter' && applyBatchOffset()}
-                    class="w-20 border-2 border-black rounded px-2 py-1.5 text-xs myfocus focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  <button
-                    on:click={applyBatchOffset}
-                    title={$t('toc.apply_offset_hint')}
-                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-yellow-400 text-black border-2 border-black rounded-lg shadow-[1px_1px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
-                  >
-                    <Hash size={14} />
-                    {$t('toc.apply_offset')}
-                  </button>
-                </div>
-              {:else}
+          <div class="pointer-events-auto flex flex-col gap-2">
+            {#if selectedCount >= 1}
+              <div class="flex flex-wrap items-center gap-2 bg-white/35 backdrop-blur-sm border-2 border-black/95 rounded-lg px-3 py-2">
+                <span class="text-xs font-semibold text-gray-700">
+                  {$t('toc.batch_operations')} {$t('toc.selected_count', {values: {count: selectedCount}})}
+                </span>
                 <button
-                  on:click={() => {
-                    showBatchOffsetEditor = true;
-                    batchOffsetInput = '';
-                  }}
-                  title={$t('toc.offset_selected_hint')}
-                  class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-yellow-400 text-black border-2 border-black rounded-lg shadow-[1px_1px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
+                  on:click={clearSelection}
+                  class="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold border-2 border-transparent rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+                  title={$t('toc.clear_selection')}
                 >
-                  <Hash size={14} />
-                  {$t('toc.offset_selected')}
+                  <X size={14} />
+                  {$t('toc.clear_selection')}
                 </button>
-              {/if}
+                <div class="flex items-center gap-2">
+                  <button
+                    on:click={() => adjustSelectedLevels(-1)}
+                    title={$t('toc.promote_selected_hint')}
+                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-blue-400 text-black border-2 border-black rounded-lg shadow-[1px_1px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
+                  >
+                    <ArrowUp size={14} />
+                    {$t('toc.promote_selected')}
+                  </button>
+                  <button
+                    on:click={() => adjustSelectedLevels(1)}
+                    title={$t('toc.demote_selected_hint')}
+                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-lime-400 text-black border-2 border-black rounded-lg shadow-[1px_1px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
+                  >
+                    <ArrowDown size={14} />
+                    {$t('toc.demote_selected')}
+                  </button>
 
-            </div>
+                  {#if showBatchOffsetEditor}
+                    <div class="flex items-center gap-2">
+                      <input
+                        type="number"
+                        bind:value={batchOffsetInput}
+                        placeholder={$t('toc.offset_placeholder')}
+                        on:keydown={(e) => e.key === 'Enter' && applyBatchOffset()}
+                        class="w-20 border-2 border-black rounded px-2 py-1.5 text-xs myfocus focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <button
+                        on:click={applyBatchOffset}
+                        title={$t('toc.apply_offset_hint')}
+                        class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-yellow-400 text-black border-2 border-black rounded-lg shadow-[1px_1px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
+                      >
+                        <Hash size={14} />
+                        {$t('toc.apply_offset')}
+                      </button>
+                    </div>
+                  {:else}
+                    <button
+                      on:click={() => {
+                        showBatchOffsetEditor = true;
+                        batchOffsetInput = '';
+                      }}
+                      title={$t('toc.offset_selected_hint')}
+                      class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-yellow-400 text-black border-2 border-black rounded-lg shadow-[1px_1px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
+                    >
+                      <Hash size={14} />
+                      {$t('toc.offset_selected')}
+                    </button>
+                  {/if}
+                </div>
+              </div>
+            {/if}
 
+            {#if showTocSearch}
+              <div class="bg-white/70 backdrop-blur-sm border-2 border-black rounded-lg px-2 py-1.5 flex items-center gap-2">
+                <Search size={15} class="text-gray-500 shrink-0" />
+                <input
+                  type="text"
+                  bind:value={tocSearchQuery}
+                  placeholder={$t('toc.search_placeholder') || 'Search ToC...'}
+                  class="min-w-0 flex-1 bg-transparent outline-none text-sm placeholder:text-gray-400"
+                />
+                {#if tocSearchQuery}
+                  <button
+                    type="button"
+                    on:click={() => (tocSearchQuery = '')}
+                    class="p-1 text-gray-500 hover:text-black"
+                    title={$t('toc.clear_search') || 'Clear search'}
+                  >
+                    <X size={14} />
+                  </button>
+                {/if}
+              </div>
+            {/if}
           </div>
         </div>
       {/if}
@@ -878,16 +990,16 @@
 
       <section
         use:dndzone={{
-          items: $tocItems,
+          items: displayedTocItems,
           flipDurationMs,
-          dragDisabled: $dragDisabled,
+          dragDisabled: $dragDisabled || Boolean(normalizedTocSearch),
           dropTargetStyle: {outline: '2px dashed #000', borderRadius: '8px'},
         }}
         on:consider={handleDndConsider}
         on:finalize={handleDndFinalize}
         class="min-h-[20px]"
       >
-        {#each $tocItems as item, i (`${item.id}${item[SHADOW_ITEM_MARKER_PROPERTY_NAME] ? `_${item[SHADOW_ITEM_MARKER_PROPERTY_NAME]}` : ''}`)}
+        {#each displayedTocItems as item, i (`${item.id}${item[SHADOW_ITEM_MARKER_PROPERTY_NAME] ? `_${item[SHADOW_ITEM_MARKER_PROPERTY_NAME]}` : ''}`)}
           <div animate:flip={{duration: flipDurationMs}}>
             <TocItem
               {item}
@@ -897,15 +1009,18 @@
               onDragStart={handleDragStart}
               onDragEnd={handleDragEnd}
               onSelect={handleSelectItem}
+              onSelectionDragStart={handleSelectionDragStart}
+              onSelectionDragEnter={handleSelectionDragEnter}
               {currentPage}
               {isPreview}
               {pageOffset}
               {insertAtPage}
               {tocPageCount}
               {selectedIds}
+              searchQuery={tocSearchQuery}
               on:showNavHint={handleShowNavHint}
               on:hoveritem
-              on:jumpToPage={(e) => {
+              on:jumpToPage={(e: CustomEvent<{to: number}>) => {
                 dispatch('jumpToPage', e.detail);
               }}
               index={i + 1}

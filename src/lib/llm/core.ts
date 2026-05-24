@@ -40,6 +40,7 @@ export interface DirectApiConfig {
   doubaoEndpointIdText?: string;
   doubaoEndpointIdVision?: string;
   modelOverrides?: ModelOverrides;
+  visionPrompt?: string;
 }
 
 export interface UiApiConfig extends DirectApiConfig {
@@ -48,6 +49,7 @@ export interface UiApiConfig extends DirectApiConfig {
   doubaoEndpointIdText: string;
   doubaoEndpointIdVision: string;
   modelOverrides: ModelOverrides;
+  visionPrompt: string;
 }
 
 export interface TocInputConfig extends DirectApiConfig {
@@ -194,6 +196,7 @@ export function createEmptyApiConfig(): UiApiConfig {
       zhipuTextModel: '',
       zhipuVisionModel: '',
     },
+    visionPrompt: '',
   };
 }
 
@@ -437,10 +440,14 @@ export async function processToc(config: TocInputConfig) {
     throw new Error('No images provided.');
   }
 
+  const visionPrompt = config.visionPrompt?.trim()
+    ? `${ SYSTEM_PROMPT_VISION }\n\nAdditional user instructions:\n${ config.visionPrompt.trim() }`
+    : SYSTEM_PROMPT_VISION;
+
   try {
     const jsonText = await requestVisionJson(
       config,
-      SYSTEM_PROMPT_VISION,
+      visionPrompt,
       'Analyze these Table of Contents images and return the single structured JSON.',
       config.images,
     );

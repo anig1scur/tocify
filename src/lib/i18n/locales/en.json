@@ -27,6 +27,8 @@
     "custom_model_label": "Custom Model",
     "custom_text_model_label": "Custom Text Model",
     "custom_vision_model_label": "Custom Vision Model",
+    "vision_prompt_label": "Vision Prompt",
+    "vision_prompt_placeholder": "Additional instructions for image recognition, such as reading order, two-column layout, or vertical text.",
     "add_numbering": "Add Numbering",
     "style": "Style",
     "none": "None",
@@ -88,6 +90,8 @@
     "apply_offset_hint": "Apply the page-number offset",
     "offset_placeholder": "-3",
     "clear_selection": "Clear",
+    "search_placeholder": "Search ToC...",
+    "clear_search": "Clear search",
     "select_item": "Select item",
     "add_child": "Add child",
     "delete_item": "Delete item"
