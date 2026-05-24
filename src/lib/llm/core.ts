@@ -34,6 +34,25 @@ export const KNOWN_PROVIDER_MODELS: Record<'gemini' | 'qwen' | 'zhipu', { text: 
   },
 } as const;
 
+export const DEFAULT_VISION_PROMPT_TEMPLATE = SYSTEM_PROMPT_VISION.trim();
+export const DEFAULT_VISION_PROMPT_TEMPLATE_ID = 'tocify-default';
+
+export interface VisionPromptTemplate {
+  id: string;
+  name: string;
+  prompt: string;
+  isDefault?: boolean;
+}
+
+export function createDefaultVisionPromptTemplate(): VisionPromptTemplate {
+  return {
+    id: DEFAULT_VISION_PROMPT_TEMPLATE_ID,
+    name: 'Tocify Default',
+    prompt: DEFAULT_VISION_PROMPT_TEMPLATE,
+    isDefault: true,
+  };
+}
+
 export interface DirectApiConfig {
   provider?: string;
   apiKey: string;
@@ -50,6 +69,8 @@ export interface UiApiConfig extends DirectApiConfig {
   doubaoEndpointIdVision: string;
   modelOverrides: ModelOverrides;
   visionPrompt: string;
+  visionPromptTemplateId: string;
+  visionPromptTemplates: VisionPromptTemplate[];
 }
 
 export interface TocInputConfig extends DirectApiConfig {
@@ -196,7 +217,9 @@ export function createEmptyApiConfig(): UiApiConfig {
       zhipuTextModel: '',
       zhipuVisionModel: '',
     },
-    visionPrompt: '',
+    visionPrompt: DEFAULT_VISION_PROMPT_TEMPLATE,
+    visionPromptTemplateId: DEFAULT_VISION_PROMPT_TEMPLATE_ID,
+    visionPromptTemplates: [createDefaultVisionPromptTemplate()],
   };
 }
 
@@ -440,9 +463,7 @@ export async function processToc(config: TocInputConfig) {
     throw new Error('No images provided.');
   }
 
-  const visionPrompt = config.visionPrompt?.trim()
-    ? `${ SYSTEM_PROMPT_VISION }\n\nAdditional user instructions:\n${ config.visionPrompt.trim() }`
-    : SYSTEM_PROMPT_VISION;
+  const visionPrompt = config.visionPrompt?.trim() || DEFAULT_VISION_PROMPT_TEMPLATE;
 
   try {
     const jsonText = await requestVisionJson(

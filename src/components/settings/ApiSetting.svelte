@@ -2,8 +2,17 @@
   import {createEventDispatcher, onMount} from 'svelte';
   import {slide} from 'svelte/transition';
   import {t} from 'svelte-i18n';
-  import {ExternalLink, Eye, EyeOff, KeyRound, Sparkles} from 'lucide-svelte';
-  import {KNOWN_PROVIDER_MODELS, createEmptyApiConfig, requiresUserApiKeyForModel, normalizeModelOverrides} from '$lib/llm/core';
+  import {ChevronDown, ExternalLink, Eye, EyeOff, KeyRound, Plus, RotateCcw, Trash2, Sparkles} from 'lucide-svelte';
+  import {
+    DEFAULT_VISION_PROMPT_TEMPLATE_ID,
+    DEFAULT_VISION_PROMPT_TEMPLATE,
+    KNOWN_PROVIDER_MODELS,
+    createEmptyApiConfig,
+    createDefaultVisionPromptTemplate,
+    requiresUserApiKeyForModel,
+    normalizeModelOverrides,
+    type VisionPromptTemplate,
+  } from '$lib/llm/core';
 
   export let isExpanded = false;
 
@@ -15,6 +24,8 @@
   let showApiKey = false;
   let showCustomModelNotice = false;
   let customModelNoticeVersion = 0;
+  let visionTemplateName = '';
+  let showVisionTemplateMenu = false;
   const providerLinks = {
     gemini: {
       label: 'Gemini',
@@ -34,22 +45,68 @@
     },
   };
 
-  function getEffectiveConfig() {
-    if (!config.provider) {
+  function createTemplateId() {
+    return `vision-template-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  }
+
+  function normalizeVisionPromptTemplates(parsed: any): {
+    templates: VisionPromptTemplate[];
+    activeId: string;
+    activePrompt: string;
+  } {
+    const defaultTemplate = createDefaultVisionPromptTemplate();
+    const rawTemplates = Array.isArray(parsed?.visionPromptTemplates)
+      ? parsed.visionPromptTemplates
+      : [];
+    const sanitizedTemplates = rawTemplates
+      .map((template: any) => ({
+        id: String(template?.id || createTemplateId()),
+        name: String(template?.name || $t('settings.vision_prompt_untitled')),
+        prompt: String(template?.prompt || ''),
+        isDefault: template?.id === DEFAULT_VISION_PROMPT_TEMPLATE_ID || Boolean(template?.isDefault),
+      }))
+      .filter((template: VisionPromptTemplate) => template.prompt.trim());
+
+    const customTemplates = sanitizedTemplates.filter(
+      (template: VisionPromptTemplate) => template.id !== DEFAULT_VISION_PROMPT_TEMPLATE_ID,
+    );
+    const templates = [defaultTemplate, ...customTemplates];
+    const parsedActiveId = String(parsed?.visionPromptTemplateId || DEFAULT_VISION_PROMPT_TEMPLATE_ID);
+    const activeTemplate = templates.find((template) => template.id === parsedActiveId);
+
+    if (activeTemplate) {
       return {
-        provider: '',
-        apiKey: '',
-        doubaoEndpointIdText: '',
-        doubaoEndpointIdVision: '',
-        modelOverrides: undefined,
-        visionPrompt: config.visionPrompt,
+        templates,
+        activeId: activeTemplate.id,
+        activePrompt: parsed?.visionPrompt || activeTemplate.prompt,
       };
     }
 
     return {
-      ...config,
-      modelOverrides: normalizeModelOverrides(config.modelOverrides),
+      templates,
+      activeId: DEFAULT_VISION_PROMPT_TEMPLATE_ID,
+      activePrompt: parsed?.visionPrompt || DEFAULT_VISION_PROMPT_TEMPLATE,
     };
+  }
+
+  function getEffectiveConfig() {
+    const effectiveConfig = {
+      provider: config.provider,
+      apiKey: config.apiKey,
+      doubaoEndpointIdText: config.doubaoEndpointIdText,
+      doubaoEndpointIdVision: config.doubaoEndpointIdVision,
+      modelOverrides: normalizeModelOverrides(config.modelOverrides),
+      visionPrompt: config.visionPrompt,
+    };
+
+    if (!config.provider) {
+      return {
+        ...effectiveConfig,
+        modelOverrides: undefined,
+      };
+    }
+
+    return effectiveConfig;
   }
 
   function getSingleModelValue(provider: string) {
@@ -96,6 +153,7 @@
     if (savedConfig) {
       try {
         const parsed = JSON.parse(savedConfig);
+        const {templates, activeId, activePrompt} = normalizeVisionPromptTemplates(parsed);
         config = {
           ...createEmptyApiConfig(),
           ...parsed,
@@ -103,12 +161,17 @@
             ...createEmptyApiConfig().modelOverrides,
             ...(parsed.modelOverrides || {}),
           },
-          visionPrompt: parsed.visionPrompt || '',
+          visionPrompt: activePrompt,
+          visionPromptTemplateId: activeId,
+          visionPromptTemplates: templates,
         };
+        syncVisionTemplateName();
         dispatch('change', getEffectiveConfig());
       } catch (e) {
         console.error('Failed to parse api config', e);
       }
+    } else {
+      syncVisionTemplateName();
     }
   });
 
@@ -144,6 +207,133 @@
       }
     }, 400);
   }
+
+  function resetVisionPromptTemplate() {
+    config = {
+      ...config,
+      visionPrompt: DEFAULT_VISION_PROMPT_TEMPLATE,
+      visionPromptTemplateId: DEFAULT_VISION_PROMPT_TEMPLATE_ID,
+      visionPromptTemplates: [
+        createDefaultVisionPromptTemplate(),
+        ...config.visionPromptTemplates.filter((template) => !template.isDefault),
+      ],
+    };
+    syncVisionTemplateName();
+    markDirty();
+  }
+
+  function syncActiveCustomTemplate() {
+    const activeTemplate = getActiveVisionTemplate();
+    if (!activeTemplate || activeTemplate.isDefault) return;
+
+    const name = visionTemplateName.trim() || activeTemplate.name;
+    config = {
+      ...config,
+      visionPromptTemplates: config.visionPromptTemplates.map((template) =>
+        template.id === activeTemplate.id
+          ? {...template, name, prompt: config.visionPrompt.trim() || DEFAULT_VISION_PROMPT_TEMPLATE}
+          : template,
+      ),
+    };
+    visionTemplateName = name;
+  }
+
+  function getActiveVisionTemplate() {
+    return config.visionPromptTemplates.find(
+      (template) => template.id === config.visionPromptTemplateId,
+    );
+  }
+
+  function syncVisionTemplateName() {
+    const activeTemplate = getActiveVisionTemplate();
+    visionTemplateName = activeTemplate ? getVisionTemplateDisplayName(activeTemplate) : '';
+  }
+
+  function getVisionTemplateDisplayName(template: VisionPromptTemplate) {
+    return template.isDefault ? $t('settings.vision_prompt_default_template') : template.name;
+  }
+
+  function selectVisionTemplate(template: VisionPromptTemplate) {
+    config = {
+      ...config,
+      visionPromptTemplateId: template.id,
+      visionPrompt: template.prompt,
+    };
+    syncVisionTemplateName();
+    showVisionTemplateMenu = false;
+    markDirty();
+  }
+
+  function handleVisionTemplateNameInput(event: Event) {
+    visionTemplateName = (event.currentTarget as HTMLInputElement).value;
+    showVisionTemplateMenu = false;
+    syncActiveCustomTemplate();
+    markDirty();
+  }
+
+  function handleVisionPromptInput() {
+    syncActiveCustomTemplate();
+    markDirty();
+  }
+
+  function createVisionPromptTemplate() {
+    const activeTemplate = getActiveVisionTemplate();
+    const currentName = visionTemplateName.trim();
+    const defaultName = $t('settings.vision_prompt_default_template');
+    const baseName =
+      !currentName || activeTemplate?.isDefault || currentName === defaultName
+        ? $t('settings.vision_prompt_untitled')
+        : currentName;
+    const name = getUniqueVisionTemplateName(baseName);
+    const template: VisionPromptTemplate = {
+      id: createTemplateId(),
+      name,
+      prompt: config.visionPrompt.trim() || DEFAULT_VISION_PROMPT_TEMPLATE,
+    };
+
+    config = {
+      ...config,
+      visionPromptTemplates: [...config.visionPromptTemplates, template],
+      visionPromptTemplateId: template.id,
+      visionPrompt: template.prompt,
+    };
+    visionTemplateName = template.name;
+    showVisionTemplateMenu = false;
+    markDirty();
+  }
+
+  function getUniqueVisionTemplateName(baseName: string) {
+    const existingNames = new Set(config.visionPromptTemplates.map((template) => template.name));
+    if (!existingNames.has(baseName)) return baseName;
+
+    let index = 2;
+    let nextName = `${baseName} ${index}`;
+    while (existingNames.has(nextName)) {
+      index += 1;
+      nextName = `${baseName} ${index}`;
+    }
+    return nextName;
+  }
+
+  function deleteActiveVisionPromptTemplate() {
+    const activeTemplate = getActiveVisionTemplate();
+    if (!activeTemplate || activeTemplate.isDefault) return;
+
+    config = {
+      ...config,
+      visionPromptTemplates: config.visionPromptTemplates.filter(
+        (template) => template.id !== activeTemplate.id,
+      ),
+      visionPromptTemplateId: DEFAULT_VISION_PROMPT_TEMPLATE_ID,
+      visionPrompt: DEFAULT_VISION_PROMPT_TEMPLATE,
+    };
+    syncVisionTemplateName();
+    showVisionTemplateMenu = false;
+    markDirty();
+  }
+
+  $: activeVisionTemplate = getActiveVisionTemplate();
+  $: canDeleteVisionTemplate = Boolean(activeVisionTemplate && !activeVisionTemplate.isDefault);
 
 </script>
 
@@ -394,15 +584,84 @@
         {/if}
 
         <div class="border-black border-2 rounded-md p-2 w-full">
-          <label
-            class="block font-bold mb-1 text-sm"
-            for="vision_prompt">{$t('settings.vision_prompt_label')}</label
-          >
+          <div class="mb-1 flex items-center justify-between gap-2">
+            <label
+              class="block font-bold text-sm"
+              for="vision_prompt">{$t('settings.vision_prompt_label')}</label
+            >
+            <button
+              type="button"
+              class="inline-flex h-7 w-7 items-center justify-center rounded text-gray-500 hover:bg-gray-100 hover:text-black"
+              on:click={resetVisionPromptTemplate}
+              aria-label={$t('settings.vision_prompt_reset')}
+              title={$t('settings.vision_prompt_reset')}
+            >
+              <RotateCcw size={13} />
+            </button>
+          </div>
+
+          <div class="mb-2">
+            <div class="flex items-center gap-1">
+              <div class="relative min-w-0 flex-1">
+                <input
+                  type="text"
+                  value={visionTemplateName}
+                  on:input={handleVisionTemplateNameInput}
+                  autocomplete="off"
+                  class="w-full border border-gray-300 rounded px-2 py-1 pr-8 text-sm outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-gray-400"
+                  placeholder={$t('settings.vision_prompt_template_name_placeholder')}
+                  aria-label={$t('settings.vision_prompt_template_select')}
+                />
+                <button
+                  type="button"
+                  class="absolute right-1 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded text-gray-500 hover:bg-gray-100 hover:text-black"
+                  on:click={() => (showVisionTemplateMenu = !showVisionTemplateMenu)}
+                  aria-label={$t('settings.vision_prompt_template_select')}
+                  title={$t('settings.vision_prompt_template_select')}
+                >
+                  <ChevronDown size={14} />
+                </button>
+
+                {#if showVisionTemplateMenu}
+                  <div class="absolute left-0 right-0 top-full z-50 mt-1 max-h-48 overflow-auto rounded-md border border-gray-300 bg-white shadow-lg">
+                    {#each config.visionPromptTemplates as template}
+                      <button
+                        type="button"
+                        class="block w-full truncate px-2 py-1.5 text-left text-sm hover:bg-gray-100 {template.id === config.visionPromptTemplateId ? 'bg-blue-50 font-semibold' : ''}"
+                        on:click={() => selectVisionTemplate(template)}
+                      >
+                        {getVisionTemplateDisplayName(template)}
+                      </button>
+                    {/each}
+                  </div>
+                {/if}
+              </div>
+              <button
+                type="button"
+                class="inline-flex h-8 w-8 items-center justify-center rounded border border-gray-300 bg-white hover:bg-gray-50"
+                on:click={createVisionPromptTemplate}
+                aria-label={$t('settings.vision_prompt_save_as_template')}
+                title={$t('settings.vision_prompt_save_as_template')}
+              >
+                <Plus size={14} />
+              </button>
+              <button
+                type="button"
+                class="inline-flex h-8 w-8 items-center justify-center rounded border border-gray-300 bg-white text-gray-500 hover:bg-gray-50 hover:text-black {canDeleteVisionTemplate ? '' : 'opacity-40'}"
+                on:click={deleteActiveVisionPromptTemplate}
+                aria-label={$t('settings.vision_prompt_delete_template')}
+                title={$t('settings.vision_prompt_delete_template')}
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+          </div>
+
           <textarea
             id="vision_prompt"
             bind:value={config.visionPrompt}
-            on:input={markDirty}
-            rows="4"
+            on:input={handleVisionPromptInput}
+            rows="10"
             class="w-full border border-gray-300 rounded px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-blue-500 resize-y placeholder:text-gray-400"
             placeholder={$t('settings.vision_prompt_placeholder')}
           ></textarea>
