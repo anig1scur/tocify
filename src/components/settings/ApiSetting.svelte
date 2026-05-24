@@ -42,6 +42,7 @@
         doubaoEndpointIdText: '',
         doubaoEndpointIdVision: '',
         modelOverrides: undefined,
+        visionPrompt: config.visionPrompt,
       };
     }
 
@@ -102,6 +103,7 @@
             ...createEmptyApiConfig().modelOverrides,
             ...(parsed.modelOverrides || {}),
           },
+          visionPrompt: parsed.visionPrompt || '',
         };
         dispatch('change', getEffectiveConfig());
       } catch (e) {
@@ -142,6 +144,7 @@
       }
     }, 400);
   }
+
 </script>
 
 <div class="border-black border-2 rounded-lg p-2 my-4 shadow-[2px_2px_0px_rgba(0,0,0,1)] bg-white">
@@ -389,6 +392,21 @@
             {/if}
           </div>
         {/if}
+
+        <div class="border-black border-2 rounded-md p-2 w-full">
+          <label
+            class="block font-bold mb-1 text-sm"
+            for="vision_prompt">{$t('settings.vision_prompt_label')}</label
+          >
+          <textarea
+            id="vision_prompt"
+            bind:value={config.visionPrompt}
+            on:input={markDirty}
+            rows="4"
+            class="w-full border border-gray-300 rounded px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-blue-500 resize-y placeholder:text-gray-400"
+            placeholder={$t('settings.vision_prompt_placeholder')}
+          ></textarea>
+        </div>
 
         <button
           class="w-full font-bold transition-all duration-200 text-black border-2 border-black rounded px-3 py-2

@@ -899,6 +899,7 @@
         doubaoEndpointIdText: customApiConfig.doubaoEndpointIdText,
         doubaoEndpointIdVision: customApiConfig.doubaoEndpointIdVision,
         modelOverrides: customApiConfig.modelOverrides,
+        visionPrompt: customApiConfig.visionPrompt,
         recognitionIgnoreRegions,
         onProgress: (current, total) => {
           aiProgress = { current, total };

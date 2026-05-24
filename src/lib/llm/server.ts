@@ -65,6 +65,7 @@ export async function processTocOnServer({
   doubaoEndpointIdText,
   doubaoEndpointIdVision,
   modelOverrides,
+  visionPrompt,
 }: {
   request: Request;
   images?: string[];
@@ -74,6 +75,7 @@ export async function processTocOnServer({
   doubaoEndpointIdText?: string;
   doubaoEndpointIdVision?: string;
   modelOverrides?: ModelOverrides;
+  visionPrompt?: string;
 }) {
   const resolvedProvider = determineProvider(request, provider);
   const normalizedModelOverrides = normalizeModelOverrides(modelOverrides);
@@ -95,6 +97,7 @@ export async function processTocOnServer({
     text,
     doubaoEndpointIdText: doubaoEndpointIdText || env.DOUBAO_ENDPOINT_ID_TEXT,
     doubaoEndpointIdVision: doubaoEndpointIdVision || env.DOUBAO_ENDPOINT_ID_VISION,
+    visionPrompt,
     modelOverrides: {
       geminiModel: 'gemini-2.5-flash',
       qwenVisionModel: env.QWEN_VL_MODEL || 'qwen-vl-plus',
