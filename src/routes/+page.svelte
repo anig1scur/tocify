@@ -43,6 +43,7 @@
   import DownloadBanner from '../components/DownloadBanner.svelte';
   import SidebarPanel from '../components/panels/SidebarPanel.svelte';
   import PreviewPanel from '../components/panels/PreviewPanel.svelte';
+  import RecognitionIgnoreEditor from '../components/RecognitionIgnoreEditor.svelte';
   import SeoJsonLd from '../components/SeoJsonLd.svelte';
 
   import TocRelation from '../components/KnowledgeBoard.svelte';
@@ -123,6 +124,7 @@
 
   let customApiConfig = createEmptyApiConfig();
   let tocEditor: any;
+  let recognitionIgnoreEditor: any;
 
   function expandTocRanges(ranges: {start: number; end: number; id: string}[], maxPage: number) {
     const pages = new Set<number>();
@@ -1124,6 +1126,10 @@
     toastProps = {show: true, message: 'API Settings Saved!', type: 'success'};
   }
 
+  function openRecognitionIgnoreEditor(e: CustomEvent<{pageNum: number}>) {
+    recognitionIgnoreEditor?.openEditor(e.detail.pageNum);
+  }
+
   const handleCloseNextStepHint = () => {
     showNextStepHint = false;
     const expiry = Date.now() + THIRTY_DAYS;
@@ -1277,9 +1283,20 @@
       on:togglePreview={togglePreviewMode}
       on:export={exportPDF}
       on:openChapterExport={openChapterExportModal}
+      on:openRecognitionIgnore={openRecognitionIgnoreEditor}
       on:recognitionIgnoreRegionsChange={(e) => (recognitionIgnoreRegions = e.detail)}
     />
   </div>
+
+  <RecognitionIgnoreEditor
+    bind:this={recognitionIgnoreEditor}
+    pdfInstance={originalPdfInstance}
+    {tocRanges}
+    {tocSelectionPageNumbers}
+    ignoreRegions={recognitionIgnoreRegions}
+    totalPages={originalPdfInstance?.numPages || pdfState.totalPages}
+    on:change={(e) => (recognitionIgnoreRegions = e.detail)}
+  />
 
   <Footer />
 

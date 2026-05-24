@@ -7,7 +7,6 @@
   import DropzoneView from '../DropzoneView.svelte';
   import PDFViewer from '../PDFViewer.svelte';
   import PDFControls from '../PDFControls.svelte';
-  import RecognitionIgnoreEditor from '../RecognitionIgnoreEditor.svelte';
   import type {RecognitionIgnoreRegion} from '$lib/pdf/recognition-ignore';
 
   export let isFileLoading = false;
@@ -33,7 +32,6 @@
 
   const dispatch = createEventDispatcher();
   let fileInputRef: HTMLInputElement;
-  let recognitionIgnoreEditor: any;
 
 
   function handleFileInputChange(e: Event) {
@@ -57,7 +55,7 @@
   }
 
   function openRecognitionIgnoreEditor(e: CustomEvent<{pageNum: number}>) {
-    recognitionIgnoreEditor?.openEditor(e.detail.pageNum);
+    dispatch('openRecognitionIgnore', e.detail);
   }
 </script>
 
@@ -110,16 +108,6 @@
           {currentTocPath}
           {prefetchPageNum}
           bind:highlightPageNum
-        />
-
-        <RecognitionIgnoreEditor
-          bind:this={recognitionIgnoreEditor}
-          pdfInstance={originalPdfInstance}
-          {tocRanges}
-          {tocSelectionPageNumbers}
-          ignoreRegions={recognitionIgnoreRegions}
-          totalPages={originalPdfInstance?.numPages || pdfState.totalPages}
-          on:change={(e) => dispatch('recognitionIgnoreRegionsChange', e.detail)}
         />
 
         <input
