@@ -165,7 +165,8 @@
             href="https://open.bigmodel.cn/usercenter/apikeys"
             target="_blank"
             class="underline decoration-gray-400 hover:text-black hover:decoration-black transition-colors">Zhipu</a
-          >
+          >,
+          custom OpenAI-compatible endpoints
           or
           <a
             href="https://github.com/anig1scur/tocify"

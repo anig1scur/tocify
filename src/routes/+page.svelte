@@ -898,6 +898,7 @@
         ranges: tocRanges,
         apiKey: customApiConfig.apiKey,
         provider: customApiConfig.provider,
+        customBaseUrl: customApiConfig.customBaseUrl,
         doubaoEndpointIdText: customApiConfig.doubaoEndpointIdText,
         doubaoEndpointIdVision: customApiConfig.doubaoEndpointIdVision,
         modelOverrides: customApiConfig.modelOverrides,

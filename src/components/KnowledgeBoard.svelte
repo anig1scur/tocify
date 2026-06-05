@@ -90,6 +90,7 @@
         ? await generateBoardDirect(simplifiedItems, {
           apiKey: apiConfig.apiKey,
           provider: apiConfig.provider,
+          customBaseUrl: apiConfig.customBaseUrl,
           doubaoEndpointIdText: apiConfig.doubaoEndpointIdText,
           modelOverrides: apiConfig.modelOverrides,
         })
@@ -101,6 +102,7 @@
               tocItems: simplifiedItems,
               apiKey: apiConfig.apiKey,
               provider: apiConfig.provider,
+              customBaseUrl: apiConfig.customBaseUrl,
               doubaoEndpointIdText: apiConfig.doubaoEndpointIdText,
               modelOverrides: apiConfig.modelOverrides,
             }),

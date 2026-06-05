@@ -519,6 +519,7 @@
           text,
           apiKey: apiConfig.apiKey,
           provider: apiConfig.provider,
+          customBaseUrl: apiConfig.customBaseUrl,
           doubaoEndpointIdText: apiConfig.doubaoEndpointIdText,
           doubaoEndpointIdVision: apiConfig.doubaoEndpointIdVision,
           modelOverrides: apiConfig.modelOverrides,
@@ -531,6 +532,9 @@
             text: text,
             apiKey: apiConfig.apiKey,
             provider: apiConfig.provider,
+            customBaseUrl: apiConfig.customBaseUrl,
+            doubaoEndpointIdText: apiConfig.doubaoEndpointIdText,
+            doubaoEndpointIdVision: apiConfig.doubaoEndpointIdVision,
             modelOverrides: apiConfig.modelOverrides,
           }),
         });

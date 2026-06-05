@@ -26,6 +26,7 @@ interface AiTocOptions {
   endPage?: number;
   apiKey?: string;
   provider?: string;
+  customBaseUrl?: string;
   doubaoEndpointIdText?: string;
   doubaoEndpointIdVision?: string;
   modelOverrides?: ModelOverrides;
@@ -47,6 +48,7 @@ async function fetchChunk(
   images: string[],
   apiKey: string | undefined,
   provider: string | undefined,
+  customBaseUrl: string | undefined,
   doubaoEndpointIdText: string | undefined,
   doubaoEndpointIdVision: string | undefined,
   modelOverrides: ModelOverrides | undefined,
@@ -61,6 +63,7 @@ async function fetchChunk(
       images,
       apiKey,
       provider,
+      customBaseUrl,
       doubaoEndpointIdText,
       doubaoEndpointIdVision,
       modelOverrides,
@@ -75,6 +78,7 @@ async function fetchChunk(
       images,
       apiKey,
       provider,
+      customBaseUrl,
       doubaoEndpointIdText,
       doubaoEndpointIdVision,
       modelOverrides,
@@ -102,7 +106,7 @@ async function fetchChunk(
 }
 
 export async function generateToc(
-  { pdfInstance, ranges, startPage, endPage, apiKey, provider, doubaoEndpointIdText, doubaoEndpointIdVision, modelOverrides, visionPrompt, recognitionIgnoreRegions = [], onProgress }: AiTocOptions
+  { pdfInstance, ranges, startPage, endPage, apiKey, provider, customBaseUrl, doubaoEndpointIdText, doubaoEndpointIdVision, modelOverrides, visionPrompt, recognitionIgnoreRegions = [], onProgress }: AiTocOptions
 ): Promise<GenerateTocResult> {
 
   // Normalize ranges
@@ -154,7 +158,7 @@ export async function generateToc(
     onProgress?.(1, 1);
     const items = await fetchChunk(
       pageEntries.map(e => e.image),
-      apiKey, provider, doubaoEndpointIdText, doubaoEndpointIdVision, modelOverrides, visionPrompt
+      apiKey, provider, customBaseUrl, doubaoEndpointIdText, doubaoEndpointIdVision, modelOverrides, visionPrompt
     );
     return { items: Array.isArray(items) ? items : [], chunkFailures: [] };
   }
@@ -178,11 +182,11 @@ export async function generateToc(
 
     // First attempt
     try {
-      result = await fetchChunk(images, apiKey, provider, doubaoEndpointIdText, doubaoEndpointIdVision, modelOverrides, visionPrompt);
+      result = await fetchChunk(images, apiKey, provider, customBaseUrl, doubaoEndpointIdText, doubaoEndpointIdVision, modelOverrides, visionPrompt);
     } catch (_firstErr) {
       // Retry once
       try {
-        result = await fetchChunk(images, apiKey, provider, doubaoEndpointIdText, doubaoEndpointIdVision, modelOverrides, visionPrompt);
+        result = await fetchChunk(images, apiKey, provider, customBaseUrl, doubaoEndpointIdText, doubaoEndpointIdVision, modelOverrides, visionPrompt);
       } catch (retryErr: any) {
         chunkFailures.push({
           start: chunkStart,

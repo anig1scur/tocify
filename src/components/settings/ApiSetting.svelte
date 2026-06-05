@@ -6,6 +6,8 @@
   import {
     DEFAULT_VISION_PROMPT_TEMPLATE_ID,
     DEFAULT_VISION_PROMPT_TEMPLATE,
+    DEFAULT_CUSTOM_BASE_URL,
+    DEFAULT_CUSTOM_MODEL,
     KNOWN_PROVIDER_MODELS,
     createEmptyApiConfig,
     createDefaultVisionPromptTemplate,
@@ -93,6 +95,7 @@
     const effectiveConfig = {
       provider: config.provider,
       apiKey: config.apiKey,
+      customBaseUrl: config.customBaseUrl,
       doubaoEndpointIdText: config.doubaoEndpointIdText,
       doubaoEndpointIdVision: config.doubaoEndpointIdVision,
       modelOverrides: normalizeModelOverrides(config.modelOverrides),
@@ -117,6 +120,8 @@
         return config.modelOverrides.qwenVisionModel || config.modelOverrides.qwenTextModel;
       case 'zhipu':
         return config.modelOverrides.zhipuVisionModel || config.modelOverrides.zhipuTextModel;
+      case 'custom':
+        return config.modelOverrides.customModel;
       default:
         return '';
     }
@@ -137,6 +142,11 @@
     if (provider === 'zhipu') {
       config.modelOverrides.zhipuTextModel = value;
       config.modelOverrides.zhipuVisionModel = value;
+      return;
+    }
+
+    if (provider === 'custom') {
+      config.modelOverrides.customModel = value;
     }
   }
 
@@ -153,13 +163,16 @@
     if (savedConfig) {
       try {
         const parsed = JSON.parse(savedConfig);
+        const defaultConfig = createEmptyApiConfig();
         const {templates, activeId, activePrompt} = normalizeVisionPromptTemplates(parsed);
         config = {
-          ...createEmptyApiConfig(),
+          ...defaultConfig,
           ...parsed,
+          customBaseUrl: parsed.customBaseUrl?.trim() || defaultConfig.customBaseUrl,
           modelOverrides: {
-            ...createEmptyApiConfig().modelOverrides,
+            ...defaultConfig.modelOverrides,
             ...(parsed.modelOverrides || {}),
+            customModel: parsed.modelOverrides?.customModel?.trim() || defaultConfig.modelOverrides.customModel,
           },
           visionPrompt: activePrompt,
           visionPromptTemplateId: activeId,
@@ -388,6 +401,7 @@
               <option value="qwen">Qwen</option>
               <option value="doubao">Doubao</option>
               <option value="zhipu">Zhipu</option>
+              <option value="custom">Custom / OpenAI Compatible</option>
             </select>
 
             {#each getVisibleProviderLinks() as providerLink}
@@ -488,6 +502,61 @@
               value={getSingleModelValue('zhipu')}
               on:input={(e) => {
                 setSingleModelValue('zhipu', (e.currentTarget as HTMLInputElement).value);
+                markDirty();
+              }}
+            />
+          </div>
+        {/if}
+
+        {#if config.provider === 'custom'}
+          <div
+            class="border-black border-2 rounded-md p-2 w-full"
+            transition:slide={{duration: 200}}
+          >
+            <label
+              class="block font-bold mb-1 text-sm"
+              for="custom_base_url">{$t('settings.custom_base_url_label') || 'Base URL'}</label
+            >
+            <input
+              id="custom_base_url"
+              type="url"
+              name="custom-base-url-input"
+              autocomplete="off"
+              autocapitalize="off"
+              autocorrect="off"
+              spellcheck="false"
+              class="w-full outline-none text-sm placeholder-gray-400"
+              placeholder={$t('settings.custom_base_url_placeholder') || DEFAULT_CUSTOM_BASE_URL}
+              maxlength="512"
+              bind:value={config.customBaseUrl}
+              on:input={markDirty}
+            />
+          </div>
+
+          <div
+            class="border-black border-2 rounded-md p-2 w-full"
+            transition:slide={{duration: 200}}
+          >
+            <label
+              class="block font-bold mb-1 text-sm"
+              for="custom_model">{$t('settings.custom_model_label') || 'Custom Model'}</label
+            >
+            <input
+              id="custom_model"
+              type="text"
+              name="custom-model-input"
+              autocomplete="new-password"
+              autocapitalize="off"
+              autocorrect="off"
+              spellcheck="false"
+              data-1p-ignore="true"
+              data-lpignore="true"
+              class="w-full outline-none text-sm placeholder-gray-400"
+              placeholder={DEFAULT_CUSTOM_MODEL}
+              maxlength="200"
+              value={getSingleModelValue('custom')}
+              on:input={(e) => {
+                setSingleModelValue('custom', (e.currentTarget as HTMLInputElement).value);
                 markDirty();
               }}
             />
