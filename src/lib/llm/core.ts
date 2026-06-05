@@ -7,7 +7,7 @@ import {
   normalizeToc,
 } from '$lib/utils/toc';
 
-export type Provider = 'gemini' | 'qwen' | 'doubao' | 'zhipu';
+export type Provider = 'gemini' | 'qwen' | 'doubao' | 'zhipu' | 'custom';
 
 export interface ModelOverrides {
   geminiModel?: string;
@@ -17,6 +17,7 @@ export interface ModelOverrides {
   zhipuVisionModel?: string;
   doubaoTextModel?: string;
   doubaoVisionModel?: string;
+  customModel?: string;
 }
 
 export const KNOWN_PROVIDER_MODELS: Record<'gemini' | 'qwen' | 'zhipu', { text: readonly string[]; vision: readonly string[] }> = {
@@ -56,6 +57,7 @@ export function createDefaultVisionPromptTemplate(): VisionPromptTemplate {
 export interface DirectApiConfig {
   provider?: string;
   apiKey: string;
+  customBaseUrl?: string;
   doubaoEndpointIdText?: string;
   doubaoEndpointIdVision?: string;
   modelOverrides?: ModelOverrides;
@@ -65,6 +67,7 @@ export interface DirectApiConfig {
 export interface UiApiConfig extends DirectApiConfig {
   provider: string;
   apiKey: string;
+  customBaseUrl: string;
   doubaoEndpointIdText: string;
   doubaoEndpointIdVision: string;
   modelOverrides: ModelOverrides;
@@ -100,7 +103,17 @@ export interface GraphResponse {
   }>;
 }
 
-const OPENAI_COMPAT_BASE_URL: Record<Exclude<Provider, 'gemini'>, string> = {
+type OpenAiCompatProvider = Exclude<Provider, 'gemini'>;
+type BuiltInOpenAiCompatProvider = Exclude<OpenAiCompatProvider, 'custom'>;
+
+const MAX_CUSTOM_BASE_URL_LENGTH = 512;
+const MAX_CUSTOM_MODEL_LENGTH = 200;
+const MAX_API_KEY_LENGTH = 4096;
+
+export const DEFAULT_CUSTOM_BASE_URL = 'https://api.openai.com/v1';
+export const DEFAULT_CUSTOM_MODEL = 'gpt-5.4-mini';
+
+const OPENAI_COMPAT_BASE_URL: Record<BuiltInOpenAiCompatProvider, string> = {
   qwen: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
   zhipu: 'https://open.bigmodel.cn/api/paas/v4',
   doubao: 'https://ark.cn-beijing.volces.com/api/v3',
@@ -117,7 +130,13 @@ export function normalizeProvider(provider?: string): Provider | undefined {
     return undefined;
   }
 
-  if (normalized === 'gemini' || normalized === 'qwen' || normalized === 'doubao' || normalized === 'zhipu') {
+  if (
+    normalized === 'gemini' ||
+    normalized === 'qwen' ||
+    normalized === 'doubao' ||
+    normalized === 'zhipu' ||
+    normalized === 'custom'
+  ) {
     return normalized;
   }
 
@@ -129,6 +148,134 @@ export function requireProvider(provider?: string, missingMessage = 'Please sele
 
   if (!normalized) {
     throw new Error(missingMessage);
+  }
+
+  return normalized;
+}
+
+function stripIpv6Brackets(hostname: string): string {
+  return hostname.replace(/^\[(.*)\]$/, '$1').toLowerCase();
+}
+
+function isBlockedIpv4Address(address: string): boolean {
+  if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(address)) {
+    return false;
+  }
+
+  const octets = address.split('.').map((part) => Number(part));
+
+  if (octets.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) {
+    return true;
+  }
+
+  const [first, second] = octets;
+
+  return (
+    first === 0 ||
+    first === 10 ||
+    first === 127 ||
+    first >= 224 ||
+    first === 100 && second >= 64 && second <= 127 ||
+    first === 169 && second === 254 ||
+    first === 172 && second >= 16 && second <= 31 ||
+    first === 192 && second === 168 ||
+    first === 198 && (second === 18 || second === 19)
+  );
+}
+
+function isBlockedIpv6Address(address: string): boolean {
+  const normalized = stripIpv6Brackets(address);
+
+  if (!normalized.includes(':')) {
+    return false;
+  }
+
+  const mappedIpv4 = normalized.match(/(?:^|:)ffff:(\d{1,3}(?:\.\d{1,3}){3})$/)?.[1];
+  if (mappedIpv4) {
+    return isBlockedIpv4Address(mappedIpv4);
+  }
+
+  return (
+    normalized === '::' ||
+    normalized === '::1' ||
+    normalized.startsWith('fe80:') ||
+    normalized.startsWith('fc') ||
+    normalized.startsWith('fd')
+  );
+}
+
+export function isBlockedIpAddress(address: string): boolean {
+  const normalized = stripIpv6Brackets(address.trim());
+  return isBlockedIpv4Address(normalized) || isBlockedIpv6Address(normalized);
+}
+
+function isBlockedHostname(hostname: string): boolean {
+  const normalized = stripIpv6Brackets(hostname.trim());
+
+  return (
+    !normalized ||
+    normalized === 'localhost' ||
+    normalized.endsWith('.localhost') ||
+    normalized.endsWith('.local') ||
+    normalized.endsWith('.internal') ||
+    normalized === 'metadata.google.internal' ||
+    isBlockedIpAddress(normalized)
+  );
+}
+
+export function normalizeCustomBaseUrl(baseUrl?: string): string {
+  const rawBaseUrl = baseUrl?.trim() || DEFAULT_CUSTOM_BASE_URL;
+
+  if (!rawBaseUrl) {
+    throw new Error('Custom base URL is required.');
+  }
+
+  if (rawBaseUrl.length > MAX_CUSTOM_BASE_URL_LENGTH) {
+    throw new Error('Custom base URL is too long.');
+  }
+
+  let url: URL;
+  try {
+    url = new URL(rawBaseUrl);
+  } catch {
+    throw new Error('Invalid custom base URL.');
+  }
+
+  if (url.protocol !== 'https:') {
+    throw new Error('Custom base URL must use HTTPS.');
+  }
+
+  if (url.username || url.password) {
+    throw new Error('Custom base URL must not include credentials.');
+  }
+
+  if (url.search || url.hash) {
+    throw new Error('Custom base URL must not include query or hash parameters.');
+  }
+
+  if (isBlockedHostname(url.hostname)) {
+    throw new Error('Custom base URL host is not allowed.');
+  }
+
+  url.pathname = url.pathname.replace(/\/+$/, '');
+  if (url.pathname.endsWith('/chat/completions')) {
+    url.pathname = url.pathname.slice(0, -'/chat/completions'.length) || '/';
+  }
+  url.search = '';
+  url.hash = '';
+
+  return url.toString().replace(/\/$/, '');
+}
+
+function normalizeApiKeyForRequest(apiKey: string): string {
+  const normalized = apiKey?.trim();
+
+  if (!normalized) {
+    throw new Error('API Key is missing.');
+  }
+
+  if (normalized.length > MAX_API_KEY_LENGTH) {
+    throw new Error('API key is too long.');
   }
 
   return normalized;
@@ -156,11 +303,45 @@ export function normalizeModelOverrides(modelOverrides?: ModelOverrides): ModelO
   return Object.keys(sanitized).length > 0 ? sanitized : undefined;
 }
 
+function getCustomModel(config: { modelOverrides?: ModelOverrides }): string {
+  const model = normalizeModelName(config.modelOverrides?.customModel) || DEFAULT_CUSTOM_MODEL;
+
+  if (!model) {
+    throw new Error('Custom model is required.');
+  }
+
+  if (model.length > MAX_CUSTOM_MODEL_LENGTH) {
+    throw new Error('Custom model is too long.');
+  }
+
+  return model;
+}
+
+export function validateCustomProviderConfig(config: {
+  apiKey?: string;
+  customBaseUrl?: string;
+  modelOverrides?: ModelOverrides;
+}): { apiKey: string; baseUrl: string; model: string } {
+  return {
+    apiKey: normalizeApiKeyForRequest(config.apiKey || ''),
+    baseUrl: normalizeCustomBaseUrl(config.customBaseUrl),
+    model: getCustomModel(config),
+  };
+}
+
 export function hasUnknownCustomModel(provider?: string, modelOverrides?: ModelOverrides): boolean {
   const normalizedProvider = normalizeProvider(provider);
   const sanitizedOverrides = normalizeModelOverrides(modelOverrides);
 
-  if (!normalizedProvider || !sanitizedOverrides || normalizedProvider === 'doubao') {
+  if (!normalizedProvider || normalizedProvider === 'doubao') {
+    return false;
+  }
+
+  if (normalizedProvider === 'custom') {
+    return true;
+  }
+
+  if (!sanitizedOverrides) {
     return false;
   }
 
@@ -208,6 +389,7 @@ export function createEmptyApiConfig(): UiApiConfig {
   return {
     provider: '',
     apiKey: '',
+    customBaseUrl: DEFAULT_CUSTOM_BASE_URL,
     doubaoEndpointIdText: '',
     doubaoEndpointIdVision: '',
     modelOverrides: {
@@ -216,6 +398,7 @@ export function createEmptyApiConfig(): UiApiConfig {
       qwenVisionModel: '',
       zhipuTextModel: '',
       zhipuVisionModel: '',
+      customModel: DEFAULT_CUSTOM_MODEL,
     },
     visionPrompt: DEFAULT_VISION_PROMPT_TEMPLATE,
     visionPromptTemplateId: DEFAULT_VISION_PROMPT_TEMPLATE_ID,
@@ -271,7 +454,15 @@ function getGeminiModel(config: DirectApiConfig): string {
   return config.modelOverrides?.geminiModel || 'gemini-2.5-flash';
 }
 
-function getOpenAiCompatTextModel(provider: Exclude<Provider, 'gemini'>, config: DirectApiConfig): string {
+function getOpenAiCompatBaseUrl(provider: OpenAiCompatProvider, config: DirectApiConfig): string {
+  if (provider === 'custom') {
+    return normalizeCustomBaseUrl(config.customBaseUrl);
+  }
+
+  return OPENAI_COMPAT_BASE_URL[provider];
+}
+
+function getOpenAiCompatTextModel(provider: OpenAiCompatProvider, config: DirectApiConfig): string {
   switch (provider) {
     case 'qwen':
       return config.modelOverrides?.qwenTextModel || 'qwen-plus';
@@ -281,10 +472,12 @@ function getOpenAiCompatTextModel(provider: Exclude<Provider, 'gemini'>, config:
       return config.doubaoEndpointIdText || config.modelOverrides?.doubaoTextModel || (() => {
         throw new Error('Doubao text Endpoint ID is required.');
       })();
+    case 'custom':
+      return getCustomModel(config);
   }
 }
 
-function getOpenAiCompatVisionModel(provider: Exclude<Provider, 'gemini'>, config: DirectApiConfig): string {
+function getOpenAiCompatVisionModel(provider: OpenAiCompatProvider, config: DirectApiConfig): string {
   switch (provider) {
     case 'qwen':
       return config.modelOverrides?.qwenVisionModel || 'qwen-vl-plus';
@@ -294,6 +487,8 @@ function getOpenAiCompatVisionModel(provider: Exclude<Provider, 'gemini'>, confi
       return config.doubaoEndpointIdVision || config.modelOverrides?.doubaoVisionModel || (() => {
         throw new Error('Doubao vision Endpoint ID is required.');
       })();
+    case 'custom':
+      return getCustomModel(config);
   }
 }
 
@@ -303,13 +498,14 @@ async function fetchGeminiJson(
   body: Record<string, unknown>,
   fallbackMessage: string,
 ): Promise<string> {
+  const requestApiKey = normalizeApiKeyForRequest(apiKey);
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${ encodeURIComponent(model) }:generateContent`,
     {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-goog-api-key': apiKey,
+        'x-goog-api-key': requestApiKey,
       },
       body: JSON.stringify(body),
     },
@@ -324,16 +520,17 @@ async function fetchGeminiJson(
 }
 
 async function fetchOpenAiCompatJson(
-  provider: Exclude<Provider, 'gemini'>,
+  baseUrl: string,
   apiKey: string,
   body: Record<string, unknown>,
   fallbackMessage: string,
 ): Promise<string> {
-  const response = await fetch(`${ OPENAI_COMPAT_BASE_URL[provider] }/chat/completions`, {
+  const requestApiKey = normalizeApiKeyForRequest(apiKey);
+  const response = await fetch(`${ baseUrl }/chat/completions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${ apiKey }`,
+      Authorization: `Bearer ${ requestApiKey }`,
     },
     body: JSON.stringify(body),
   });
@@ -379,7 +576,7 @@ async function requestTextJson(config: DirectApiConfig, systemPrompt: string, us
   }
 
   return fetchOpenAiCompatJson(
-    provider,
+    getOpenAiCompatBaseUrl(provider, config),
     config.apiKey,
     textBody,
     `${ providerLabel(provider) } request failed.`,
@@ -444,7 +641,7 @@ async function requestVisionJson(config: DirectApiConfig, systemPrompt: string, 
   }
 
   return fetchOpenAiCompatJson(
-    provider,
+    getOpenAiCompatBaseUrl(provider, config),
     config.apiKey,
     visionBody,
     `${ providerLabel(provider) } request failed.`,
@@ -503,7 +700,7 @@ export async function generateBoard(tocItems: GraphNodeInput[], config: DirectAp
       `${ providerLabel(provider) } request failed.`,
     )
     : await fetchOpenAiCompatJson(
-      provider,
+      getOpenAiCompatBaseUrl(provider, config),
       config.apiKey,
       {
         model: getOpenAiCompatTextModel(provider, config),

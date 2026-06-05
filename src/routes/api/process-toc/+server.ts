@@ -14,7 +14,17 @@ export const POST = withRateLimit(async ({ request }) => {
   }
 
   try {
-    const { images, text, apiKey, provider, doubaoEndpointIdText, doubaoEndpointIdVision, modelOverrides, visionPrompt } = await request.json();
+    const {
+      images,
+      text,
+      apiKey,
+      provider,
+      customBaseUrl,
+      doubaoEndpointIdText,
+      doubaoEndpointIdVision,
+      modelOverrides,
+      visionPrompt,
+    } = await request.json();
 
     if ((!images || !Array.isArray(images) || images.length === 0) &&
       (!text || typeof text !== 'string' || !text.trim())) {
@@ -40,6 +50,7 @@ export const POST = withRateLimit(async ({ request }) => {
       text,
       apiKey,
       provider,
+      customBaseUrl,
       doubaoEndpointIdText,
       doubaoEndpointIdVision,
       modelOverrides,

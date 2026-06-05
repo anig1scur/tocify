@@ -73,7 +73,7 @@ export function withRateLimit(
       const clonedRequest = event.request.clone();
       const body = await clonedRequest.json();
 
-      if (body.apiKey) {
+      if (body.apiKey && String(body.provider || '').trim().toLowerCase() !== 'custom') {
         return handler(event);
       }
     } catch (e) {

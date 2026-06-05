@@ -1,11 +1,15 @@
 import { env } from '$env/dynamic/private';
+import { lookup } from 'node:dns/promises';
 
 import {
   generateBoard,
+  isBlockedIpAddress,
+  normalizeCustomBaseUrl,
   requiresUserApiKeyForModel,
   normalizeModelOverrides,
   normalizeProvider,
   processToc,
+  validateCustomProviderConfig,
   type GraphNodeInput,
   type ModelOverrides,
   type Provider,
@@ -43,6 +47,8 @@ function resolveApiKey(provider: Provider, userKey?: string): string {
       return env.ZHIPU_API_KEY || '';
     case 'doubao':
       return env.DOUBAO_API_KEY || '';
+    case 'custom':
+      return '';
   }
 }
 
@@ -56,12 +62,55 @@ function createBadRequest(message: string) {
   return error;
 }
 
+async function assertCustomBaseUrlResolvesSafely(customBaseUrl?: string) {
+  const baseUrl = normalizeCustomBaseUrl(customBaseUrl);
+  const hostname = new URL(baseUrl).hostname.replace(/^\[(.*)\]$/, '$1');
+
+  try {
+    const addresses = await lookup(hostname, { all: true, verbatim: true });
+
+    if (addresses.some(({ address }) => isBlockedIpAddress(address))) {
+      throw createBadRequest('Custom base URL resolves to a private network address.');
+    }
+  } catch (err: any) {
+    if (err?.status) {
+      throw err;
+    }
+
+    throw createBadRequest('Unable to validate custom base URL host.');
+  }
+}
+
+async function validateCustomProviderOnServer(
+  provider: Provider,
+  apiKey: string | undefined,
+  customBaseUrl: string | undefined,
+  modelOverrides: ModelOverrides | undefined,
+) {
+  if (provider !== 'custom') {
+    return;
+  }
+
+  try {
+    validateCustomProviderConfig({
+      apiKey,
+      customBaseUrl,
+      modelOverrides,
+    });
+  } catch (err: any) {
+    throw createBadRequest(err?.message || 'Invalid custom provider configuration.');
+  }
+
+  await assertCustomBaseUrlResolvesSafely(customBaseUrl);
+}
+
 export async function processTocOnServer({
   request,
   images,
   text,
   apiKey,
   provider,
+  customBaseUrl,
   doubaoEndpointIdText,
   doubaoEndpointIdVision,
   modelOverrides,
@@ -72,6 +121,7 @@ export async function processTocOnServer({
   text?: string;
   apiKey?: string;
   provider?: string;
+  customBaseUrl?: string;
   doubaoEndpointIdText?: string;
   doubaoEndpointIdVision?: string;
   modelOverrides?: ModelOverrides;
@@ -84,6 +134,8 @@ export async function processTocOnServer({
     throw createBadRequest('Custom models outside the built-in list require your own API key.');
   }
 
+  await validateCustomProviderOnServer(resolvedProvider, apiKey, customBaseUrl, normalizedModelOverrides);
+
   const resolvedApiKey = resolveApiKey(resolvedProvider, apiKey);
 
   if (!resolvedApiKey) {
@@ -93,6 +145,7 @@ export async function processTocOnServer({
   return processToc({
     provider: resolvedProvider,
     apiKey: resolvedApiKey,
+    customBaseUrl,
     images,
     text,
     doubaoEndpointIdText: doubaoEndpointIdText || env.DOUBAO_ENDPOINT_ID_TEXT,
@@ -106,6 +159,7 @@ export async function processTocOnServer({
       zhipuVisionModel: 'glm-4v-flash',
       doubaoTextModel: env.DOUBAO_ENDPOINT_ID_TEXT,
       doubaoVisionModel: env.DOUBAO_ENDPOINT_ID_VISION,
+      customModel: normalizedModelOverrides?.customModel,
       ...normalizedModelOverrides,
     },
   });
@@ -116,6 +170,7 @@ export async function generateBoardOnServer({
   tocItems,
   apiKey,
   provider,
+  customBaseUrl,
   doubaoEndpointIdText,
   modelOverrides,
 }: {
@@ -123,6 +178,7 @@ export async function generateBoardOnServer({
   tocItems: GraphNodeInput[];
   apiKey?: string;
   provider?: string;
+  customBaseUrl?: string;
   doubaoEndpointIdText?: string;
   modelOverrides?: ModelOverrides;
 }) {
@@ -133,6 +189,8 @@ export async function generateBoardOnServer({
     throw createBadRequest('Custom models outside the built-in list require your own API key.');
   }
 
+  await validateCustomProviderOnServer(resolvedProvider, apiKey, customBaseUrl, normalizedModelOverrides);
+
   const resolvedApiKey = resolveApiKey(resolvedProvider, apiKey);
 
   if (!resolvedApiKey) {
@@ -142,12 +200,14 @@ export async function generateBoardOnServer({
   return generateBoard(tocItems, {
     provider: resolvedProvider,
     apiKey: resolvedApiKey,
+    customBaseUrl,
     doubaoEndpointIdText: doubaoEndpointIdText || env.DOUBAO_ENDPOINT_ID_TEXT,
     modelOverrides: {
       geminiModel: 'gemini-2.5-flash',
       qwenTextModel: 'qwen-plus',
       zhipuTextModel: 'glm-4-flash',
       doubaoTextModel: env.DOUBAO_ENDPOINT_ID_TEXT,
+      customModel: normalizedModelOverrides?.customModel,
       ...normalizedModelOverrides,
     },
   });
