@@ -1,4 +1,10 @@
 {
+  "header": {
+    "toc": "目录",
+    "ocr": "OCR",
+    "github": "在 GitHub 查看项目",
+    "help": "使用帮助"
+  },
   "settings": {
     "title": "目录设置",
     "toggle_expand": "展开 / 折叠切换",
@@ -175,6 +181,43 @@
     "title": "上传你的 PDF",
     "subtitle": "将文件拖拽到此处或",
     "btn_select": "点击选择文件"
+  },
+  "ocr_lab": {
+    "title": "OCR 可搜索 PDF",
+    "meta_title": "Tocify · OCR 可搜索 PDF",
+    "meta_description": "在浏览器中运行 OCR，并在本地生成可搜索的双层 PDF。",
+    "start_page": "起始页",
+    "end_page": "结束页",
+    "worker_count": "Worker 数量",
+    "worker_count_hint": "同时运行的 OCR 会话数量。设备性能强时可以调高；浏览器变卡、发热或会话失败时调低。",
+    "resolution_quality": "识别清晰度",
+    "resolution_quality_hint": "送入 OCR 的页面图片尺寸。低更快；标准适合多数 PDF；高/极高更适合小字或模糊扫描件，但会更慢。",
+    "resolution_low": "低",
+    "resolution_standard": "标准",
+    "resolution_high": "高",
+    "resolution_ultra": "极高",
+    "run_local": "运行本地 OCR",
+    "engine_note": "PP-OCRv6 tiny，在你的浏览器中本地运行。",
+    "local_loading_button": "模型加载中...",
+    "local_running_button": "OCR 识别中...",
+    "cancel_ocr": "取消 OCR",
+    "local_canceling_button": "正在取消 OCR...",
+    "local_timing": "本地 OCR 完成：{pages} 页共 {seconds} 秒。",
+    "search_placeholder": "搜索 OCR 文本、页码...",
+    "search_no_results": "没有匹配的 OCR 文本。",
+    "sort_low_confidence": "低分优先",
+    "sort_reading_order": "阅读顺序",
+    "delete_selected_line": "删除选中行",
+    "pdf_preview_title": "PDF 预览",
+    "preview_rendering": "正在渲染预览...",
+    "progress": "正在写入隐藏文本层：{current} / {total}",
+    "errors": {
+      "load_failed": "加载 PDF 失败。",
+      "not_pdf": "这个文件看起来不是有效的 PDF。请确认你选择的是原始 .pdf 文件。",
+      "no_pdf": "请先上传原始 PDF。",
+      "local_failed": "运行本地 OCR 失败。",
+      "build_failed": "生成双层 PDF 失败。"
+    }
   },
   "offset": {
     "title": "通过首个目录项校准页码偏移",

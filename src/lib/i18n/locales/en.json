@@ -3,6 +3,12 @@
     "title": "Tocify · Add Bookmarks & Table of Contents to PDF online | 在浏览器中为 PDF 添加书签",
     "description": "Free online tool to add bookmarks and table of contents to PDF files, AI-powered outline generator for scanned documents. 为 PDF 添加目录/书签的在线免费工具，AI 驱动的 PDF 目录生成器。开源、私密、基于浏览器。"
   },
+  "header": {
+    "toc": "ToC",
+    "ocr": "OCR",
+    "github": "View project on GitHub",
+    "help": "How to use"
+  },
   "settings": {
     "title": "ToC Settings",
     "toggle_expand": "Toggle Expand/Collapse",
@@ -179,6 +185,43 @@
     "title": "Upload Your PDF",
     "subtitle": "Drag & drop a file here, or",
     "btn_select": "Click to Select File"
+  },
+  "ocr_lab": {
+    "title": "OCR Searchable PDF",
+    "meta_title": "Tocify · OCR Searchable PDF",
+    "meta_description": "Run browser OCR and create searchable double-layer PDFs locally.",
+    "start_page": "Start Page",
+    "end_page": "End Page",
+    "worker_count": "Workers",
+    "worker_count_hint": "How many OCR sessions run in parallel. More workers can be faster on powerful machines, but may make the browser heavier or less stable.",
+    "resolution_quality": "Resolution",
+    "resolution_quality_hint": "Controls the page image size sent to OCR. Low is faster; Standard fits most PDFs; High/Ultra can help small text or blurry scans but run slower.",
+    "resolution_low": "Low",
+    "resolution_standard": "Standard",
+    "resolution_high": "High",
+    "resolution_ultra": "Ultra",
+    "run_local": "Run Local OCR",
+    "engine_note": "PP-OCRv6 tiny, running locally in your browser.",
+    "local_loading_button": "Loading Model...",
+    "local_running_button": "Running OCR...",
+    "cancel_ocr": "Cancel OCR",
+    "local_canceling_button": "Canceling OCR...",
+    "local_timing": "Local OCR finished in {seconds}s for {pages} pages.",
+    "search_placeholder": "Search OCR text or page...",
+    "search_no_results": "No matching OCR text.",
+    "sort_low_confidence": "Low score",
+    "sort_reading_order": "Reading",
+    "delete_selected_line": "Delete selected line",
+    "pdf_preview_title": "PDF Preview",
+    "preview_rendering": "Rendering preview...",
+    "progress": "Writing hidden text layer: {current} / {total}",
+    "errors": {
+      "load_failed": "Failed to load this PDF.",
+      "not_pdf": "This file does not look like a valid PDF. Make sure you selected the original .pdf file.",
+      "no_pdf": "Upload the original PDF first.",
+      "local_failed": "Failed to run local OCR.",
+      "build_failed": "Failed to build the searchable PDF."
+    }
   },
   "offset": {
     "title": "Confirm Page Offset By The First ToC Item",
