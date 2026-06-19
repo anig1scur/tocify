@@ -1,3 +1,7 @@
+<script context="module" lang="ts">
+  let tocViewCache: any = null;
+</script>
+
 <script lang="ts">
   import {onMount, onDestroy, tick} from 'svelte';
   import {get} from 'svelte/store';
@@ -121,10 +125,13 @@
   let prefetchPageNum = 0;
   let lastConfigJson = '';
   let chapterExportItems: ExportableChapter[] = [];
+  let previousAddPhysicalTocPage = addPhysicalTocPage;
 
   let customApiConfig = createEmptyApiConfig();
   let tocEditor: any;
   let recognitionIgnoreEditor: any;
+
+  restoreTocViewCache();
 
   function expandTocRanges(ranges: {start: number; end: number; id: string}[], maxPage: number) {
     const pages = new Set<number>();
@@ -162,7 +169,9 @@
   });
 
   onMount(() => {
-    $pdfService = new PDFService();
+    if (!tocViewCache) {
+      $pdfService = new PDFService();
+    }
 
     const hideUntil = localStorage.getItem('tocify_hide_graph_entrance_until');
     if (hideUntil) {
@@ -199,23 +208,93 @@
     };
   });
 
-  onDestroy(async () => {
+  onDestroy(() => {
+    saveTocViewCache();
     unsubscribeTocItems();
-    if (originalPdfInstance) {
-      try {
-        await originalPdfInstance.destroy();
-      } catch (e: any) {
-        console.warn('Error destroying original instance:', e);
-      }
-    }
-    if (tocPdfInstance) {
-      try {
-        await tocPdfInstance.destroy();
-      } catch (e: any) {
-        console.warn('Error destroying TOC instance:', e);
-      }
-    }
   });
+
+  function restoreTocViewCache() {
+    if (!tocViewCache) return;
+
+    ({
+      pdfjs,
+      PdfLib,
+      isTocConfigExpanded,
+      showNextStepHint,
+      addPhysicalTocPage,
+      highlightPageNum,
+      hasShownTocHint,
+      isGraphEntranceVisible,
+      offsetPreviewPageNum,
+      selectedChapterExportIds,
+      chapterExportMode,
+      toastProps,
+      originalPdfInstance,
+      tocPdfInstance,
+      pdfState,
+      tocRanges,
+      recognitionIgnoreRegions,
+      activeRangeIndex,
+      tocPageCount,
+      isPreviewMode,
+      pendingTocItems,
+      firstTocItem,
+      aiError,
+      aiProgress,
+      lastPdfContentJson,
+      lastInsertAtPage,
+      prefetchPageNum,
+      lastConfigJson,
+      customApiConfig,
+      previousAddPhysicalTocPage,
+    } = tocViewCache);
+
+    isDragging = false;
+    isFileLoading = false;
+    isAiLoading = false;
+    isPreviewLoading = false;
+    showGraphDrawer = false;
+    showOffsetModal = false;
+    showHelpModal = false;
+    showChapterExportModal = false;
+    showStarRequestModal = false;
+    pdfState = {...pdfState};
+  }
+
+  function saveTocViewCache() {
+    tocViewCache = {
+      pdfjs,
+      PdfLib,
+      isTocConfigExpanded,
+      showNextStepHint,
+      addPhysicalTocPage,
+      highlightPageNum,
+      hasShownTocHint,
+      isGraphEntranceVisible,
+      offsetPreviewPageNum,
+      selectedChapterExportIds,
+      chapterExportMode,
+      toastProps,
+      originalPdfInstance,
+      tocPdfInstance,
+      pdfState,
+      tocRanges,
+      recognitionIgnoreRegions,
+      activeRangeIndex,
+      tocPageCount,
+      isPreviewMode,
+      pendingTocItems,
+      firstTocItem,
+      aiError,
+      aiProgress,
+      lastPdfContentJson,
+      lastInsertAtPage,
+      prefetchPageNum,
+      lastConfigJson,
+      customApiConfig,
+      previousAddPhysicalTocPage,
+    };
+  }
 
   function getPdfEffectiveData(items: TocItem[]): any[] {
     return items.map((item) => ({
@@ -308,7 +387,6 @@
   } else {
   }
 
-  let previousAddPhysicalTocPage = addPhysicalTocPage;
   $: {
     if (pdfState.doc && previousAddPhysicalTocPage !== addPhysicalTocPage && !isFileLoading) {
       previousAddPhysicalTocPage = addPhysicalTocPage;
@@ -1212,7 +1290,7 @@
   <h1 class="sr-only">Generate PDF bookmarks / table of contents in browser — AI-powered, private, online and free.</h1>
 
   <div
-    class="flex flex-col mt-5 lg:flex-row lg:mt-8 p-2 md:p-4 md:pr-3 gap-4 lg:gap-8 mx-auto w-[95%] md:w-[90%] xl:w-[80%] 3xl:w-[75%] max-w-6xl justify-between"
+    class="flex flex-col mt-5 lg:flex-row lg:items-start lg:mt-8 p-2 md:p-4 md:pr-3 gap-4 lg:gap-8 mx-auto w-[95%] md:w-[90%] xl:w-[80%] 3xl:w-[75%] max-w-6xl justify-between"
   >
     <SidebarPanel
       {pdfState}
