@@ -70,7 +70,6 @@
   let showHelpModal = false;
   let isPreviewDragging = false;
   let previewDragDepth = 0;
-  let buildProgress: { current: number; total: number } | null = null;
   let ocrProgress: OcrProgress | null = null;
   let errorMessage = '';
   let lastLocalOcrError = '';
@@ -79,19 +78,23 @@
   let pageEnd = 1;
   let ocrWorkerPoolSize = 4;
   let ocrResolutionQuality: OcrResolutionQuality = 'standard';
+  let ocrBoxExtension = 2.0;
   const OCR_MIN_WORKER_POOL_SIZE = 1;
   const OCR_MAX_WORKER_POOL_SIZE = 4;
   const OCR_RUNTIME_SETTINGS_STORAGE_KEY = 'tocify.ocr.runtimeSettings';
   const INTERNAL_PAGE_BATCH_SIZE = 1;
   const INTERNAL_TEXT_DETECTION_BATCH_SIZE = 1;
   const INTERNAL_TEXT_RECOGNITION_BATCH_SIZE = 2;
+  const OCR_BOX_EXTENSION_DEFAULT = 2.0;
+  const OCR_BOX_EXTENSION_MIN = 1.0;
+  const OCR_BOX_EXTENSION_MAX = 3.0;
+  const OCR_BOX_EXTENSION_STEP = 0.1;
   const OCR_RESOLUTION_QUALITY_SIZES: Record<OcrResolutionQuality, number> = {
     low: 1200,
     standard: 1600,
     high: 2000,
     ultra: 2400,
   };
-  const OCR_TEXT_DET_UNCLIP_RATIO = 2.0;
   const OCR_TREE_STICKY_SEARCH_TOP = 48;
   const OCR_TREE_STICKY_SEARCH_HEIGHT = 36;
   const OCR_TREE_STICKY_GAP = 14;
@@ -100,6 +103,7 @@
   const PREVIEW_MIN_LOCATED_BOX_HEIGHT = 17;
   const PREVIEW_MIN_SCALE = 0.5;
   const PREVIEW_MAX_SCALE = 8;
+  const PREVIEW_DEFAULT_SCALE = 1.0;
   let ocrJson = '';
   let timingSummary = '';
   let editorDoc: any = null;
@@ -115,7 +119,7 @@
   let previewDisplayHeight = 0;
   let previewWrapWidth = 0;
   let previewWrapHeight = 0;
-  let previewScale = 1.0;
+  let previewScale = PREVIEW_DEFAULT_SCALE;
   let previewRenderKey = '';
   let previewRenderedKey = '';
   let isPreviewRendering = false;
@@ -232,6 +236,7 @@
     if ('pageEnd' in patch && patch.pageEnd !== pageEnd) pageEnd = patch.pageEnd;
     if ('selectedPageNumber' in patch && patch.selectedPageNumber !== selectedPageNumber) selectedPageNumber = patch.selectedPageNumber;
     if ('selectedLineIndex' in patch && patch.selectedLineIndex !== selectedLineIndex) selectedLineIndex = patch.selectedLineIndex;
+    if ('ocrBoxExtension' in patch && patch.ocrBoxExtension !== ocrBoxExtension) ocrBoxExtension = clampOcrBoxExtension(patch.ocrBoxExtension);
     if ('lastLocalOcrError' in patch && patch.lastLocalOcrError !== lastLocalOcrError) lastLocalOcrError = patch.lastLocalOcrError;
 
     if (activeOcrRunState) {
@@ -263,6 +268,7 @@
       editorDoc: snapshot.editorDoc ?? editorDoc,
       pageStart: snapshot.pageStart ?? pageStart,
       pageEnd: snapshot.pageEnd ?? pageEnd,
+      ocrBoxExtension: snapshot.ocrBoxExtension ?? ocrBoxExtension,
       lastLocalOcrError: snapshot.lastLocalOcrError ?? lastLocalOcrError,
     });
     if (!isActiveSnapshot) {
@@ -314,6 +320,7 @@
       pageEnd,
       ocrWorkerPoolSize,
       ocrResolutionQuality,
+      ocrBoxExtension,
       ocrJson,
       timingSummary,
       editorDoc,
@@ -327,6 +334,7 @@
 
     ocrWorkerPoolSize = clampOcrWorkerPoolSize(ocrWorkerPoolSize);
     ocrResolutionQuality = normalizeOcrResolutionQuality(ocrResolutionQuality);
+    ocrBoxExtension = clampOcrBoxExtension(ocrBoxExtension);
 
     localOcrPool = Array.isArray(ocrViewCache.localOcrPool)
       ? ocrViewCache.localOcrPool
@@ -348,7 +356,6 @@
     isBuilding = false;
     showHelpModal = false;
     isPreviewDragging = false;
-    buildProgress = null;
     ocrProgress = null;
     errorMessage = '';
   }
@@ -364,6 +371,7 @@
       pageEnd,
       ocrWorkerPoolSize,
       ocrResolutionQuality,
+      ocrBoxExtension,
       ocrJson,
       timingSummary,
       editorDoc,
@@ -378,7 +386,6 @@
 
   function resetStateForNewFile() {
     errorMessage = '';
-    buildProgress = null;
     ocrProgress = null;
     timingSummary = '';
     editorDoc = null;
@@ -405,6 +412,14 @@
     return value === 'low' || value === 'high' || value === 'ultra' ? value : 'standard';
   }
 
+  function clampOcrBoxExtension(value: unknown) {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return OCR_BOX_EXTENSION_DEFAULT;
+
+    const clamped = Math.max(OCR_BOX_EXTENSION_MIN, Math.min(OCR_BOX_EXTENSION_MAX, parsed));
+    return Number((Math.round(clamped / OCR_BOX_EXTENSION_STEP) * OCR_BOX_EXTENSION_STEP).toFixed(1));
+  }
+
   function restoreOcrRuntimeSettings() {
     if (typeof window === 'undefined') return;
 
@@ -415,6 +430,7 @@
       const settings = JSON.parse(rawSettings);
       ocrWorkerPoolSize = clampOcrWorkerPoolSize(settings?.workerPoolSize);
       ocrResolutionQuality = normalizeOcrResolutionQuality(settings?.resolutionQuality);
+      ocrBoxExtension = clampOcrBoxExtension(settings?.boxExtension);
     } catch {
       // Ignore corrupted user preferences and fall back to defaults.
     }
@@ -429,6 +445,7 @@
         JSON.stringify({
           workerPoolSize: clampOcrWorkerPoolSize(ocrWorkerPoolSize),
           resolutionQuality: normalizeOcrResolutionQuality(ocrResolutionQuality),
+          boxExtension: clampOcrBoxExtension(ocrBoxExtension),
         }),
       );
     } catch {
@@ -579,17 +596,26 @@
   }
 
   function handleOcrRuntimeSettingChange(
-    options: { workerPoolSize?: unknown; resolutionQuality?: unknown } = {},
+    options: { workerPoolSize?: unknown; resolutionQuality?: unknown; boxExtension?: unknown } = {},
   ) {
-    ocrWorkerPoolSize = clampOcrWorkerPoolSize(
+    const nextWorkerPoolSize = clampOcrWorkerPoolSize(
       'workerPoolSize' in options ? options.workerPoolSize : ocrWorkerPoolSize,
     );
-    ocrResolutionQuality = normalizeOcrResolutionQuality(
+    const nextResolutionQuality = normalizeOcrResolutionQuality(
       'resolutionQuality' in options ? options.resolutionQuality : ocrResolutionQuality,
     );
+    const nextBoxExtension = clampOcrBoxExtension(
+      'boxExtension' in options ? options.boxExtension : ocrBoxExtension,
+    );
+    const shouldDisposeOcrPool = nextWorkerPoolSize !== ocrWorkerPoolSize
+      || nextResolutionQuality !== ocrResolutionQuality;
+
+    ocrWorkerPoolSize = nextWorkerPoolSize;
+    ocrResolutionQuality = nextResolutionQuality;
+    ocrBoxExtension = nextBoxExtension;
     persistOcrRuntimeSettings();
 
-    if (localOcrPool.length) {
+    if (shouldDisposeOcrPool && localOcrPool.length) {
       void disposeLocalOcrPool();
     }
   }
@@ -619,6 +645,7 @@
       pageStart = 1;
       pageEnd = instance.numPages;
       selectedPageNumber = 1;
+      resetPreviewViewForDocument();
     } catch (error: any) {
       errorMessage = error?.message || $t('ocr_lab.errors.load_failed');
     } finally {
@@ -1153,7 +1180,23 @@
   }
 
   function resetPreviewZoom() {
-    previewScale = 1.0;
+    previewScale = PREVIEW_DEFAULT_SCALE;
+  }
+
+  function resetPreviewViewForDocument() {
+    resetPreviewZoom();
+    previewLocateSequence += 1;
+    previewEditingLineIndex = null;
+    previewEditingPageNumber = null;
+    previewEditingLineKey = '';
+    previewEditingText = '';
+    dragState = null;
+    newSelectionState = null;
+
+    if (previewScrollContainer) {
+      previewScrollContainer.scrollLeft = 0;
+      previewScrollContainer.scrollTop = 0;
+    }
   }
 
   async function renderPreviewPage() {
@@ -1494,6 +1537,7 @@
     const currentPdfInstance = pdfInstance;
     const currentPdfBytes = pdfBytes;
     const requestedPageRange = normalizeOcrPageRange(pageStart, pageEnd, currentPdfInstance.numPages);
+    const requestedBoxExtension = clampOcrBoxExtension(ocrBoxExtension);
     const runControl = { runId, cancelled: false };
     ocrTreeSortMode = 'reading';
     activeOcrRunControl = runControl;
@@ -1510,8 +1554,9 @@
 	      timingSummary: '',
 	      ocrJson: '',
 	      editorDoc: null,
-	      pageStart: requestedPageRange.start,
+      pageStart: requestedPageRange.start,
       pageEnd: requestedPageRange.end,
+      ocrBoxExtension: requestedBoxExtension,
       selectedPageNumber,
       selectedLineIndex,
       lastLocalOcrError,
@@ -1528,6 +1573,7 @@
 	      ocrProgress: null,
 	      pageStart: requestedPageRange.start,
       pageEnd: requestedPageRange.end,
+      ocrBoxExtension: requestedBoxExtension,
     });
 
     const runPromise = (async () => {
@@ -1591,7 +1637,7 @@
 
           const [result] = await ocr.predict(canvas, {
             textDetLimitSideLen: getOcrQualitySize(),
-            textDetUnclipRatio: OCR_TEXT_DET_UNCLIP_RATIO,
+            textDetUnclipRatio: requestedBoxExtension,
             textRecScoreThresh: 0.35,
           });
           if (isOcrRunCancelled(runControl)) return;
@@ -1748,7 +1794,6 @@
 
     isBuilding = true;
     errorMessage = '';
-    buildProgress = null;
 
     try {
       flushOcrJsonFromEditor();
@@ -1758,9 +1803,6 @@
         ocr: parsed,
         pageStart: 1,
         pageEnd: pdfInstance.numPages,
-        onProgress: (current, total) => {
-          buildProgress = { current, total };
-        },
       });
 
       const nextName = pdfFile.name.toLowerCase().endsWith('.pdf')
@@ -1800,8 +1842,12 @@
 	          {pageEnd}
 	          workerPoolSize={ocrWorkerPoolSize}
 	          resolutionQuality={ocrResolutionQuality}
+	          boxExtension={ocrBoxExtension}
 	          minWorkerPoolSize={OCR_MIN_WORKER_POOL_SIZE}
 	          maxWorkerPoolSize={OCR_MAX_WORKER_POOL_SIZE}
+	          minBoxExtension={OCR_BOX_EXTENSION_MIN}
+	          maxBoxExtension={OCR_BOX_EXTENSION_MAX}
+	          boxExtensionStep={OCR_BOX_EXTENSION_STEP}
 	          {isFileLoading}
 	          {isBuilding}
 	          isInitializing={isInitializingOcr}
@@ -1838,12 +1884,6 @@
 
         {#if timingSummary}
           <p class="text-sm text-sky-700 bg-sky-50 border border-sky-300 rounded-lg px-4 py-3">{timingSummary}</p>
-        {/if}
-
-        {#if buildProgress}
-          <p class="text-sm text-sky-700 bg-sky-50 border border-sky-300 rounded-lg px-4 py-3">
-            {$t('ocr_lab.progress', { values: buildProgress })}
-          </p>
         {/if}
 
         {#if errorMessage}
@@ -2044,11 +2084,7 @@
                   title={$t('tooltip.export_pdf')}
                 >
                   <Download size={16} />
-                  {#if isBuilding}
-                    {$t('btn.loading')}
-                  {:else}
-                    {$t('btn.generate_pdf')}
-                  {/if}
+                  {$t('btn.generate_pdf')}
                 </button>
               </div>
             </div>

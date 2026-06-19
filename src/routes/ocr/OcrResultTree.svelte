@@ -37,7 +37,7 @@
 
       if (!currentGroup || currentGroup.pageNumber !== pageNumber) {
         currentGroup = {
-          key: `${groups.length}:${pageNumber}`,
+          key: `${pageNumber}:${Number(item?.lineIndex)}`,
           pageNumber,
           startIndex: filteredIndex,
           items: [],
@@ -107,6 +107,7 @@
 
             <div class="min-w-0">
               {#each group.items as item, itemIndex (Number(item.pageNumber) + ':' + Number(item.lineIndex))}
+                {@const isSelectedLine = Number(item.pageNumber) === Number(selectedPageNumber) && item.lineIndex === selectedLineIndex}
                 <div
                   class="group py-1 pr-1.5"
                   data-ocr-page={item.pageNumber}
@@ -121,7 +122,7 @@
                     }
                   }}
                 >
-                  <div class="rounded-md px-1.5 py-1 transition-colors {Number(item.pageNumber) === Number(selectedPageNumber) && item.lineIndex === selectedLineIndex ? 'bg-yellow-100/70' : 'group-hover:bg-sky-50/70'}">
+                  <div class="rounded-md px-1.5 py-1 transition-colors {isSelectedLine ? 'bg-yellow-100/70' : 'group-hover:bg-sky-50/70'}">
                     <div class="flex items-center gap-2 text-[11px] leading-none text-gray-400">
                       <span>#{group.startIndex + itemIndex + 1}</span>
                       {#if Number.isFinite(Number(item.line.score))}
@@ -137,7 +138,7 @@
                       </button>
                     </div>
                     <div class="relative mt-1">
-                      {#if ocrTreeSearchTerm}
+                      {#if isSelectedLine && ocrTreeSearchTerm}
                         <div class="pointer-events-none absolute inset-0 whitespace-pre-wrap break-words px-0 py-0.5 text-sm leading-[1.55] text-gray-800">
                           {#each getHighlightedTextSegments(item.line.text, ocrTreeSearchTerm) as segment}
                             {#if segment.hit}
@@ -148,16 +149,32 @@
                           {/each}
                         </div>
                       {/if}
-                      <textarea
-                        use:autosizeTextarea={item.line.text}
-                        rows="1"
-                        class="relative block w-full resize-none overflow-hidden border-0 border-transparent bg-transparent px-0 py-0.5 text-sm leading-[1.55] focus:border-slate-300 focus:outline-none {ocrTreeSearchTerm ? 'text-transparent caret-gray-800 selection:bg-sky-200 focus:bg-transparent' : 'text-gray-800 focus:bg-white/40'}"
-                        value={item.line.text}
-                        spellcheck="false"
-                        on:focus={() => selectLine(item.pageNumber, item.lineIndex)}
-                        on:click|stopPropagation={() => selectLine(item.pageNumber, item.lineIndex)}
-                        on:input={(event: Event) => updateLineText(item.pageNumber, item.lineIndex, (event.currentTarget as HTMLTextAreaElement).value)}
-                      ></textarea>
+                      {#if isSelectedLine}
+                        <textarea
+                          use:autosizeTextarea={item.line.text}
+                          rows="1"
+                          class="relative block w-full resize-none overflow-hidden border-0 border-transparent bg-transparent px-0 py-0.5 text-sm leading-[1.55] focus:border-slate-300 focus:outline-none {ocrTreeSearchTerm ? 'text-transparent caret-gray-800 selection:bg-sky-200 focus:bg-transparent' : 'text-gray-800 focus:bg-white/40'}"
+                          value={item.line.text}
+                          spellcheck="false"
+                          on:focus={() => selectLine(item.pageNumber, item.lineIndex)}
+                          on:click|stopPropagation={() => selectLine(item.pageNumber, item.lineIndex)}
+                          on:input={(event: Event) => updateLineText(item.pageNumber, item.lineIndex, (event.currentTarget as HTMLTextAreaElement).value)}
+                        ></textarea>
+                      {:else if ocrTreeSearchTerm}
+                        <div class="whitespace-pre-wrap break-words px-0 py-0.5 text-sm leading-[1.55] text-gray-800">
+                          {#each getHighlightedTextSegments(item.line.text, ocrTreeSearchTerm) as segment}
+                            {#if segment.hit}
+                              <mark class="rounded bg-yellow-200/90 px-0.5 text-gray-900">{segment.text}</mark>
+                            {:else}
+                              {segment.text}
+                            {/if}
+                          {/each}
+                        </div>
+                      {:else}
+                        <div class="whitespace-pre-wrap break-words px-0 py-0.5 text-sm leading-[1.55] text-gray-800">
+                          {item.line.text}
+                        </div>
+                      {/if}
                     </div>
                   </div>
                 </div>

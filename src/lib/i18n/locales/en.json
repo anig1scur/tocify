@@ -196,6 +196,8 @@
     "worker_count_hint": "How many OCR sessions run in parallel. More workers can be faster on powerful machines, but may make the browser heavier or less stable.",
     "resolution_quality": "Resolution",
     "resolution_quality_hint": "Controls the page image size sent to OCR. Low is faster; Standard fits most PDFs; High/Ultra can help small text or blurry scans but run slower.",
+    "box_extension": "Box Extension",
+    "box_extension_hint": "Expands detected text boxes. Higher values can recover clipped characters, but may merge nearby text.",
     "resolution_low": "Low",
     "resolution_standard": "Standard",
     "resolution_high": "High",

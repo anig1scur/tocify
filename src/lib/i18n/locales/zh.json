@@ -192,6 +192,8 @@
     "worker_count_hint": "同时运行的 OCR 会话数量。设备性能强时可以调高；浏览器变卡、发热或会话失败时调低。",
     "resolution_quality": "识别清晰度",
     "resolution_quality_hint": "送入 OCR 的页面图片尺寸。低更快；标准适合多数 PDF；高/极高更适合小字或模糊扫描件，但会更慢。",
+    "box_extension": "框扩展",
+    "box_extension_hint": "扩展文字检测框范围。调高可以减少截字，但可能把相邻文本合到一起。",
     "resolution_low": "低",
     "resolution_standard": "标准",
     "resolution_high": "高",

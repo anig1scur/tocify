@@ -1,7 +1,29 @@
-import { PDFDocument, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
+import {
+  PDFDocument,
+  ParseSpeeds,
+  TextRenderingMode,
+  beginText,
+  endText,
+  popGraphicsState,
+  pushGraphicsState,
+  rgb,
+  rotateAndSkewTextRadiansAndTranslate,
+  setCharacterSqueeze,
+  setFillingColor,
+  setFontAndSize,
+  setTextRenderingMode,
+  showText,
+  type PDFFont,
+  type PDFName,
+  type PDFPage,
+} from 'pdf-lib';
 import fontkit from 'pdf-fontkit';
 
 const SEARCHABLE_FONT_URL = 'https://static.aeriszhu.com/SourceHanSansSC-Regular.woff2';
+const INVISIBLE_TEXT_COLOR = rgb(0, 0, 0);
+const MIN_TEXT_HORIZONTAL_SCALE = 25;
+const MAX_TEXT_HORIZONTAL_SCALE = 400;
+const LINES_PER_RENDER_TICK = 200;
 
 export interface SearchableOcrLine {
   text: string;
@@ -38,53 +60,52 @@ interface RawLineLike {
 
 let fontBytesPromise: Promise<ArrayBuffer> | null = null;
 
-function drawTransparentFittedText(
+function getWidthAtSize(font: PDFFont, text: string, size: number, widthCache: Map<string, number>) {
+  let widthAtUnitSize = widthCache.get(text);
+
+  if (widthAtUnitSize === undefined) {
+    widthAtUnitSize = font.widthOfTextAtSize(text, 1);
+    widthCache.set(text, widthAtUnitSize);
+  }
+
+  return widthAtUnitSize * size;
+}
+
+async function yieldToEventLoop() {
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
+}
+
+function getTextHorizontalScale(measuredWidth: number, targetWidth: number) {
+  if (measuredWidth <= 0) return 100;
+  return Math.max(
+    MIN_TEXT_HORIZONTAL_SCALE,
+    Math.min(MAX_TEXT_HORIZONTAL_SCALE, (targetWidth / measuredWidth) * 100),
+  );
+}
+
+function drawInvisibleFittedText(
   page: PDFPage,
   font: PDFFont,
+  fontKey: PDFName,
   text: string,
   x: number,
   y: number,
   size: number,
   targetWidth: number,
+  measuredWidth: number,
 ) {
-  const measuredWidth = font.widthOfTextAtSize(text, size);
-  const stretchRatio = measuredWidth > 0 ? targetWidth / measuredWidth : 1;
-
-  if (stretchRatio <= 1.15 || text.length <= 1) {
-    page.drawText(text, {
-      x,
-      y,
-      size,
-      font,
-      color: rgb(0, 0, 0),
-      opacity: 0,
-    });
-    return;
-  }
-
-  const chars = Array.from(text);
-  const charWidths = chars.map((char) => font.widthOfTextAtSize(char, size));
-  const naturalWidth = charWidths.reduce((sum, width) => sum + width, 0);
-  const gap = chars.length > 1 ? Math.max(0, (targetWidth - naturalWidth) / (chars.length - 1)) : 0;
-  let cursorX = x;
-
-  for (let index = 0; index < chars.length; index += 1) {
-    const char = chars[index];
-    const charWidth = charWidths[index];
-
-    if (char.trim()) {
-      page.drawText(char, {
-        x: cursorX,
-        y,
-        size,
-        font,
-        color: rgb(0, 0, 0),
-        opacity: 0,
-      });
-    }
-
-    cursorX += charWidth + gap;
-  }
+  page.pushOperators(
+    pushGraphicsState(),
+    beginText(),
+    setFillingColor(INVISIBLE_TEXT_COLOR),
+    setFontAndSize(fontKey, size),
+    setTextRenderingMode(TextRenderingMode.Invisible),
+    setCharacterSqueeze(getTextHorizontalScale(measuredWidth, targetWidth)),
+    rotateAndSkewTextRadiansAndTranslate(0, 0, 0, x, y),
+    showText(font.encodeText(text)),
+    endText(),
+    popGraphicsState(),
+  );
 }
 
 async function loadSearchableFontBytes() {
@@ -206,11 +227,15 @@ export async function buildSearchablePdf({
   onProgress,
 }: BuildSearchablePdfOptions): Promise<Uint8Array> {
   const bytes = pdfBytes instanceof Uint8Array ? pdfBytes : new Uint8Array(pdfBytes);
-  const doc = await PDFDocument.load(bytes);
+  const doc = await PDFDocument.load(bytes, {
+    parseSpeed: ParseSpeeds.Fastest,
+    updateMetadata: false,
+  });
   doc.registerFontkit(fontkit);
 
   const fontBytes = await loadSearchableFontBytes();
   const font = await doc.embedFont(fontBytes, { subset: true });
+  const widthCache = new Map<string, number>();
 
   const totalPages = doc.getPageCount();
   const finalStart = Math.max(1, Math.min(totalPages, pageStart));
@@ -229,12 +254,13 @@ export async function buildSearchablePdf({
   for (let index = 0; index < pagesToProcess.length; index += 1) {
     const { pageNumber, ocrPage } = pagesToProcess[index];
     const page = doc.getPage(pageNumber - 1);
-    page.setFont(font);
+    const fontKey = page.node.newFontDictionary(font.name, font.ref);
     const { width: pdfWidth, height: pdfHeight } = page.getSize();
     const scaleX = pdfWidth / ocrPage.imageWidth;
     const scaleY = pdfHeight / ocrPage.imageHeight;
 
-    for (const line of ocrPage.lines) {
+    for (let lineIndex = 0; lineIndex < ocrPage.lines.length; lineIndex += 1) {
+      const line = ocrPage.lines[lineIndex];
       const [x1, y1, x2, y2] = line.bbox;
       const lineWidth = Math.max(1, (x2 - x1) * scaleX);
       const lineHeight = Math.max(1, (y2 - y1) * scaleY);
@@ -242,18 +268,24 @@ export async function buildSearchablePdf({
       let size = Math.max(4, lineHeight * 0.8);
       const writableWidth = lineWidth + Math.max(0.5, size * 0.12);
 
-      const measuredWidth = font.widthOfTextAtSize(line.text, size);
+      let measuredWidth = getWidthAtSize(font, line.text, size, widthCache);
       if (measuredWidth > writableWidth) {
         size = Math.max(2, size * (writableWidth / measuredWidth));
+        measuredWidth = getWidthAtSize(font, line.text, size, widthCache);
       }
 
       const y = pdfHeight - (y2 * scaleY) + Math.max(0, (lineHeight - size) * 0.25);
 
-      drawTransparentFittedText(page, font, line.text, x, y, size, writableWidth);
+      drawInvisibleFittedText(page, font, fontKey, line.text, x, y, size, writableWidth, measuredWidth);
+
+      if ((lineIndex + 1) % LINES_PER_RENDER_TICK === 0) {
+        await yieldToEventLoop();
+      }
     }
 
     onProgress?.(index + 1, pagesToProcess.length);
+    await yieldToEventLoop();
   }
 
-  return doc.save({ useObjectStreams: false });
+  return doc.save({ useObjectStreams: false, updateFieldAppearances: false });
 }

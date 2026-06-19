@@ -19,8 +19,12 @@
   export let pageEnd = 1;
   export let workerPoolSize = 4;
   export let resolutionQuality: OcrResolutionQuality = 'standard';
+  export let boxExtension = 2.0;
   export let minWorkerPoolSize = 1;
   export let maxWorkerPoolSize = 4;
+  export let minBoxExtension = 1.0;
+  export let maxBoxExtension = 3.0;
+  export let boxExtensionStep = 0.1;
   export let isFileLoading = false;
   export let isBuilding = false;
   export let isInitializing = false;
@@ -29,95 +33,124 @@
   export let ocrProgress: OcrProgress | null = null;
   export let ocrProgressPercent = 0;
   export let onPageRangeChange: (options: { start?: unknown; end?: unknown }) => void = () => undefined;
-  export let onRuntimeSettingChange: (options: { workerPoolSize?: unknown; resolutionQuality?: unknown }) => void = () => undefined;
+  export let onRuntimeSettingChange: (options: { workerPoolSize?: unknown; resolutionQuality?: unknown; boxExtension?: unknown }) => void = () => undefined;
   export let onRun: () => void = () => undefined;
   export let onCancel: () => void = () => undefined;
 
   $: isBusy = isInitializing || isRunning || isCancelling;
   $: isRunDisabled = !hasPdf || isFileLoading || isBusy || isBuilding;
+
+  const fieldControlClass = 'mt-1 box-border h-11 w-full rounded-lg border-2 border-black bg-white px-3 py-0 text-base leading-none outline-none disabled:bg-gray-100 disabled:text-gray-500';
+  const fieldLabelClass = 'flex items-center gap-1 text-xs uppercase tracking-wide text-gray-500';
 </script>
 
 <div class="border-black border-2 rounded-lg p-3 shadow-[2px_2px_0px_rgba(0,0,0,1)] bg-white">
-  <div class="grid grid-cols-2 gap-3">
-    <label class="block">
-      <span class="flex items-center gap-1 text-xs uppercase tracking-wider text-gray-500">
-        {$t('ocr_lab.start_page')}
-      </span>
-      <input
-        class="mt-1 w-full border-2 border-black rounded-lg px-3 py-2 bg-white disabled:bg-gray-100 disabled:text-gray-500"
-        type="number"
-        min="1"
-        max={pdfPageCount}
-        value={pageStart}
-        on:change={(event) =>
-          onPageRangeChange({
-            start: (event.currentTarget as HTMLInputElement).value,
-          })}
-        disabled={!hasPdf || isBusy}
-      />
-    </label>
+  <div class="grid gap-3">
+    <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <label class="block min-w-0">
+        <span class={fieldLabelClass}>
+          {$t('ocr_lab.start_page')}
+        </span>
+        <input
+          class={fieldControlClass}
+          type="number"
+          min="1"
+          max={pdfPageCount}
+          value={pageStart}
+          on:change={(event) =>
+            onPageRangeChange({
+              start: (event.currentTarget as HTMLInputElement).value,
+            })}
+          disabled={!hasPdf || isBusy}
+        />
+      </label>
 
-    <label class="block">
-      <span class="flex items-center gap-1 text-xs uppercase tracking-wider text-gray-500">
-        {$t('ocr_lab.end_page')}
-      </span>
-      <input
-        class="mt-1 w-full border-2 border-black rounded-lg px-3 py-2 bg-white disabled:bg-gray-100 disabled:text-gray-500"
-        type="number"
-        min="1"
-        max={pdfPageCount}
-        value={pageEnd}
-        on:change={(event) =>
-          onPageRangeChange({
-            end: (event.currentTarget as HTMLInputElement).value,
-          })}
-        disabled={!hasPdf || isBusy}
-      />
-    </label>
+      <label class="block min-w-0">
+        <span class={fieldLabelClass}>
+          {$t('ocr_lab.end_page')}
+        </span>
+        <input
+          class={fieldControlClass}
+          type="number"
+          min="1"
+          max={pdfPageCount}
+          value={pageEnd}
+          on:change={(event) =>
+            onPageRangeChange({
+              end: (event.currentTarget as HTMLInputElement).value,
+            })}
+          disabled={!hasPdf || isBusy}
+        />
+      </label>
 
-    <label class="block">
-      <span class="flex items-center gap-1 text-xs uppercase tracking-wider text-gray-500">
-        {$t('ocr_lab.worker_count')}
-        <Tooltip text={$t('ocr_lab.worker_count_hint')} width="w-64" position="top">
-          <span class="mb-0.5 inline-flex h-3 w-3 items-center justify-center rounded-full border border-gray-300 text-[8px] normal-case leading-none text-gray-500">i</span>
-        </Tooltip>
-      </span>
-      <input
-        class="mt-1 w-full border-2 border-black rounded-lg px-3 py-2 bg-white disabled:bg-gray-100 disabled:text-gray-500"
-        type="number"
-        min={minWorkerPoolSize}
-        max={maxWorkerPoolSize}
-        value={workerPoolSize}
-        on:input={(event) =>
-          onRuntimeSettingChange({
-            workerPoolSize: (event.currentTarget as HTMLInputElement).value,
-          })}
-        disabled={isBusy}
-      />
-    </label>
+      <label class="block min-w-0">
+        <span class={fieldLabelClass}>
+          {$t('ocr_lab.worker_count')}
+          <Tooltip text={$t('ocr_lab.worker_count_hint')} width="w-64" position="top">
+            <span class="mb-0.5 inline-flex h-3 w-3 items-center justify-center rounded-full border border-gray-300 text-[8px] normal-case leading-none text-gray-500">i</span>
+          </Tooltip>
+        </span>
+        <input
+          class={fieldControlClass}
+          type="number"
+          min={minWorkerPoolSize}
+          max={maxWorkerPoolSize}
+          value={workerPoolSize}
+          on:input={(event) =>
+            onRuntimeSettingChange({
+              workerPoolSize: (event.currentTarget as HTMLInputElement).value,
+            })}
+          disabled={isBusy}
+        />
+      </label>
+    </div>
 
-    <label class="block">
-      <span class="flex items-center gap-1 text-xs uppercase tracking-wider text-gray-500">
-        {$t('ocr_lab.resolution_quality')}
-        <Tooltip text={$t('ocr_lab.resolution_quality_hint')} width="w-64" position="top">
-          <span class="mb-0.5 inline-flex h-3 w-3 items-center justify-center rounded-full border border-gray-300 text-[8px] normal-case leading-none text-gray-500">i</span>
-        </Tooltip>
-      </span>
-      <select
-        class="mt-1 w-full border-2 border-black rounded-lg px-3 py-2 bg-white disabled:bg-gray-100 disabled:text-gray-500"
-        value={resolutionQuality}
-        on:input={(event) =>
-          onRuntimeSettingChange({
-            resolutionQuality: (event.currentTarget as HTMLSelectElement).value,
-          })}
-        disabled={isBusy}
-      >
-        <option value="low">{$t('ocr_lab.resolution_low')}</option>
-        <option value="standard">{$t('ocr_lab.resolution_standard')}</option>
-        <option value="high">{$t('ocr_lab.resolution_high')}</option>
-        <option value="ultra">{$t('ocr_lab.resolution_ultra')}</option>
-      </select>
-    </label>
+    <div class="grid grid-cols-2 gap-3">
+      <label class="block min-w-0">
+        <span class={fieldLabelClass}>
+          {$t('ocr_lab.resolution_quality')}
+          <Tooltip text={$t('ocr_lab.resolution_quality_hint')} width="w-64" position="top">
+            <span class="mb-0.5 inline-flex h-3 w-3 items-center justify-center rounded-full border border-gray-300 text-[8px] normal-case leading-none text-gray-500">i</span>
+          </Tooltip>
+        </span>
+        <select
+          class={fieldControlClass}
+          value={resolutionQuality}
+          on:input={(event) =>
+            onRuntimeSettingChange({
+              resolutionQuality: (event.currentTarget as HTMLSelectElement).value,
+            })}
+          disabled={isBusy}
+        >
+          <option value="low">{$t('ocr_lab.resolution_low')}</option>
+          <option value="standard">{$t('ocr_lab.resolution_standard')}</option>
+          <option value="high">{$t('ocr_lab.resolution_high')}</option>
+          <option value="ultra">{$t('ocr_lab.resolution_ultra')}</option>
+        </select>
+      </label>
+
+      <label class="block min-w-0">
+        <span class={fieldLabelClass}>
+          {$t('ocr_lab.box_extension')}
+          <Tooltip text={$t('ocr_lab.box_extension_hint')} width="w-64" position="top">
+            <span class="mb-0.5 inline-flex h-3 w-3 items-center justify-center rounded-full border border-gray-300 text-[8px] normal-case leading-none text-gray-500">i</span>
+          </Tooltip>
+        </span>
+        <input
+          class={fieldControlClass}
+          type="number"
+          min={minBoxExtension}
+          max={maxBoxExtension}
+          step={boxExtensionStep}
+          value={boxExtension}
+          on:change={(event) =>
+            onRuntimeSettingChange({
+              boxExtension: (event.currentTarget as HTMLInputElement).value,
+            })}
+          disabled={isBusy}
+        />
+      </label>
+    </div>
   </div>
   <p class="mt-6 text-center text-xs text-gray-400">{$t('ocr_lab.engine_note')}</p>
 </div>
