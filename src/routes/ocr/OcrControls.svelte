@@ -86,7 +86,7 @@
       <label class="block min-w-0">
         <span class={fieldLabelClass}>
           {$t('ocr_lab.worker_count')}
-          <Tooltip text={$t('ocr_lab.worker_count_hint')} width="w-64" position="top">
+          <Tooltip text={$t('ocr_lab.worker_count_hint')} width="w-64" position="right">
             <span class="mb-0.5 inline-flex h-3 w-3 items-center justify-center rounded-full border border-gray-300 text-[8px] normal-case leading-none text-gray-500">i</span>
           </Tooltip>
         </span>
@@ -109,7 +109,7 @@
       <label class="block min-w-0">
         <span class={fieldLabelClass}>
           {$t('ocr_lab.resolution_quality')}
-          <Tooltip text={$t('ocr_lab.resolution_quality_hint')} width="w-64" position="top">
+          <Tooltip text={$t('ocr_lab.resolution_quality_hint')} width="w-64" position="right">
             <span class="mb-0.5 inline-flex h-3 w-3 items-center justify-center rounded-full border border-gray-300 text-[8px] normal-case leading-none text-gray-500">i</span>
           </Tooltip>
         </span>
@@ -132,7 +132,7 @@
       <label class="block min-w-0">
         <span class={fieldLabelClass}>
           {$t('ocr_lab.box_extension')}
-          <Tooltip text={$t('ocr_lab.box_extension_hint')} width="w-64" position="top">
+          <Tooltip text={$t('ocr_lab.box_extension_hint')} width="w-64" position="right">
             <span class="mb-0.5 inline-flex h-3 w-3 items-center justify-center rounded-full border border-gray-300 text-[8px] normal-case leading-none text-gray-500">i</span>
           </Tooltip>
         </span>

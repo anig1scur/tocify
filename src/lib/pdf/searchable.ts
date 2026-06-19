@@ -41,11 +41,19 @@ export interface SearchableOcrDocument {
   pages: SearchableOcrPage[];
 }
 
+export interface SearchablePdfPageImage {
+  bytes: Uint8Array | ArrayBuffer;
+  type: 'image/jpeg' | 'image/png';
+  pdfWidth: number;
+  pdfHeight: number;
+}
+
 interface BuildSearchablePdfOptions {
   pdfBytes: Uint8Array | ArrayBuffer;
   ocr: SearchableOcrDocument;
   pageStart?: number;
   pageEnd?: number;
+  renderPageImage?: (pageNumber: number) => Promise<SearchablePdfPageImage>;
   onProgress?: (current: number, total: number) => void;
 }
 
@@ -106,6 +114,42 @@ function drawInvisibleFittedText(
     endText(),
     popGraphicsState(),
   );
+}
+
+async function drawOcrPageTextLayer(
+  page: PDFPage,
+  font: PDFFont,
+  fontKey: PDFName,
+  ocrPage: SearchableOcrPage,
+  widthCache: Map<string, number>,
+) {
+  const { width: pdfWidth, height: pdfHeight } = page.getSize();
+  const scaleX = pdfWidth / ocrPage.imageWidth;
+  const scaleY = pdfHeight / ocrPage.imageHeight;
+
+  for (let lineIndex = 0; lineIndex < ocrPage.lines.length; lineIndex += 1) {
+    const line = ocrPage.lines[lineIndex];
+    const [x1, y1, x2, y2] = line.bbox;
+    const lineWidth = Math.max(1, (x2 - x1) * scaleX);
+    const lineHeight = Math.max(1, (y2 - y1) * scaleY);
+    const x = x1 * scaleX;
+    let size = Math.max(4, lineHeight * 0.8);
+    const writableWidth = lineWidth + Math.max(0.5, size * 0.12);
+
+    let measuredWidth = getWidthAtSize(font, line.text, size, widthCache);
+    if (measuredWidth > writableWidth) {
+      size = Math.max(2, size * (writableWidth / measuredWidth));
+      measuredWidth = getWidthAtSize(font, line.text, size, widthCache);
+    }
+
+    const y = pdfHeight - (y2 * scaleY) + Math.max(0, (lineHeight - size) * 0.25);
+
+    drawInvisibleFittedText(page, font, fontKey, line.text, x, y, size, writableWidth, measuredWidth);
+
+    if ((lineIndex + 1) % LINES_PER_RENDER_TICK === 0) {
+      await yieldToEventLoop();
+    }
+  }
 }
 
 async function loadSearchableFontBytes() {
@@ -224,13 +268,15 @@ export async function buildSearchablePdf({
   ocr,
   pageStart = 1,
   pageEnd,
+  renderPageImage,
   onProgress,
 }: BuildSearchablePdfOptions): Promise<Uint8Array> {
   const bytes = pdfBytes instanceof Uint8Array ? pdfBytes : new Uint8Array(pdfBytes);
-  const doc = await PDFDocument.load(bytes, {
+  const sourceDoc = await PDFDocument.load(bytes, {
     parseSpeed: ParseSpeeds.Fastest,
     updateMetadata: false,
   });
+  const doc = renderPageImage ? await PDFDocument.create() : sourceDoc;
   doc.registerFontkit(fontkit);
 
   const fontBytes = await loadSearchableFontBytes();
@@ -238,10 +284,43 @@ export async function buildSearchablePdf({
   const widthCache = new Map<string, number>();
 
   const totalPages = doc.getPageCount();
-  const finalStart = Math.max(1, Math.min(totalPages, pageStart));
-  const finalEnd = Math.max(finalStart, Math.min(totalPages, pageEnd ?? totalPages));
+  const sourcePageCount = sourceDoc.getPageCount();
+  const finalTotalPages = renderPageImage ? sourcePageCount : totalPages;
+  const finalStart = Math.max(1, Math.min(finalTotalPages, pageStart));
+  const finalEnd = Math.max(finalStart, Math.min(finalTotalPages, pageEnd ?? finalTotalPages));
 
   const pageMap = new Map(ocr.pages.map((page) => [page.page, page]));
+
+  if (renderPageImage) {
+    for (let pageNumber = 1; pageNumber <= sourcePageCount; pageNumber += 1) {
+      const imagePage = await renderPageImage(pageNumber);
+      const page = doc.addPage([imagePage.pdfWidth, imagePage.pdfHeight]);
+      const imageBytes = imagePage.bytes instanceof Uint8Array ? imagePage.bytes : new Uint8Array(imagePage.bytes);
+      const image = imagePage.type === 'image/png'
+        ? await doc.embedPng(imageBytes)
+        : await doc.embedJpg(imageBytes);
+
+      page.drawImage(image, {
+        x: 0,
+        y: 0,
+        width: imagePage.pdfWidth,
+        height: imagePage.pdfHeight,
+      });
+
+      const ocrPage = pageNumber >= finalStart && pageNumber <= finalEnd ? pageMap.get(pageNumber) : null;
+
+      if (ocrPage) {
+        const fontKey = page.node.newFontDictionary(font.name, font.ref);
+        await drawOcrPageTextLayer(page, font, fontKey, ocrPage, widthCache);
+      }
+
+      onProgress?.(pageNumber, sourcePageCount);
+      await yieldToEventLoop();
+    }
+
+    return doc.save({ useObjectStreams: false, updateFieldAppearances: false });
+  }
+
   const pagesToProcess = [];
 
   for (let pageNumber = finalStart; pageNumber <= finalEnd; pageNumber += 1) {
@@ -255,33 +334,7 @@ export async function buildSearchablePdf({
     const { pageNumber, ocrPage } = pagesToProcess[index];
     const page = doc.getPage(pageNumber - 1);
     const fontKey = page.node.newFontDictionary(font.name, font.ref);
-    const { width: pdfWidth, height: pdfHeight } = page.getSize();
-    const scaleX = pdfWidth / ocrPage.imageWidth;
-    const scaleY = pdfHeight / ocrPage.imageHeight;
-
-    for (let lineIndex = 0; lineIndex < ocrPage.lines.length; lineIndex += 1) {
-      const line = ocrPage.lines[lineIndex];
-      const [x1, y1, x2, y2] = line.bbox;
-      const lineWidth = Math.max(1, (x2 - x1) * scaleX);
-      const lineHeight = Math.max(1, (y2 - y1) * scaleY);
-      const x = x1 * scaleX;
-      let size = Math.max(4, lineHeight * 0.8);
-      const writableWidth = lineWidth + Math.max(0.5, size * 0.12);
-
-      let measuredWidth = getWidthAtSize(font, line.text, size, widthCache);
-      if (measuredWidth > writableWidth) {
-        size = Math.max(2, size * (writableWidth / measuredWidth));
-        measuredWidth = getWidthAtSize(font, line.text, size, widthCache);
-      }
-
-      const y = pdfHeight - (y2 * scaleY) + Math.max(0, (lineHeight - size) * 0.25);
-
-      drawInvisibleFittedText(page, font, fontKey, line.text, x, y, size, writableWidth, measuredWidth);
-
-      if ((lineIndex + 1) % LINES_PER_RENDER_TICK === 0) {
-        await yieldToEventLoop();
-      }
-    }
+    await drawOcrPageTextLayer(page, font, fontKey, ocrPage, widthCache);
 
     onProgress?.(index + 1, pagesToProcess.length);
     await yieldToEventLoop();

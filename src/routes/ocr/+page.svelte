@@ -4,13 +4,14 @@
   let activeOcrRunState: any = null;
   let activeOcrRunControl: { runId: number; cancelled: boolean } | null = null;
   let lastOcrRunSnapshot: any = null;
+  let workerFetchSupportPromise: Promise<boolean> | null = null;
   let nextOcrRunId = 1;
 </script>
 
 <script lang="ts">
   import { onDestroy, onMount, tick } from 'svelte';
   import { t } from 'svelte-i18n';
-  import { ChevronLeft, ChevronRight, Download, RotateCw, Upload, ZoomIn, ZoomOut } from 'lucide-svelte';
+  import { ChevronLeft, ChevronRight, Download, Loader2, RotateCw, Upload, ZoomIn, ZoomOut } from 'lucide-svelte';
   import * as pdfjsLib from 'pdfjs-dist';
   import type { OcrResult } from '@paddleocr/paddleocr-js';
 
@@ -20,7 +21,7 @@
   import Header from '../../components/Header.svelte';
   import SeoJsonLd from '../../components/SeoJsonLd.svelte';
   import HelpModal from '../../components/modals/HelpModal.svelte';
-  import { buildSearchablePdf, normalizeSearchableOcr } from '$lib/pdf/searchable';
+  import { buildSearchablePdf, normalizeSearchableOcr, type SearchablePdfPageImage } from '$lib/pdf/searchable';
   import { isLegacyBrowser } from '$lib/utils';
   import OcrControls from './OcrControls.svelte';
   import OcrResultTree from './OcrResultTree.svelte';
@@ -40,6 +41,8 @@
 
   type OcrResolutionQuality = 'low' | 'standard' | 'high' | 'ultra';
   type OcrTreeSortMode = 'reading' | 'confidence';
+  type OcrBackend = 'auto' | 'wasm';
+  type OcrWasmPaths = string | { mjs: string; wasm: string };
   type DragMode = 'move' | 'left' | 'right' | 'top' | 'bottom' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
   type OcrProgressPhase = 'initializing' | 'rendering' | 'recognizing' | 'postprocessing';
   type OcrProgress = {
@@ -104,6 +107,17 @@
   const PREVIEW_MIN_SCALE = 0.5;
   const PREVIEW_MAX_SCALE = 8;
   const PREVIEW_DEFAULT_SCALE = 1.0;
+  const SEARCHABLE_PDF_IMAGE_MIN_MAX_SIDE = 1600;
+  const SEARCHABLE_PDF_IMAGE_JPEG_QUALITY = 0.92;
+  const ORT_CDN_BASE_URL = 'https://registry.npmmirror.com/onnxruntime-web/1.26.0/files/dist/';
+  const ORT_JSEP_WASM_PATHS: OcrWasmPaths = {
+    mjs: `${ORT_CDN_BASE_URL}ort-wasm-simd-threaded.jsep.mjs`,
+    wasm: `${ORT_CDN_BASE_URL}ort-wasm-simd-threaded.jsep.wasm`,
+  };
+  const ORT_PLAIN_WASM_PATHS: OcrWasmPaths = {
+    mjs: `${ORT_CDN_BASE_URL}ort-wasm-simd-threaded.mjs`,
+    wasm: `${ORT_CDN_BASE_URL}ort-wasm-simd-threaded.wasm`,
+  };
   let ocrJson = '';
   let timingSummary = '';
   let editorDoc: any = null;
@@ -220,7 +234,6 @@
   $: ocrProgressPercent = ocrProgress
     ? Math.max(0, Math.min(100, Math.round((ocrProgress.current / Math.max(1, ocrProgress.total)) * 100)))
     : 0;
-
   pdfjsLib.GlobalWorkerOptions.workerSrc = isLegacyBrowser() ? '/pdf.worker.legacy.min.mjs' : '/pdf.worker.min.mjs';
 
   function applyOcrRunPatch(patch: Record<string, any>) {
@@ -408,6 +421,34 @@
     );
   }
 
+  function isIosLikeBrowser() {
+    if (typeof navigator === 'undefined') return false;
+
+    const userAgent = navigator.userAgent || '';
+    const platform = navigator.platform || '';
+    return /iP(hone|ad|od)/.test(userAgent) || (platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  }
+
+  function getEffectiveOcrWorkerPoolSize() {
+    return isIosLikeBrowser() ? 1 : clampOcrWorkerPoolSize(ocrWorkerPoolSize);
+  }
+
+  function getOcrOrtRuntimeConfig(): { backend: OcrBackend; wasmPaths: OcrWasmPaths; runtime: string } {
+    if (isIosLikeBrowser()) {
+      return {
+        backend: 'wasm',
+        wasmPaths: ORT_PLAIN_WASM_PATHS,
+        runtime: 'plain-wasm',
+      };
+    }
+
+    return {
+      backend: 'auto',
+      wasmPaths: ORT_JSEP_WASM_PATHS,
+      runtime: 'jsep-auto',
+    };
+  }
+
   function normalizeOcrResolutionQuality(value: unknown): OcrResolutionQuality {
     return value === 'low' || value === 'high' || value === 'ultra' ? value : 'standard';
   }
@@ -564,9 +605,12 @@
   }
 
   function getLocalOcrRuntimeKey() {
+    const ortRuntime = getOcrOrtRuntimeConfig();
     return [
       `quality:${ocrResolutionQuality}`,
-      `workers:${clampOcrWorkerPoolSize(ocrWorkerPoolSize)}`,
+      `workers:${getEffectiveOcrWorkerPoolSize()}`,
+      `ort:${ortRuntime.runtime}`,
+      `backend:${ortRuntime.backend}`,
       `page:${INTERNAL_PAGE_BATCH_SIZE}`,
       `det:${INTERNAL_TEXT_DETECTION_BATCH_SIZE}`,
       `rec:${INTERNAL_TEXT_RECOGNITION_BATCH_SIZE}`,
@@ -1256,6 +1300,54 @@
     await Promise.all(pool.map((ocr) => ocr.dispose().catch(() => undefined)));
   }
 
+  function supportsWorkerFetch() {
+    if (workerFetchSupportPromise) return workerFetchSupportPromise;
+
+    workerFetchSupportPromise = new Promise<boolean>((resolve) => {
+      if (
+        typeof Worker === 'undefined'
+        || typeof Blob === 'undefined'
+        || typeof URL === 'undefined'
+        || typeof URL.createObjectURL !== 'function'
+      ) {
+        resolve(false);
+        return;
+      }
+
+      let worker: Worker | null = null;
+      let workerUrl = '';
+      let settled = false;
+      let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+      const finish = (supported: boolean) => {
+        if (settled) return;
+        settled = true;
+        if (timeoutId !== null) {
+          clearTimeout(timeoutId);
+        }
+        worker?.terminate();
+        if (workerUrl) {
+          URL.revokeObjectURL(workerUrl);
+        }
+        resolve(supported);
+      };
+
+      try {
+        workerUrl = URL.createObjectURL(new Blob([
+          "self.postMessage(typeof fetch === 'function');",
+        ], { type: 'application/javascript' }));
+        worker = new Worker(workerUrl);
+        timeoutId = setTimeout(() => finish(false), 1500);
+        worker.onmessage = (event) => finish(Boolean(event.data));
+        worker.onerror = () => finish(false);
+      } catch {
+        finish(false);
+      }
+    });
+
+    return workerFetchSupportPromise;
+  }
+
   async function ensureLocalOcrPool(control: { runId: number; cancelled: boolean } | null = null) {
     assertOcrRunActive(control);
     const runtimeKey = getLocalOcrRuntimeKey();
@@ -1267,7 +1359,7 @@
     const loadingProgress = {
       phase: 'initializing',
       current: 0,
-      total: clampOcrWorkerPoolSize(ocrWorkerPoolSize),
+      total: getEffectiveOcrWorkerPoolSize(),
     };
     applyOcrRunPatch({
       isInitializingOcr: true,
@@ -1278,7 +1370,11 @@
       const { PaddleOCR } = await import('@paddleocr/paddleocr-js');
       assertOcrRunActive(control);
       const hardwareConcurrency = typeof navigator !== 'undefined' ? navigator.hardwareConcurrency || 2 : 2;
-      const workerPoolSize = clampOcrWorkerPoolSize(ocrWorkerPoolSize);
+      const workerPoolSize = getEffectiveOcrWorkerPoolSize();
+      const ortRuntime = getOcrOrtRuntimeConfig();
+      const canUseWorkerOcr = await supportsWorkerFetch();
+      assertOcrRunActive(control);
+
       const wasmThreads = typeof crossOriginIsolated !== 'undefined' && crossOriginIsolated
         ? Math.max(1, Math.min(2, Math.floor((hardwareConcurrency - 1) / workerPoolSize) || 1))
         : 1;
@@ -1296,14 +1392,14 @@
         textDetectionBatchSize: INTERNAL_TEXT_DETECTION_BATCH_SIZE,
         textRecognitionBatchSize: INTERNAL_TEXT_RECOGNITION_BATCH_SIZE,
         ortOptions: {
-          backend: 'auto',
-          wasmPaths: 'https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/',
+          backend: ortRuntime.backend,
+          wasmPaths: ortRuntime.wasmPaths,
           numThreads: wasmThreads,
           simd: true,
         },
       };
 
-      const createOcr = async (worker: boolean, backend: 'auto' | 'wasm') => PaddleOCR.create({
+      const createOcr = async (worker: boolean, backend: OcrBackend) => PaddleOCR.create({
         ...baseOptions,
         worker,
         ortOptions: {
@@ -1312,7 +1408,35 @@
         },
       });
 
-      try {
+      const createMainThreadOcr = async (prefixError = '') => {
+        try {
+          assertOcrRunActive(control);
+          localOcrPool = [await createOcr(false, ortRuntime.backend)];
+          assertOcrRunActive(control);
+        } catch (primaryError: any) {
+          if (isOcrRunCancelledError(primaryError)) throw primaryError;
+          const primaryLabel = ortRuntime.backend === 'wasm' ? 'WASM backend error' : 'Auto backend error';
+          lastLocalOcrError = `${prefixError}${prefixError ? '\n\n' : ''}${primaryLabel}:\n${formatError(primaryError)}`;
+          applyOcrRunPatch({ lastLocalOcrError });
+          if (ortRuntime.backend === 'wasm') {
+            throw primaryError;
+          }
+          assertOcrRunActive(control);
+          localOcrPool = [await createOcr(false, 'wasm')];
+          assertOcrRunActive(control);
+        }
+      };
+
+      if (!canUseWorkerOcr) {
+        applyOcrRunPatch({
+          ocrProgress: {
+            phase: 'initializing',
+            current: 0,
+            total: 1,
+          },
+        });
+        await createMainThreadOcr($t('ocr_lab.errors.worker_fetch_unsupported'));
+      } else {
         const pool: LocalOcrEngine[] = [];
         try {
           for (let i = 0; i < workerPoolSize; i += 1) {
@@ -1331,28 +1455,12 @@
             });
           }
           localOcrPool = pool;
-        } catch (workerError) {
+        } catch (workerError: any) {
           await Promise.all(pool.map((ocr) => ocr.dispose().catch(() => undefined)));
-          throw workerError;
-        }
-      } catch (workerError: any) {
-        if (isOcrRunCancelledError(workerError)) throw workerError;
-        lastLocalOcrError = formatError(workerError);
-        applyOcrRunPatch({
-          lastLocalOcrError,
-        });
-
-        try {
-          assertOcrRunActive(control);
-          localOcrPool = [await createOcr(false, 'auto')];
-          assertOcrRunActive(control);
-        } catch (autoError: any) {
-          if (isOcrRunCancelledError(autoError)) throw autoError;
-          lastLocalOcrError = `${lastLocalOcrError}\n\nAuto backend error:\n${formatError(autoError)}`;
+          if (isOcrRunCancelledError(workerError)) throw workerError;
+          lastLocalOcrError = formatError(workerError);
           applyOcrRunPatch({ lastLocalOcrError });
-          assertOcrRunActive(control);
-          localOcrPool = [await createOcr(false, 'wasm')];
-          assertOcrRunActive(control);
+          await createMainThreadOcr(lastLocalOcrError);
         }
       }
 
@@ -1387,6 +1495,24 @@
     }
   }
 
+  function isOrtWasmInitError(detail: string) {
+    return /initWasm|no available backend found|wasm/i.test(detail);
+  }
+
+  function formatLocalOcrError(error: unknown) {
+    const detail = formatError(error);
+    const fallbackDetail = lastLocalOcrError
+      ? `\n\nWorker error:\n${lastLocalOcrError}`
+      : '';
+    const fullDetail = `${detail}${fallbackDetail}`;
+
+    if (isOrtWasmInitError(fullDetail)) {
+      return `${$t('ocr_lab.errors.local_wasm_failed')}\n\n${fullDetail}`;
+    }
+
+    return `${$t('ocr_lab.errors.local_failed')}\n\n${fullDetail}`;
+  }
+
   async function renderPdfPageAsCanvas(
     instance: pdfjsLib.PDFDocumentProxy,
     pageNumber: number,
@@ -1414,6 +1540,66 @@
 
     await renderTask.promise.then(() => page.cleanup()).catch(() => page.cleanup());
     return canvas;
+  }
+
+  async function canvasToJpegBytes(canvas: HTMLCanvasElement, quality = SEARCHABLE_PDF_IMAGE_JPEG_QUALITY) {
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((result) => {
+        if (result) {
+          resolve(result);
+        } else {
+          reject(new Error('Could not encode PDF page image.'));
+        }
+      }, 'image/jpeg', quality);
+    });
+
+    return new Uint8Array(await blob.arrayBuffer());
+  }
+
+  async function renderPdfPageForSearchablePdf(
+    instance: pdfjsLib.PDFDocumentProxy,
+    pageNumber: number,
+  ): Promise<SearchablePdfPageImage> {
+    const page = await instance.getPage(pageNumber);
+    const baseViewport = page.getViewport({ scale: 1 });
+    const baseMaxSide = Math.max(baseViewport.width, baseViewport.height);
+    const renderMaxSide = Math.max(SEARCHABLE_PDF_IMAGE_MIN_MAX_SIDE, getOcrQualitySize());
+    const scale = renderMaxSide / Math.max(1, baseMaxSide);
+    const viewport = page.getViewport({ scale });
+
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.floor(viewport.width);
+    canvas.height = Math.floor(viewport.height);
+
+    const context = canvas.getContext('2d', { alpha: false });
+    if (!context) {
+      throw new Error('Could not create canvas context for searchable PDF image rendering.');
+    }
+
+    context.fillStyle = '#fff';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+
+    const renderTask = page.render({
+      canvasContext: context,
+      viewport,
+    });
+
+    try {
+      await renderTask.promise;
+    } finally {
+      page.cleanup();
+    }
+
+    const bytes = await canvasToJpegBytes(canvas);
+    canvas.width = 0;
+    canvas.height = 0;
+
+    return {
+      bytes,
+      type: 'image/jpeg',
+      pdfWidth: baseViewport.width,
+      pdfHeight: baseViewport.height,
+    };
   }
 
   function polyToBBox(poly: Array<[number, number]>): [number, number, number, number] {
@@ -1541,6 +1727,7 @@
     const runControl = { runId, cancelled: false };
     ocrTreeSortMode = 'reading';
     activeOcrRunControl = runControl;
+    lastLocalOcrError = '';
 
     activeOcrRunState = {
       runId,
@@ -1559,7 +1746,7 @@
       ocrBoxExtension: requestedBoxExtension,
       selectedPageNumber,
       selectedLineIndex,
-      lastLocalOcrError,
+      lastLocalOcrError: '',
     };
     lastOcrRunSnapshot = { ...activeOcrRunState };
 
@@ -1574,6 +1761,7 @@
 	      pageStart: requestedPageRange.start,
       pageEnd: requestedPageRange.end,
       ocrBoxExtension: requestedBoxExtension,
+      lastLocalOcrError: '',
     });
 
     const runPromise = (async () => {
@@ -1727,12 +1915,9 @@
         return;
       }
 
-      const detail = formatError(error);
-      const fallbackDetail = lastLocalOcrError
-        ? `\n\nWorker error:\n${lastLocalOcrError}`
-        : '';
+      await disposeLocalOcrPool();
       applyOcrRunPatch({
-        errorMessage: `${$t('ocr_lab.errors.local_failed')}\n\n${detail}${fallbackDetail}`,
+        errorMessage: formatLocalOcrError(error),
       });
     } finally {
       applyOcrRunPatch({
@@ -1798,11 +1983,13 @@
     try {
       flushOcrJsonFromEditor();
       const parsed = parseJson();
+      const currentPdfInstance = pdfInstance;
       const result = await buildSearchablePdf({
         pdfBytes,
         ocr: parsed,
         pageStart: 1,
-        pageEnd: pdfInstance.numPages,
+        pageEnd: currentPdfInstance.numPages,
+        renderPageImage: (pageNumber) => renderPdfPageForSearchablePdf(currentPdfInstance, pageNumber),
       });
 
       const nextName = pdfFile.name.toLowerCase().endsWith('.pdf')
@@ -1832,7 +2019,7 @@
   <div
     class="flex flex-col mt-5 lg:flex-row lg:items-start lg:mt-8 p-2 md:p-4 md:pr-3 gap-4 lg:gap-8 mx-auto w-[95%] md:w-[90%] xl:w-[80%] 3xl:w-[75%] max-w-6xl justify-between"
   >
-	      <aside class="w-full lg:w-[35%] min-h-[85vh] flex-shrink-0 flex flex-col gap-4">
+	      <aside class="w-full lg:w-[35%] lg:min-h-[85vh] flex-shrink-0 flex flex-col gap-4">
 	        <Header activePage="ocr" on:openhelp={() => (showHelpModal = true)} />
 
 	        <OcrControls
@@ -1890,7 +2077,6 @@
           <p class="text-sm text-red-700 bg-red-50 border border-red-300 rounded-lg px-4 py-3 whitespace-pre-line">{errorMessage}</p>
         {/if}
 
-        <div class="mt-auto"></div>
       </aside>
 
       <main class="flex flex-col w-full lg:w-[70%] min-w-0 h-fit lg:sticky lg:top-5 lg:self-start">
@@ -2050,9 +2236,6 @@
                             {/if}
                           {/if}
 
-                          {#if isPreviewRendering && !previewRenderedKey}
-                            <div class="absolute inset-0 bg-white/70 flex items-center justify-center text-sm font-bold">{$t('ocr_lab.preview_rendering')}</div>
-                          {/if}
                         </div>
                       </div>
                     </div>
@@ -2078,12 +2261,17 @@
                   {$t('btn.upload_new')}
                 </button>
                 <button
-                  class="btn flex gap-2 items-center justify-center font-bold bg-green-500 text-black border-2 border-black rounded-lg px-4 py-2 shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all disabled:bg-gray-300 disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0 w-full md:w-auto"
+                  class="btn flex gap-2 items-center justify-center font-bold bg-green-500 text-black border-2 border-black rounded-lg px-4 py-2 shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0 w-full md:w-auto {(!pdfFile || isFileLoading) ? 'disabled:bg-gray-300 disabled:cursor-not-allowed' : 'disabled:bg-green-500 disabled:cursor-wait'}"
                   on:click={generateSearchablePdf}
                   disabled={!pdfFile || isFileLoading || isBuilding}
+                  aria-busy={isBuilding}
                   title={$t('tooltip.export_pdf')}
                 >
-                  <Download size={16} />
+                  {#if isBuilding}
+                    <Loader2 size={16} class="animate-spin" />
+                  {:else}
+                    <Download size={16} />
+                  {/if}
                   {$t('btn.generate_pdf')}
                 </button>
               </div>

@@ -211,13 +211,14 @@
     "sort_reading_order": "阅读顺序",
     "delete_selected_line": "删除选中行",
     "pdf_preview_title": "PDF 预览",
-    "preview_rendering": "正在渲染预览...",
     "progress": "正在写入隐藏文本层：{current} / {total}",
     "errors": {
       "load_failed": "加载 PDF 失败。",
       "not_pdf": "这个文件看起来不是有效的 PDF。请确认你选择的是原始 .pdf 文件。",
       "no_pdf": "请先上传原始 PDF。",
       "local_failed": "运行本地 OCR 失败。",
+      "local_wasm_failed": "浏览器 OCR 后端初始化失败。请刷新页面后重试；如果仍失败，降低 Worker 数量或换一个浏览器。",
+      "worker_fetch_unsupported": "当前浏览器的 Web Worker 不支持 fetch，无法运行本地 OCR。请使用最新版 Chrome、Edge、Safari 或 Firefox。",
       "build_failed": "生成双层 PDF 失败。"
     }
   },

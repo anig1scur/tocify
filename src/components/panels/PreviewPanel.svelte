@@ -61,7 +61,7 @@
 
 <div class="flex flex-col w-full lg:w-[70%] lg:sticky lg:top-5 lg:self-start">
   <div
-    class="h-fit pb-4 min-h-[85vh] border-black border-2 rounded-lg bg-white shadow-[2px_2px_0px_rgba(0,0,0,1)]"
+    class="relative h-fit pb-4 min-h-[85vh] border-black border-2 rounded-lg bg-white shadow-[2px_2px_0px_rgba(0,0,0,1)]"
   >
     {#if isFileLoading}
       <div
