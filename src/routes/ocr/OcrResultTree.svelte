@@ -3,8 +3,7 @@
   import { Search, Trash2, X } from 'lucide-svelte';
 
   import '../../lib/i18n';
-
-  type OcrTreeSortMode = 'reading' | 'confidence';
+  import type { OcrTreeSortMode } from '$lib/ocr/types';
 
   export let flatOcrLines: any[] = [];
   export let filteredOcrLines: any[] = [];
@@ -122,62 +121,48 @@
                     }
                   }}
                 >
-                  <div class="rounded-md px-1.5 py-1 transition-colors {isSelectedLine ? 'bg-yellow-100/70' : 'group-hover:bg-sky-50/70'}">
-                    <div class="flex items-center gap-2 text-[11px] leading-none text-gray-400">
-                      <span>#{group.startIndex + itemIndex + 1}</span>
-                      {#if Number.isFinite(Number(item.line.score))}
-                        <span class="ml-auto font-mono">{Number(item.line.score).toFixed(3)}</span>
-                      {/if}
-                      <button
-                        class="p-0.5 text-gray-400 hover:text-gray-700 transition-colors"
-                        title={$t('ocr_lab.delete_selected_line')}
-                        aria-label={$t('ocr_lab.delete_selected_line')}
-                        on:click|stopPropagation={() => deleteLine(item.pageNumber, item.lineIndex)}
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                    <div class="relative mt-1">
-                      {#if isSelectedLine && ocrTreeSearchTerm}
-                        <div class="pointer-events-none absolute inset-0 whitespace-pre-wrap break-words px-0 py-0.5 text-sm leading-[1.55] text-gray-800">
-                          {#each getHighlightedTextSegments(item.line.text, ocrTreeSearchTerm) as segment}
-                            {#if segment.hit}
-                              <mark class="rounded bg-yellow-200/90 px-0.5 text-gray-900">{segment.text}</mark>
-                            {:else}
-                              {segment.text}
-                            {/if}
-                          {/each}
-                        </div>
-                      {/if}
-                      {#if isSelectedLine}
-                        <textarea
-                          use:autosizeTextarea={item.line.text}
-                          rows="1"
-                          class="relative block w-full resize-none overflow-hidden border-0 border-transparent bg-transparent px-0 py-0.5 text-sm leading-[1.55] focus:border-slate-300 focus:outline-none {ocrTreeSearchTerm ? 'text-transparent caret-gray-800 selection:bg-sky-200 focus:bg-transparent' : 'text-gray-800 focus:bg-white/40'}"
-                          value={item.line.text}
-                          spellcheck="false"
-                          on:focus={() => selectLine(item.pageNumber, item.lineIndex)}
-                          on:click|stopPropagation={() => selectLine(item.pageNumber, item.lineIndex)}
-                          on:input={(event: Event) => updateLineText(item.pageNumber, item.lineIndex, (event.currentTarget as HTMLTextAreaElement).value)}
-                        ></textarea>
-                      {:else if ocrTreeSearchTerm}
-                        <div class="whitespace-pre-wrap break-words px-0 py-0.5 text-sm leading-[1.55] text-gray-800">
-                          {#each getHighlightedTextSegments(item.line.text, ocrTreeSearchTerm) as segment}
-                            {#if segment.hit}
-                              <mark class="rounded bg-yellow-200/90 px-0.5 text-gray-900">{segment.text}</mark>
-                            {:else}
-                              {segment.text}
-                            {/if}
-                          {/each}
-                        </div>
-                      {:else}
-                        <div class="whitespace-pre-wrap break-words px-0 py-0.5 text-sm leading-[1.55] text-gray-800">
-                          {item.line.text}
-                        </div>
-                      {/if}
-                    </div>
-                  </div>
-                </div>
+	                  <div class="rounded-md px-1.5 py-1 transition-colors {isSelectedLine ? 'bg-yellow-100/70' : 'group-hover:bg-sky-50/70'}">
+	                    <div class="flex items-center gap-2 text-[11px] leading-none text-gray-400">
+	                      <span>#{group.startIndex + itemIndex + 1}</span>
+	                      {#if Number.isFinite(Number(item.line.score))}
+	                        <span class="ml-auto font-mono">{Number(item.line.score).toFixed(3)}</span>
+	                      {/if}
+	                      <button
+	                        type="button"
+	                        class="p-0.5 text-gray-400 hover:text-gray-700 transition-colors"
+	                        title={$t('ocr_lab.delete_selected_line')}
+	                        aria-label={$t('ocr_lab.delete_selected_line')}
+	                        on:click|stopPropagation={() => deleteLine(item.pageNumber, item.lineIndex)}
+	                      >
+	                        <Trash2 size={14} />
+	                      </button>
+	                    </div>
+	                    <div class="relative mt-1">
+	                      {#if ocrTreeSearchTerm}
+	                        <div class="pointer-events-none absolute inset-0 whitespace-pre-wrap break-words px-0 py-0.5 text-sm leading-[1.55] text-gray-800">
+	                          {#each getHighlightedTextSegments(item.line.text, ocrTreeSearchTerm) as segment}
+	                            {#if segment.hit}
+	                              <mark class="rounded bg-yellow-200/90 px-0.5 text-gray-900">{segment.text}</mark>
+	                            {:else}
+	                              {segment.text}
+	                            {/if}
+	                          {/each}
+	                        </div>
+	                      {/if}
+	                      <textarea
+	                        use:autosizeTextarea={item.line.text}
+	                        rows="1"
+	                        class="relative block w-full resize-none overflow-hidden border-0 border-transparent bg-transparent px-0 py-0.5 text-sm leading-[1.55] focus:border-slate-300 focus:outline-none {ocrTreeSearchTerm ? 'text-transparent caret-gray-800 selection:bg-sky-200 focus:bg-transparent' : 'text-gray-800 focus:bg-white/40'}"
+	                        value={item.line.text}
+	                        spellcheck="false"
+	                        on:focus={() => selectLine(item.pageNumber, item.lineIndex)}
+	                        on:click|stopPropagation={() => selectLine(item.pageNumber, item.lineIndex)}
+	                        on:keydown|stopPropagation
+	                        on:input={(event: Event) => updateLineText(item.pageNumber, item.lineIndex, (event.currentTarget as HTMLTextAreaElement).value)}
+	                      ></textarea>
+	                    </div>
+	                  </div>
+	                </div>
               {/each}
             </div>
           </section>

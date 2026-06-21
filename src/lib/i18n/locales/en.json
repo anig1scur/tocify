@@ -192,6 +192,12 @@
     "meta_description": "Run browser OCR and create searchable double-layer PDFs locally.",
     "start_page": "Start Page",
     "end_page": "End Page",
+    "model_size": "Model",
+    "model_size_hint": "OCR runs locally in your browser. PP-OCRv6 Small is more accurate for dense text and scans but takes longer to load and run. PP-OCRv6 Tiny is faster and lighter.",
+    "model_small": "PP-OCRv6 Small",
+    "model_tiny": "PP-OCRv6 Tiny",
+    "watermark_cleanup": "Watermark Cleanup",
+    "watermark_cleanup_hint": "Only affects the temporary image sent to OCR. It removes mid-gray watermarks and strengthens black text for watermarked scans, but adds a little per-page processing time.",
     "worker_count": "Workers",
     "worker_count_hint": "How many OCR sessions run in parallel. More workers can be faster on powerful machines, but may make the browser heavier or less stable.",
     "resolution_quality": "Resolution",
@@ -203,7 +209,6 @@
     "resolution_high": "High",
     "resolution_ultra": "Ultra",
     "run_local": "Run Local OCR",
-    "engine_note": "PP-OCRv6 tiny, running locally in your browser.",
     "local_loading_button": "Loading Model...",
     "local_running_button": "Running OCR...",
     "cancel_ocr": "Cancel OCR",
@@ -215,7 +220,6 @@
     "sort_reading_order": "Reading",
     "delete_selected_line": "Delete selected line",
     "pdf_preview_title": "PDF Preview",
-    "progress": "Writing hidden text layer: {current} / {total}",
     "errors": {
       "load_failed": "Failed to load this PDF.",
       "not_pdf": "This file does not look like a valid PDF. Make sure you selected the original .pdf file.",
@@ -223,6 +227,8 @@
       "local_failed": "Failed to run local OCR.",
       "local_wasm_failed": "The browser OCR backend failed to initialize. Refresh the page and try again; if it still fails, reduce Workers or use another browser.",
       "worker_fetch_unsupported": "This browser does not support fetch inside Web Workers, so local OCR cannot run. Use the latest Chrome, Edge, Safari, or Firefox.",
+      "engine_timeout": "The OCR engine did not respond in time. On Firefox, try Workers = 1, Tiny model, or Chrome/Edge if it keeps happening.",
+      "page_timeout": "OCR did not finish page {page} in time. Try a lower resolution, Tiny model, or fewer pages.",
       "build_failed": "Failed to build the searchable PDF."
     }
   },

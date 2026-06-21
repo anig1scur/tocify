@@ -4,52 +4,85 @@
   let activeOcrRunState: any = null;
   let activeOcrRunControl: { runId: number; cancelled: boolean } | null = null;
   let lastOcrRunSnapshot: any = null;
-  let workerFetchSupportPromise: Promise<boolean> | null = null;
   let nextOcrRunId = 1;
 </script>
 
 <script lang="ts">
   import { onDestroy, onMount, tick } from 'svelte';
   import { t } from 'svelte-i18n';
-  import { ChevronLeft, ChevronRight, Download, Loader2, RotateCw, Upload, ZoomIn, ZoomOut } from 'lucide-svelte';
   import * as pdfjsLib from 'pdfjs-dist';
-  import type { OcrResult } from '@paddleocr/paddleocr-js';
 
   import '../../lib/i18n';
-  import DropzoneView from '../../components/DropzoneView.svelte';
   import Footer from '../../components/Footer.svelte';
   import Header from '../../components/Header.svelte';
   import SeoJsonLd from '../../components/SeoJsonLd.svelte';
   import HelpModal from '../../components/modals/HelpModal.svelte';
-  import { buildSearchablePdf, normalizeSearchableOcr, type SearchablePdfPageImage } from '$lib/pdf/searchable';
+  import { buildSearchablePdf, normalizeSearchableOcr } from '$lib/pdf/searchable';
   import { isLegacyBrowser } from '$lib/utils';
   import OcrControls from './OcrControls.svelte';
+  import OcrPdfPreview from './OcrPdfPreview.svelte';
   import OcrResultTree from './OcrResultTree.svelte';
   import {
     clamp,
+    getLineBBox,
     getLineMergeKey,
     markLineUserEdited,
     mergeIncomingOcrPage,
-    resolveSmallHorizontalOverlaps,
+    type OcrBBox,
     sortLinesForReadingOrder,
-  } from './ocrGeometry';
-
-  type LocalOcrEngine = {
-    predict(input: unknown, params?: Record<string, unknown>): Promise<OcrResult[]>;
-    dispose(): Promise<void>;
-  };
-
-  type OcrResolutionQuality = 'low' | 'standard' | 'high' | 'ultra';
-  type OcrTreeSortMode = 'reading' | 'confidence';
-  type OcrBackend = 'auto' | 'wasm';
-  type OcrWasmPaths = string | { mjs: string; wasm: string };
-  type DragMode = 'move' | 'left' | 'right' | 'top' | 'bottom' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
-  type OcrProgressPhase = 'initializing' | 'rendering' | 'recognizing' | 'postprocessing';
-  type OcrProgress = {
-    phase: OcrProgressPhase;
-    current: number;
-    total: number;
-  };
+  } from '$lib/ocr/geometry';
+  import {
+    convertLocalResult,
+    renderPdfPageAsCanvas,
+  } from '$lib/ocr/image-processing';
+  import {
+    INTERNAL_PAGE_BATCH_SIZE,
+    INTERNAL_TEXT_DETECTION_BATCH_SIZE,
+    INTERNAL_TEXT_RECOGNITION_BATCH_SIZE,
+    OCR_BOX_EXTENSION_MAX,
+    OCR_BOX_EXTENSION_MIN,
+    OCR_BOX_EXTENSION_STEP,
+    OCR_ENGINE_CREATE_TIMEOUT_MS,
+    OCR_LINE_ID_KEY,
+    OCR_MAX_WORKER_POOL_SIZE,
+    OCR_MIN_WORKER_POOL_SIZE,
+    OCR_MODEL_CONFIGS,
+    OCR_PAGE_PREDICT_TIMEOUT_MS,
+    OCR_RUNTIME_SETTINGS_STORAGE_KEY,
+    OCR_SELECTION_HISTORY_LIMIT,
+    OCR_TREE_STICKY_PAGE_HEIGHT,
+    OCR_TREE_STICKY_PAGE_TOP,
+    OCR_TREE_STICKY_SEARCH_TOP,
+    PREVIEW_DEFAULT_SCALE,
+    PREVIEW_LOCATED_BOX_HORIZONTAL_PADDING,
+    PREVIEW_MAX_SCALE,
+    PREVIEW_MIN_LOCATED_BOX_HEIGHT,
+    PREVIEW_MIN_SCALE,
+  } from '$lib/ocr/config';
+  import type {
+    DragMode,
+    LocalOcrEngine,
+    OcrBackend,
+    OcrModelSize,
+    OcrProgress,
+    OcrResolutionQuality,
+    OcrSelectionHistoryEntry,
+    OcrSelectionState,
+    OcrTreeSortMode,
+  } from '$lib/ocr/types';
+  import {
+    clampOcrBoxExtension,
+    clampOcrWorkerPoolSize,
+    disposeLateOcrEngine,
+    getEffectiveOcrWorkerPoolSize as resolveEffectiveOcrWorkerPoolSize,
+    getOcrOrtRuntimeConfig,
+    getOcrResolutionQualitySize,
+    normalizeOcrModelSize,
+    normalizeOcrResolutionQuality,
+    shouldUseOcrWorker,
+    supportsWorkerFetch,
+    withTimeout,
+  } from '$lib/ocr/runtime';
 
   class OcrRunCancelledError extends Error {
     constructor() {
@@ -58,7 +91,6 @@
     }
   }
 
-  let fileInput: HTMLInputElement | null = null;
   let pdfFile: File | null = null;
   let pdfBytes: Uint8Array | null = null;
   let pdfInstance: pdfjsLib.PDFDocumentProxy | null = null;
@@ -79,45 +111,11 @@
 
   let pageStart = 1;
   let pageEnd = 1;
+  let ocrModelSize: OcrModelSize = 'tiny';
   let ocrWorkerPoolSize = 4;
   let ocrResolutionQuality: OcrResolutionQuality = 'standard';
+  let ocrWatermarkCleanup = false;
   let ocrBoxExtension = 2.0;
-  const OCR_MIN_WORKER_POOL_SIZE = 1;
-  const OCR_MAX_WORKER_POOL_SIZE = 4;
-  const OCR_RUNTIME_SETTINGS_STORAGE_KEY = 'tocify.ocr.runtimeSettings';
-  const INTERNAL_PAGE_BATCH_SIZE = 1;
-  const INTERNAL_TEXT_DETECTION_BATCH_SIZE = 1;
-  const INTERNAL_TEXT_RECOGNITION_BATCH_SIZE = 2;
-  const OCR_BOX_EXTENSION_DEFAULT = 2.0;
-  const OCR_BOX_EXTENSION_MIN = 1.0;
-  const OCR_BOX_EXTENSION_MAX = 3.0;
-  const OCR_BOX_EXTENSION_STEP = 0.1;
-  const OCR_RESOLUTION_QUALITY_SIZES: Record<OcrResolutionQuality, number> = {
-    low: 1200,
-    standard: 1600,
-    high: 2000,
-    ultra: 2400,
-  };
-  const OCR_TREE_STICKY_SEARCH_TOP = 48;
-  const OCR_TREE_STICKY_SEARCH_HEIGHT = 36;
-  const OCR_TREE_STICKY_GAP = 14;
-  const OCR_TREE_STICKY_PAGE_TOP = OCR_TREE_STICKY_SEARCH_TOP + OCR_TREE_STICKY_SEARCH_HEIGHT + OCR_TREE_STICKY_GAP;
-  const OCR_TREE_STICKY_PAGE_HEIGHT = 20;
-  const PREVIEW_MIN_LOCATED_BOX_HEIGHT = 17;
-  const PREVIEW_MIN_SCALE = 0.5;
-  const PREVIEW_MAX_SCALE = 8;
-  const PREVIEW_DEFAULT_SCALE = 1.0;
-  const SEARCHABLE_PDF_IMAGE_MIN_MAX_SIDE = 1600;
-  const SEARCHABLE_PDF_IMAGE_JPEG_QUALITY = 0.92;
-  const ORT_CDN_BASE_URL = 'https://registry.npmmirror.com/onnxruntime-web/1.26.0/files/dist/';
-  const ORT_JSEP_WASM_PATHS: OcrWasmPaths = {
-    mjs: `${ORT_CDN_BASE_URL}ort-wasm-simd-threaded.jsep.mjs`,
-    wasm: `${ORT_CDN_BASE_URL}ort-wasm-simd-threaded.jsep.wasm`,
-  };
-  const ORT_PLAIN_WASM_PATHS: OcrWasmPaths = {
-    mjs: `${ORT_CDN_BASE_URL}ort-wasm-simd-threaded.mjs`,
-    wasm: `${ORT_CDN_BASE_URL}ort-wasm-simd-threaded.wasm`,
-  };
   let ocrJson = '';
   let timingSummary = '';
   let editorDoc: any = null;
@@ -145,12 +143,20 @@
   let previewEditingText = '';
   let previewEditingTextarea: HTMLTextAreaElement | null = null;
   let lastSyncedCompletedRunId: number | null = null;
+  let nextOcrLineEditorId = 1;
+  let ocrUndoStack: OcrSelectionHistoryEntry[] = [];
+  let ocrRedoStack: OcrSelectionHistoryEntry[] = [];
   let dragState: {
     pointerId: number;
     mode: DragMode;
     startX: number;
     startY: number;
-    original: [number, number, number, number];
+    original: OcrBBox;
+    targetLine: any;
+    pageNumber: number;
+    lineIndex: number;
+    lineId: string;
+    selectionBefore: OcrSelectionState;
   } | null = null;
   let newSelectionState: {
     pointerId: number;
@@ -249,6 +255,8 @@
     if ('pageEnd' in patch && patch.pageEnd !== pageEnd) pageEnd = patch.pageEnd;
     if ('selectedPageNumber' in patch && patch.selectedPageNumber !== selectedPageNumber) selectedPageNumber = patch.selectedPageNumber;
     if ('selectedLineIndex' in patch && patch.selectedLineIndex !== selectedLineIndex) selectedLineIndex = patch.selectedLineIndex;
+    if ('ocrModelSize' in patch && patch.ocrModelSize !== ocrModelSize) ocrModelSize = normalizeOcrModelSize(patch.ocrModelSize);
+    if ('ocrWatermarkCleanup' in patch && patch.ocrWatermarkCleanup !== ocrWatermarkCleanup) ocrWatermarkCleanup = Boolean(patch.ocrWatermarkCleanup);
     if ('ocrBoxExtension' in patch && patch.ocrBoxExtension !== ocrBoxExtension) ocrBoxExtension = clampOcrBoxExtension(patch.ocrBoxExtension);
     if ('lastLocalOcrError' in patch && patch.lastLocalOcrError !== lastLocalOcrError) lastLocalOcrError = patch.lastLocalOcrError;
 
@@ -281,6 +289,8 @@
       editorDoc: snapshot.editorDoc ?? editorDoc,
       pageStart: snapshot.pageStart ?? pageStart,
       pageEnd: snapshot.pageEnd ?? pageEnd,
+      ocrModelSize: snapshot.ocrModelSize ?? ocrModelSize,
+      ocrWatermarkCleanup: snapshot.ocrWatermarkCleanup ?? ocrWatermarkCleanup,
       ocrBoxExtension: snapshot.ocrBoxExtension ?? ocrBoxExtension,
       lastLocalOcrError: snapshot.lastLocalOcrError ?? lastLocalOcrError,
     });
@@ -331,6 +341,8 @@
       localOcrRuntimeKey,
       pageStart,
       pageEnd,
+      ocrModelSize,
+      ocrWatermarkCleanup,
       ocrWorkerPoolSize,
       ocrResolutionQuality,
       ocrBoxExtension,
@@ -346,6 +358,8 @@
     } = ocrViewCache);
 
     ocrWorkerPoolSize = clampOcrWorkerPoolSize(ocrWorkerPoolSize);
+    ocrModelSize = normalizeOcrModelSize(ocrModelSize);
+    ocrWatermarkCleanup = Boolean(ocrWatermarkCleanup);
     ocrResolutionQuality = normalizeOcrResolutionQuality(ocrResolutionQuality);
     ocrBoxExtension = clampOcrBoxExtension(ocrBoxExtension);
 
@@ -382,6 +396,8 @@
       localOcrRuntimeKey,
       pageStart,
       pageEnd,
+      ocrModelSize,
+      ocrWatermarkCleanup,
       ocrWorkerPoolSize,
       ocrResolutionQuality,
       ocrBoxExtension,
@@ -398,6 +414,7 @@
   }
 
   function resetStateForNewFile() {
+    clearOcrSelectionHistory();
     errorMessage = '';
     ocrProgress = null;
     timingSummary = '';
@@ -414,51 +431,8 @@
     previewDisplayHeight = 0;
   }
 
-  function clampOcrWorkerPoolSize(value: unknown) {
-    return Math.max(
-      OCR_MIN_WORKER_POOL_SIZE,
-      Math.min(OCR_MAX_WORKER_POOL_SIZE, Math.floor(Number(value)) || 4),
-    );
-  }
-
-  function isIosLikeBrowser() {
-    if (typeof navigator === 'undefined') return false;
-
-    const userAgent = navigator.userAgent || '';
-    const platform = navigator.platform || '';
-    return /iP(hone|ad|od)/.test(userAgent) || (platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  }
-
   function getEffectiveOcrWorkerPoolSize() {
-    return isIosLikeBrowser() ? 1 : clampOcrWorkerPoolSize(ocrWorkerPoolSize);
-  }
-
-  function getOcrOrtRuntimeConfig(): { backend: OcrBackend; wasmPaths: OcrWasmPaths; runtime: string } {
-    if (isIosLikeBrowser()) {
-      return {
-        backend: 'wasm',
-        wasmPaths: ORT_PLAIN_WASM_PATHS,
-        runtime: 'plain-wasm',
-      };
-    }
-
-    return {
-      backend: 'auto',
-      wasmPaths: ORT_JSEP_WASM_PATHS,
-      runtime: 'jsep-auto',
-    };
-  }
-
-  function normalizeOcrResolutionQuality(value: unknown): OcrResolutionQuality {
-    return value === 'low' || value === 'high' || value === 'ultra' ? value : 'standard';
-  }
-
-  function clampOcrBoxExtension(value: unknown) {
-    const parsed = Number(value);
-    if (!Number.isFinite(parsed)) return OCR_BOX_EXTENSION_DEFAULT;
-
-    const clamped = Math.max(OCR_BOX_EXTENSION_MIN, Math.min(OCR_BOX_EXTENSION_MAX, parsed));
-    return Number((Math.round(clamped / OCR_BOX_EXTENSION_STEP) * OCR_BOX_EXTENSION_STEP).toFixed(1));
+    return resolveEffectiveOcrWorkerPoolSize(ocrWorkerPoolSize);
   }
 
   function restoreOcrRuntimeSettings() {
@@ -469,8 +443,10 @@
       if (!rawSettings) return;
 
       const settings = JSON.parse(rawSettings);
+      ocrModelSize = normalizeOcrModelSize(settings?.modelSize);
       ocrWorkerPoolSize = clampOcrWorkerPoolSize(settings?.workerPoolSize);
       ocrResolutionQuality = normalizeOcrResolutionQuality(settings?.resolutionQuality);
+      ocrWatermarkCleanup = Boolean(settings?.watermarkCleanup);
       ocrBoxExtension = clampOcrBoxExtension(settings?.boxExtension);
     } catch {
       // Ignore corrupted user preferences and fall back to defaults.
@@ -484,8 +460,10 @@
       window.localStorage.setItem(
         OCR_RUNTIME_SETTINGS_STORAGE_KEY,
         JSON.stringify({
+          modelSize: normalizeOcrModelSize(ocrModelSize),
           workerPoolSize: clampOcrWorkerPoolSize(ocrWorkerPoolSize),
           resolutionQuality: normalizeOcrResolutionQuality(ocrResolutionQuality),
+          watermarkCleanup: Boolean(ocrWatermarkCleanup),
           boxExtension: clampOcrBoxExtension(ocrBoxExtension),
         }),
       );
@@ -495,7 +473,7 @@
   }
 
   function getOcrQualitySize() {
-    return OCR_RESOLUTION_QUALITY_SIZES[ocrResolutionQuality];
+    return getOcrResolutionQualitySize(ocrResolutionQuality);
   }
 
   function clampOcrPageNumber(value: unknown, totalPages = pdfInstance?.numPages || 1) {
@@ -607,8 +585,10 @@
   function getLocalOcrRuntimeKey() {
     const ortRuntime = getOcrOrtRuntimeConfig();
     return [
+      `model:${ocrModelSize}`,
       `quality:${ocrResolutionQuality}`,
       `workers:${getEffectiveOcrWorkerPoolSize()}`,
+      `execution:${shouldUseOcrWorker() ? 'worker' : 'main'}`,
       `ort:${ortRuntime.runtime}`,
       `backend:${ortRuntime.backend}`,
       `page:${INTERNAL_PAGE_BATCH_SIZE}`,
@@ -640,22 +620,31 @@
   }
 
   function handleOcrRuntimeSettingChange(
-    options: { workerPoolSize?: unknown; resolutionQuality?: unknown; boxExtension?: unknown } = {},
+    options: { modelSize?: unknown; workerPoolSize?: unknown; resolutionQuality?: unknown; watermarkCleanup?: unknown; boxExtension?: unknown } = {},
   ) {
+    const nextModelSize = normalizeOcrModelSize(
+      'modelSize' in options ? options.modelSize : ocrModelSize,
+    );
     const nextWorkerPoolSize = clampOcrWorkerPoolSize(
       'workerPoolSize' in options ? options.workerPoolSize : ocrWorkerPoolSize,
     );
     const nextResolutionQuality = normalizeOcrResolutionQuality(
       'resolutionQuality' in options ? options.resolutionQuality : ocrResolutionQuality,
     );
+    const nextWatermarkCleanup = Boolean(
+      'watermarkCleanup' in options ? options.watermarkCleanup : ocrWatermarkCleanup,
+    );
     const nextBoxExtension = clampOcrBoxExtension(
       'boxExtension' in options ? options.boxExtension : ocrBoxExtension,
     );
-    const shouldDisposeOcrPool = nextWorkerPoolSize !== ocrWorkerPoolSize
+    const shouldDisposeOcrPool = nextModelSize !== ocrModelSize
+      || nextWorkerPoolSize !== ocrWorkerPoolSize
       || nextResolutionQuality !== ocrResolutionQuality;
 
+    ocrModelSize = nextModelSize;
     ocrWorkerPoolSize = nextWorkerPoolSize;
     ocrResolutionQuality = nextResolutionQuality;
+    ocrWatermarkCleanup = nextWatermarkCleanup;
     ocrBoxExtension = nextBoxExtension;
     persistOcrRuntimeSettings();
 
@@ -890,12 +879,219 @@
     return [Math.round(x1), Math.round(y1), Math.round(x2), Math.round(y2)];
   }
 
-  function updateSelectedLineBBox(bbox: [number, number, number, number]) {
-    if (!selectedPageData || !selectedLine) return;
-    selectedLine.bbox = normalizeEditorBBox(bbox);
-    markLineUserEdited(selectedLine);
+  function clonePlainValue<T>(value: T): T {
+    return JSON.parse(JSON.stringify(value)) as T;
+  }
+
+  function setOcrLineEditorId(line: any, lineId: string) {
+    if (!line || typeof line !== 'object') return;
+    Object.defineProperty(line, OCR_LINE_ID_KEY, {
+      value: lineId,
+      enumerable: false,
+      configurable: true,
+      writable: true,
+    });
+  }
+
+  function getOcrLineEditorId(line: any) {
+    if (!line || typeof line !== 'object') return '';
+    const existingId = String(line[OCR_LINE_ID_KEY] ?? '');
+    if (existingId) return existingId;
+
+    const nextId = `line-${nextOcrLineEditorId++}`;
+    setOcrLineEditorId(line, nextId);
+    return nextId;
+  }
+
+  function cloneOcrHistoryLine(line: any, lineId = getOcrLineEditorId(line)) {
+    const clone = clonePlainValue(line);
+    setOcrLineEditorId(clone, lineId);
+    return clone;
+  }
+
+  function getCurrentOcrSelectionState(): OcrSelectionState {
+    return {
+      pageNumber: Number(selectedPageNumber) || 1,
+      lineIndex: Math.max(0, Number(selectedLineIndex) || 0),
+    };
+  }
+
+  function getEditorPageByNumber(pageNumber: number) {
+    const pages = Array.isArray(editorDoc?.pages) ? editorDoc.pages : editorPages;
+    return pages.find((item: any) => Number(item?.page) === Number(pageNumber));
+  }
+
+  function getLineRawEditorId(line: any) {
+    return line && typeof line === 'object' ? String(line[OCR_LINE_ID_KEY] ?? '') : '';
+  }
+
+  function findLineIndexByEditorId(page: any, lineId: string, fallbackIndex = -1, fallbackLine: any = null) {
+    const lines = Array.isArray(page?.lines) ? page.lines : [];
+    const exactIndex = lines.findIndex((line: any) => getLineRawEditorId(line) === lineId);
+    if (exactIndex >= 0) return exactIndex;
+
+    if (fallbackIndex >= 0 && fallbackIndex < lines.length) {
+      return fallbackIndex;
+    }
+
+    const fallbackBox = getLineBBox(fallbackLine);
+    if (!fallbackBox) return -1;
+    return lines.findIndex((line: any) => {
+      const lineBox = getLineBBox(line);
+      return lineBox
+        && String(line?.text ?? '') === String(fallbackLine?.text ?? '')
+        && areOcrBBoxesEqual(lineBox, fallbackBox);
+    });
+  }
+
+  function areOcrBBoxesEqual(a: OcrBBox | null, b: OcrBBox | null) {
+    return Boolean(a && b && a.every((value, index) => Number(value) === Number(b[index])));
+  }
+
+  function setOcrSelectionState(selection: OcrSelectionState) {
+    selectedPageNumber = selection.pageNumber;
+    const page = getEditorPageByNumber(selection.pageNumber);
+    const lines = Array.isArray(page?.lines) ? page.lines : [];
+    selectedLineIndex = lines.length
+      ? Math.max(0, Math.min(lines.length - 1, selection.lineIndex))
+      : 0;
+  }
+
+  function syncSelectionMutation() {
     editorDoc = { ...editorDoc };
     syncJsonFromEditor();
+  }
+
+  function clearOcrSelectionHistory() {
+    ocrUndoStack = [];
+    ocrRedoStack = [];
+  }
+
+  function commitOcrSelectionHistory(entry: OcrSelectionHistoryEntry) {
+    ocrUndoStack = [...ocrUndoStack, entry].slice(-OCR_SELECTION_HISTORY_LIMIT);
+    ocrRedoStack = [];
+  }
+
+  function insertHistoryLine(pageNumber: number, line: any, lineIndex: number, lineId: string) {
+    const page = ensureEditorPage(pageNumber);
+    const existingIndex = findLineIndexByEditorId(page, lineId);
+    if (existingIndex >= 0) return existingIndex;
+
+    const nextLine = cloneOcrHistoryLine(line, lineId);
+    const safeIndex = Math.max(0, Math.min(page.lines.length, lineIndex));
+    page.lines.splice(safeIndex, 0, nextLine);
+    return safeIndex;
+  }
+
+  function removeHistoryLine(pageNumber: number, lineId: string, fallbackIndex: number, fallbackLine: any = null) {
+    const page = getEditorPageByNumber(pageNumber);
+    if (!page || !Array.isArray(page.lines)) return -1;
+
+    const lineIndex = findLineIndexByEditorId(page, lineId, fallbackIndex, fallbackLine);
+    if (lineIndex < 0) return -1;
+    page.lines.splice(lineIndex, 1);
+    return lineIndex;
+  }
+
+  function applyOcrSelectionHistory(entry: OcrSelectionHistoryEntry, direction: 'undo' | 'redo') {
+    cancelPreviewTextEdit();
+
+    if (entry.type === 'bbox') {
+      const page = getEditorPageByNumber(entry.pageNumber);
+      const lineIndex = findLineIndexByEditorId(page, entry.lineId, entry.fallbackIndex);
+      const line = Array.isArray(page?.lines) && lineIndex >= 0 ? page.lines[lineIndex] : null;
+      if (line) {
+        setOcrLineEditorId(line, entry.lineId);
+        line.bbox = [...(direction === 'undo' ? entry.beforeBBox : entry.afterBBox)];
+        markLineUserEdited(line);
+        setOcrSelectionState({
+          ...(direction === 'undo' ? entry.selectionBefore : entry.selectionAfter),
+          lineIndex,
+        });
+      }
+    } else if (entry.type === 'create') {
+      if (direction === 'undo') {
+        removeHistoryLine(entry.pageNumber, entry.lineId, entry.lineIndex, entry.line);
+        setOcrSelectionState(entry.selectionBefore);
+      } else {
+        const lineIndex = insertHistoryLine(entry.pageNumber, entry.line, entry.lineIndex, entry.lineId);
+        setOcrSelectionState({ pageNumber: entry.pageNumber, lineIndex });
+      }
+    } else if (entry.type === 'delete') {
+      if (direction === 'undo') {
+        const lineIndex = insertHistoryLine(entry.pageNumber, entry.line, entry.lineIndex, entry.lineId);
+        setOcrSelectionState({ pageNumber: entry.pageNumber, lineIndex });
+      } else {
+        removeHistoryLine(entry.pageNumber, entry.lineId, entry.lineIndex, entry.line);
+        setOcrSelectionState(entry.selectionAfter);
+      }
+    }
+
+    syncSelectionMutation();
+    schedulePreviewBoxLocate();
+  }
+
+  function undoOcrSelectionHistory() {
+    const entry = ocrUndoStack[ocrUndoStack.length - 1];
+    if (!entry || dragState || newSelectionState) return false;
+
+    ocrUndoStack = ocrUndoStack.slice(0, -1);
+    ocrRedoStack = [...ocrRedoStack, entry];
+    applyOcrSelectionHistory(entry, 'undo');
+    return true;
+  }
+
+  function redoOcrSelectionHistory() {
+    const entry = ocrRedoStack[ocrRedoStack.length - 1];
+    if (!entry || dragState || newSelectionState) return false;
+
+    ocrRedoStack = ocrRedoStack.slice(0, -1);
+    ocrUndoStack = [...ocrUndoStack, entry].slice(-OCR_SELECTION_HISTORY_LIMIT);
+    applyOcrSelectionHistory(entry, 'redo');
+    return true;
+  }
+
+  function isEditableKeyboardTarget(target: EventTarget | null) {
+    const element = target instanceof HTMLElement ? target : null;
+    return Boolean(element?.closest('input, textarea, select, [contenteditable]'));
+  }
+
+  function deleteSelectedOcrLine() {
+    if (dragState || newSelectionState || !selectedLine) return false;
+
+    const pageNumber = Number(selectedPageNumber);
+    const lineIndex = Number(selectedLineIndex);
+    const page = getEditorPageByNumber(pageNumber);
+    if (!Array.isArray(page?.lines) || !page.lines[lineIndex]) return false;
+
+    deleteLine(pageNumber, lineIndex);
+    return true;
+  }
+
+  function handleOcrKeyboardShortcut(event: KeyboardEvent) {
+    if (event.isComposing || isEditableKeyboardTarget(event.target)) return;
+
+    let handled = false;
+
+    if ((event.key === 'Delete' || event.key === 'Backspace') && !event.metaKey && !event.ctrlKey && !event.altKey) {
+      handled = deleteSelectedOcrLine();
+    } else if (event.key.toLowerCase() === 'z' && (event.metaKey || event.ctrlKey)) {
+      handled = event.shiftKey
+        ? redoOcrSelectionHistory()
+        : undoOcrSelectionHistory();
+    }
+
+    if (!handled) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
+  function updateLineBBox(line: any, bbox: [number, number, number, number]) {
+    if (!line) return;
+    line.bbox = normalizeEditorBBox(bbox);
+    markLineUserEdited(line);
+    syncSelectionMutation();
   }
 
   function selectLine(pageNumber: number, lineIndex: number, options: { locatePreview?: boolean } = {}) {
@@ -936,10 +1132,11 @@
     if (!overlayRect) return;
 
     if (overlayRect.height > 0 && overlayRect.height < PREVIEW_MIN_LOCATED_BOX_HEIGHT && previewScale < PREVIEW_MAX_SCALE) {
+      const maxAutoScale = getMaxPreviewScaleForLocatedBox(overlayRect);
       const requiredScale = clamp(
         previewScale * (PREVIEW_MIN_LOCATED_BOX_HEIGHT / overlayRect.height),
         previewScale,
-        PREVIEW_MAX_SCALE,
+        maxAutoScale,
       );
 
       if (requiredScale > previewScale + 0.01) {
@@ -953,6 +1150,19 @@
 
     await tick();
     centerPreviewOnOverlayRect(overlayRect);
+  }
+
+  function getMaxPreviewScaleForLocatedBox(overlayRect: { width: number }) {
+    if (!previewScrollContainer || overlayRect.width <= 0) return PREVIEW_MAX_SCALE;
+
+    const availableWidth = Math.max(
+      1,
+      previewScrollContainer.clientWidth - PREVIEW_LOCATED_BOX_HORIZONTAL_PADDING,
+    );
+    const maxScaleByWidth = previewScale * (availableWidth / overlayRect.width);
+    if (!Number.isFinite(maxScaleByWidth) || maxScaleByWidth <= 0) return PREVIEW_MAX_SCALE;
+
+    return Math.max(previewScale, Math.min(PREVIEW_MAX_SCALE, maxScaleByWidth));
   }
 
   function centerPreviewOnOverlayRect(overlayRect: { left: number; top: number; width: number; height: number }) {
@@ -1029,6 +1239,7 @@
     const [x1, y1, x2, y2] = normalized;
     if (x2 - x1 < 8 || y2 - y1 < 8) return;
 
+    const selectionBefore = getCurrentOcrSelectionState();
     const pageNumber = Number(selectedPageNumber);
     const page = ensureEditorPage(pageNumber);
     const nextLine = {
@@ -1038,12 +1249,22 @@
       manual: true,
       userEdited: true,
     };
+    const lineId = getOcrLineEditorId(nextLine);
     page.lines.push(nextLine);
     sortLinesForReadingOrder(page.lines);
     selectedLineIndex = page.lines.indexOf(nextLine);
     selectedPageNumber = pageNumber;
     editorDoc = { ...editorDoc };
     syncJsonFromEditor(true);
+    commitOcrSelectionHistory({
+      type: 'create',
+      pageNumber,
+      lineId,
+      lineIndex: selectedLineIndex,
+      line: cloneOcrHistoryLine(nextLine, lineId),
+      selectionBefore,
+      selectionAfter: getCurrentOcrSelectionState(),
+    });
   }
 
   function updateLineText(
@@ -1112,26 +1333,47 @@
   }
 
   function deleteLine(pageNumber: number, lineIndex: number) {
-    const page = editorPages.find((item: any) => Number(item?.page) === Number(pageNumber));
+    const page = getEditorPageByNumber(pageNumber);
     if (!page || !Array.isArray(page.lines)) return;
+    const line = page.lines[lineIndex];
+    if (!line) return;
+    const selectionBefore = getCurrentOcrSelectionState();
+    const lineId = getOcrLineEditorId(line);
+    const historyLine = cloneOcrHistoryLine(line, lineId);
     page.lines.splice(lineIndex, 1);
     if (Number(selectedPageNumber) === Number(pageNumber)) {
       selectedLineIndex = Math.max(0, Math.min(selectedLineIndex, page.lines.length - 1));
     }
     editorDoc = { ...editorDoc };
     syncJsonFromEditor(true);
+    commitOcrSelectionHistory({
+      type: 'delete',
+      pageNumber,
+      lineId,
+      lineIndex,
+      line: historyLine,
+      selectionBefore,
+      selectionAfter: getCurrentOcrSelectionState(),
+    });
   }
 
-  function startBBoxDrag(event: PointerEvent, mode: DragMode) {
-    if (!selectedLine?.bbox || !previewCanvas) return;
+  function startBBoxDrag(event: PointerEvent, mode: DragMode, line: any = selectedLine, lineIndex = selectedLineIndex) {
+    if (!line?.bbox || !previewCanvas) return;
     event.preventDefault();
+    newSelectionState = null;
     const start = pointerToImagePoint(event);
+    const lineId = getOcrLineEditorId(line);
     dragState = {
       pointerId: event.pointerId,
       mode,
       startX: start.x,
       startY: start.y,
-      original: [...selectedLine.bbox] as [number, number, number, number],
+      original: [...line.bbox] as OcrBBox,
+      targetLine: line,
+      pageNumber: Number(selectedPageNumber),
+      lineIndex,
+      lineId,
+      selectionBefore: getCurrentOcrSelectionState(),
     };
     try {
       previewCanvas.setPointerCapture(event.pointerId);
@@ -1143,6 +1385,7 @@
   function startNewSelection(event: PointerEvent) {
     if (!previewCanvas || previewRenderedKey !== previewRenderKey) return;
     event.preventDefault();
+    dragState = null;
     const start = pointerToImagePoint(event);
     newSelectionState = {
       pointerId: event.pointerId,
@@ -1169,7 +1412,7 @@
       return;
     }
 
-    if (!dragState || !selectedLine) return;
+    if (!dragState || !dragState.targetLine) return;
     const point = pointerToImagePoint(event);
     const dx = point.x - dragState.startX;
     const dy = point.y - dragState.startY;
@@ -1182,7 +1425,7 @@
     if (dragState.mode.includes('top')) next[1] = y1 + dy;
     if (dragState.mode.includes('bottom')) next[3] = y2 + dy;
 
-    updateSelectedLineBBox(next);
+    updateLineBBox(dragState.targetLine, next);
   }
 
   function finishBBoxDrag(event: PointerEvent) {
@@ -1201,6 +1444,20 @@
     if (!dragState || !previewCanvas) return;
     if (previewCanvas.hasPointerCapture(event.pointerId)) {
       previewCanvas.releasePointerCapture(event.pointerId);
+    }
+    const completedDrag = dragState;
+    const afterBBox = getLineBBox(completedDrag.targetLine);
+    if (afterBBox && !areOcrBBoxesEqual(completedDrag.original, afterBBox)) {
+      commitOcrSelectionHistory({
+        type: 'bbox',
+        pageNumber: completedDrag.pageNumber,
+        lineId: completedDrag.lineId,
+        fallbackIndex: completedDrag.lineIndex,
+        beforeBBox: [...completedDrag.original],
+        afterBBox: [...(afterBBox as OcrBBox)],
+        selectionBefore: completedDrag.selectionBefore,
+        selectionAfter: getCurrentOcrSelectionState(),
+      });
     }
     dragState = null;
   }
@@ -1300,54 +1557,6 @@
     await Promise.all(pool.map((ocr) => ocr.dispose().catch(() => undefined)));
   }
 
-  function supportsWorkerFetch() {
-    if (workerFetchSupportPromise) return workerFetchSupportPromise;
-
-    workerFetchSupportPromise = new Promise<boolean>((resolve) => {
-      if (
-        typeof Worker === 'undefined'
-        || typeof Blob === 'undefined'
-        || typeof URL === 'undefined'
-        || typeof URL.createObjectURL !== 'function'
-      ) {
-        resolve(false);
-        return;
-      }
-
-      let worker: Worker | null = null;
-      let workerUrl = '';
-      let settled = false;
-      let timeoutId: ReturnType<typeof setTimeout> | null = null;
-
-      const finish = (supported: boolean) => {
-        if (settled) return;
-        settled = true;
-        if (timeoutId !== null) {
-          clearTimeout(timeoutId);
-        }
-        worker?.terminate();
-        if (workerUrl) {
-          URL.revokeObjectURL(workerUrl);
-        }
-        resolve(supported);
-      };
-
-      try {
-        workerUrl = URL.createObjectURL(new Blob([
-          "self.postMessage(typeof fetch === 'function');",
-        ], { type: 'application/javascript' }));
-        worker = new Worker(workerUrl);
-        timeoutId = setTimeout(() => finish(false), 1500);
-        worker.onmessage = (event) => finish(Boolean(event.data));
-        worker.onerror = () => finish(false);
-      } catch {
-        finish(false);
-      }
-    });
-
-    return workerFetchSupportPromise;
-  }
-
   async function ensureLocalOcrPool(control: { runId: number; cancelled: boolean } | null = null) {
     assertOcrRunActive(control);
     const runtimeKey = getLocalOcrRuntimeKey();
@@ -1372,22 +1581,16 @@
       const hardwareConcurrency = typeof navigator !== 'undefined' ? navigator.hardwareConcurrency || 2 : 2;
       const workerPoolSize = getEffectiveOcrWorkerPoolSize();
       const ortRuntime = getOcrOrtRuntimeConfig();
-      const canUseWorkerOcr = await supportsWorkerFetch();
+      const canUseWorkerOcr = shouldUseOcrWorker() && await supportsWorkerFetch();
       assertOcrRunActive(control);
+      const modelConfig = OCR_MODEL_CONFIGS[ocrModelSize];
 
       const wasmThreads = typeof crossOriginIsolated !== 'undefined' && crossOriginIsolated
         ? Math.max(1, Math.min(2, Math.floor((hardwareConcurrency - 1) / workerPoolSize) || 1))
         : 1;
 
       const baseOptions = {
-        textDetectionModelName: 'PP-OCRv6_tiny_det',
-        textDetectionModelAsset: {
-          url: '/models/paddleocr/PP-OCRv6_tiny_det_onnx_infer.tar',
-        },
-        textRecognitionModelName: 'PP-OCRv6_tiny_rec',
-        textRecognitionModelAsset: {
-          url: '/models/paddleocr/PP-OCRv6_tiny_rec_onnx_infer.tar',
-        },
+        ...modelConfig,
         pipelineBatchSize: INTERNAL_PAGE_BATCH_SIZE,
         textDetectionBatchSize: INTERNAL_TEXT_DETECTION_BATCH_SIZE,
         textRecognitionBatchSize: INTERNAL_TEXT_RECOGNITION_BATCH_SIZE,
@@ -1396,17 +1599,22 @@
           wasmPaths: ortRuntime.wasmPaths,
           numThreads: wasmThreads,
           simd: true,
-        },
+        } as any,
       };
 
-      const createOcr = async (worker: boolean, backend: OcrBackend) => PaddleOCR.create({
-        ...baseOptions,
-        worker,
-        ortOptions: {
-          ...baseOptions.ortOptions,
-          backend,
-        },
-      });
+      const createOcr = async (worker: boolean, backend: OcrBackend) => withTimeout(
+        PaddleOCR.create({
+          ...baseOptions,
+          worker,
+          ortOptions: {
+            ...baseOptions.ortOptions,
+            backend,
+          },
+        }) as Promise<LocalOcrEngine>,
+        OCR_ENGINE_CREATE_TIMEOUT_MS,
+        $t('ocr_lab.errors.engine_timeout'),
+        disposeLateOcrEngine,
+      );
 
       const createMainThreadOcr = async (prefixError = '') => {
         try {
@@ -1441,10 +1649,7 @@
         try {
           for (let i = 0; i < workerPoolSize; i += 1) {
             assertOcrRunActive(control);
-            pool.push(await PaddleOCR.create({
-              ...baseOptions,
-              worker: true,
-            }));
+            pool.push(await createOcr(true, ortRuntime.backend));
             assertOcrRunActive(control);
             applyOcrRunPatch({
               ocrProgress: {
@@ -1513,193 +1718,6 @@
     return `${$t('ocr_lab.errors.local_failed')}\n\n${fullDetail}`;
   }
 
-  async function renderPdfPageAsCanvas(
-    instance: pdfjsLib.PDFDocumentProxy,
-    pageNumber: number,
-  ) {
-    const page = await instance.getPage(pageNumber);
-      const baseViewport = page.getViewport({ scale: 1 });
-      const baseMaxSide = Math.max(baseViewport.width, baseViewport.height);
-      const qualitySize = getOcrQualitySize();
-      const scale = qualitySize / Math.max(1, baseMaxSide);
-    const viewport = page.getViewport({ scale });
-
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.floor(viewport.width);
-    canvas.height = Math.floor(viewport.height);
-
-    const context = canvas.getContext('2d', { alpha: false });
-    if (!context) {
-      throw new Error('Could not create canvas context for OCR image rendering.');
-    }
-
-    const renderTask = page.render({
-      canvasContext: context,
-      viewport,
-    });
-
-    await renderTask.promise.then(() => page.cleanup()).catch(() => page.cleanup());
-    return canvas;
-  }
-
-  async function canvasToJpegBytes(canvas: HTMLCanvasElement, quality = SEARCHABLE_PDF_IMAGE_JPEG_QUALITY) {
-    const blob = await new Promise<Blob>((resolve, reject) => {
-      canvas.toBlob((result) => {
-        if (result) {
-          resolve(result);
-        } else {
-          reject(new Error('Could not encode PDF page image.'));
-        }
-      }, 'image/jpeg', quality);
-    });
-
-    return new Uint8Array(await blob.arrayBuffer());
-  }
-
-  async function renderPdfPageForSearchablePdf(
-    instance: pdfjsLib.PDFDocumentProxy,
-    pageNumber: number,
-  ): Promise<SearchablePdfPageImage> {
-    const page = await instance.getPage(pageNumber);
-    const baseViewport = page.getViewport({ scale: 1 });
-    const baseMaxSide = Math.max(baseViewport.width, baseViewport.height);
-    const renderMaxSide = Math.max(SEARCHABLE_PDF_IMAGE_MIN_MAX_SIDE, getOcrQualitySize());
-    const scale = renderMaxSide / Math.max(1, baseMaxSide);
-    const viewport = page.getViewport({ scale });
-
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.floor(viewport.width);
-    canvas.height = Math.floor(viewport.height);
-
-    const context = canvas.getContext('2d', { alpha: false });
-    if (!context) {
-      throw new Error('Could not create canvas context for searchable PDF image rendering.');
-    }
-
-    context.fillStyle = '#fff';
-    context.fillRect(0, 0, canvas.width, canvas.height);
-
-    const renderTask = page.render({
-      canvasContext: context,
-      viewport,
-    });
-
-    try {
-      await renderTask.promise;
-    } finally {
-      page.cleanup();
-    }
-
-    const bytes = await canvasToJpegBytes(canvas);
-    canvas.width = 0;
-    canvas.height = 0;
-
-    return {
-      bytes,
-      type: 'image/jpeg',
-      pdfWidth: baseViewport.width,
-      pdfHeight: baseViewport.height,
-    };
-  }
-
-  function polyToBBox(poly: Array<[number, number]>): [number, number, number, number] {
-    const xs = poly.map(([x]) => x);
-    const ys = poly.map(([, y]) => y);
-    return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
-  }
-
-  function luminance(data: Uint8ClampedArray, offset: number) {
-    return data[offset] * 0.299 + data[offset + 1] * 0.587 + data[offset + 2] * 0.114;
-  }
-
-  function refineHorizontalBBoxByInk(
-    context: CanvasRenderingContext2D | null,
-    canvasWidth: number,
-    canvasHeight: number,
-    bbox: [number, number, number, number],
-  ): [number, number, number, number] {
-    if (!context) return bbox;
-
-    const [x1, y1, x2, y2] = bbox;
-    const cropX = clamp(Math.floor(x1), 0, canvasWidth - 1);
-    const cropY = clamp(Math.floor(y1), 0, canvasHeight - 1);
-    const cropRight = clamp(Math.ceil(x2), cropX + 1, canvasWidth);
-    const cropBottom = clamp(Math.ceil(y2), cropY + 1, canvasHeight);
-    const cropWidth = cropRight - cropX;
-    const cropHeight = cropBottom - cropY;
-
-    if (cropWidth < 4 || cropHeight < 4) return bbox;
-
-    const image = context.getImageData(cropX, cropY, cropWidth, cropHeight);
-    const sampleLuminance: number[] = [];
-    const step = Math.max(1, Math.floor(Math.sqrt((cropWidth * cropHeight) / 1200)));
-
-    for (let y = 0; y < cropHeight; y += step) {
-      for (let x = 0; x < cropWidth; x += step) {
-        sampleLuminance.push(luminance(image.data, (y * cropWidth + x) * 4));
-      }
-    }
-
-    sampleLuminance.sort((a, b) => a - b);
-    const background = sampleLuminance[Math.floor(sampleLuminance.length * 0.9)] ?? 255;
-    const inkThreshold = Math.max(70, background - 55);
-    const columnInk = new Array(cropWidth).fill(0);
-
-    for (let y = 0; y < cropHeight; y += 1) {
-      for (let x = 0; x < cropWidth; x += 1) {
-        if (luminance(image.data, (y * cropWidth + x) * 4) < inkThreshold) {
-          columnInk[x] += 1;
-        }
-      }
-    }
-
-    const minColumnInk = Math.max(3, Math.floor(cropHeight * 0.1));
-    const columnWindow = (x: number) =>
-      (columnInk[x - 2] ?? 0) +
-      (columnInk[x - 1] ?? 0) +
-      columnInk[x] +
-      (columnInk[x + 1] ?? 0) +
-      (columnInk[x + 2] ?? 0);
-
-    let left = 0;
-    let right = cropWidth - 1;
-
-    while (left < right && columnWindow(left) < minColumnInk) left += 1;
-    while (right > left && columnWindow(right) < minColumnInk) right -= 1;
-
-    const refinedWidth = right - left + 1;
-    if (refinedWidth < cropWidth * 0.35) return bbox;
-
-    const pad = Math.max(1, Math.round(Math.min(cropWidth, cropHeight) * 0.04));
-    const rightPad = Math.max(pad, Math.round(cropHeight * 0.06));
-    return [
-      clamp(cropX + left - pad, x1, x2),
-      y1,
-      clamp(cropX + right + 1 + rightPad, x1, x2),
-      y2,
-    ];
-  }
-
-  function convertLocalResult(pageNumber: number, result: OcrResult, canvas: HTMLCanvasElement) {
-    const context = canvas.getContext('2d', { willReadFrequently: true });
-    const lines = result.items
-      .filter((item) => item.text.trim())
-      .map((item) => ({
-        text: item.text.trim(),
-        bbox: refineHorizontalBBoxByInk(context, canvas.width, canvas.height, polyToBBox(item.poly)),
-        score: item.score,
-      }));
-
-    return {
-      page: pageNumber,
-      imageWidth: result.image.width,
-      imageHeight: result.image.height,
-      lines: resolveSmallHorizontalOverlaps(lines),
-      metrics: result.metrics,
-      runtime: result.runtime,
-    };
-  }
-
   function buildPageNumbers(start: number, end: number) {
     const pages: number[] = [];
     for (let page = start; page <= end; page += 1) {
@@ -1724,7 +1742,9 @@
     const currentPdfBytes = pdfBytes;
     const requestedPageRange = normalizeOcrPageRange(pageStart, pageEnd, currentPdfInstance.numPages);
     const requestedBoxExtension = clampOcrBoxExtension(ocrBoxExtension);
+    const requestedWatermarkCleanup = Boolean(ocrWatermarkCleanup);
     const runControl = { runId, cancelled: false };
+    clearOcrSelectionHistory();
     ocrTreeSortMode = 'reading';
     activeOcrRunControl = runControl;
     lastLocalOcrError = '';
@@ -1734,15 +1754,17 @@
       pdfFile,
       pdfBytes: currentPdfBytes,
       isInitializingOcr: false,
-	      isRunningOcr: true,
-	      isCancellingOcr: false,
-	      ocrProgress: null,
-	      errorMessage: '',
-	      timingSummary: '',
-	      ocrJson: '',
-	      editorDoc: null,
+      isRunningOcr: true,
+      isCancellingOcr: false,
+      ocrProgress: null,
+      errorMessage: '',
+      timingSummary: '',
+      ocrJson: '',
+      editorDoc: null,
       pageStart: requestedPageRange.start,
       pageEnd: requestedPageRange.end,
+      ocrModelSize,
+      ocrWatermarkCleanup: requestedWatermarkCleanup,
       ocrBoxExtension: requestedBoxExtension,
       selectedPageNumber,
       selectedLineIndex,
@@ -1754,12 +1776,14 @@
       isRunningOcr: true,
       isCancellingOcr: false,
       errorMessage: '',
-	      timingSummary: '',
-	      ocrJson: '',
-	      editorDoc: null,
-	      ocrProgress: null,
-	      pageStart: requestedPageRange.start,
+      timingSummary: '',
+      ocrJson: '',
+      editorDoc: null,
+      ocrProgress: null,
+      pageStart: requestedPageRange.start,
       pageEnd: requestedPageRange.end,
+      ocrModelSize,
+      ocrWatermarkCleanup: requestedWatermarkCleanup,
       ocrBoxExtension: requestedBoxExtension,
       lastLocalOcrError: '',
     });
@@ -1804,7 +1828,12 @@
             },
           });
 
-          const canvas = await renderPdfPageAsCanvas(currentPdfInstance, pageNumber);
+          const canvas = await renderPdfPageAsCanvas(
+            currentPdfInstance,
+            pageNumber,
+            getOcrQualitySize(),
+            { watermarkCleanup: requestedWatermarkCleanup },
+          );
           if (isOcrRunCancelled(runControl)) return;
           renderedCount += 1;
           applyOcrRunPatch({
@@ -1823,11 +1852,15 @@
             },
           });
 
-          const [result] = await ocr.predict(canvas, {
-            textDetLimitSideLen: getOcrQualitySize(),
-            textDetUnclipRatio: requestedBoxExtension,
-            textRecScoreThresh: 0.35,
-          });
+          const [result] = await withTimeout(
+            ocr.predict(canvas, {
+              textDetLimitSideLen: getOcrQualitySize(),
+              textDetUnclipRatio: requestedBoxExtension,
+              textRecScoreThresh: 0.35,
+            }),
+            OCR_PAGE_PREDICT_TIMEOUT_MS,
+            $t('ocr_lab.errors.page_timeout', { values: { page: pageNumber } }),
+          );
           if (isOcrRunCancelled(runControl)) return;
 
           if (result) {
@@ -1981,16 +2014,14 @@
     errorMessage = '';
 
     try {
-      flushOcrJsonFromEditor();
-      const parsed = parseJson();
-      const currentPdfInstance = pdfInstance;
-      const result = await buildSearchablePdf({
-        pdfBytes,
-        ocr: parsed,
-        pageStart: 1,
-        pageEnd: currentPdfInstance.numPages,
-        renderPageImage: (pageNumber) => renderPdfPageForSearchablePdf(currentPdfInstance, pageNumber),
-      });
+	      flushOcrJsonFromEditor();
+	      const parsed = parseJson();
+	      const result = await buildSearchablePdf({
+	        pdfBytes,
+	        ocr: parsed,
+	        pageStart: 1,
+	        pageEnd: pdfInstance.numPages,
+	      });
 
       const nextName = pdfFile.name.toLowerCase().endsWith('.pdf')
         ? `${pdfFile.name.slice(0, -4)}_searchable.pdf`
@@ -2005,7 +2036,12 @@
   }
 </script>
 
-<svelte:window on:pointermove={handlePreviewPointerMove} on:pointerup={finishBBoxDrag} on:pointercancel={finishBBoxDrag} />
+<svelte:window
+  on:keydown={handleOcrKeyboardShortcut}
+  on:pointermove={handlePreviewPointerMove}
+  on:pointerup={finishBBoxDrag}
+  on:pointercancel={finishBBoxDrag}
+/>
 
 <SeoJsonLd
   title={$t('ocr_lab.meta_title')}
@@ -2019,293 +2055,112 @@
   <div
     class="flex flex-col mt-5 lg:flex-row lg:items-start lg:mt-8 p-2 md:p-4 md:pr-3 gap-4 lg:gap-8 mx-auto w-[95%] md:w-[90%] xl:w-[80%] 3xl:w-[75%] max-w-6xl justify-between"
   >
-	      <aside class="w-full lg:w-[35%] lg:min-h-[85vh] flex-shrink-0 flex flex-col gap-4">
-	        <Header activePage="ocr" on:openhelp={() => (showHelpModal = true)} />
+    <aside class="w-full lg:w-[35%] lg:min-h-[85vh] flex-shrink-0 flex flex-col gap-4">
+      <Header activePage="ocr" on:openhelp={() => (showHelpModal = true)} />
 
-	        <OcrControls
-	          pdfPageCount={pdfInstance?.numPages || 1}
-	          hasPdf={Boolean(pdfFile)}
-	          {pageStart}
-	          {pageEnd}
-	          workerPoolSize={ocrWorkerPoolSize}
-	          resolutionQuality={ocrResolutionQuality}
-	          boxExtension={ocrBoxExtension}
-	          minWorkerPoolSize={OCR_MIN_WORKER_POOL_SIZE}
-	          maxWorkerPoolSize={OCR_MAX_WORKER_POOL_SIZE}
-	          minBoxExtension={OCR_BOX_EXTENSION_MIN}
-	          maxBoxExtension={OCR_BOX_EXTENSION_MAX}
-	          boxExtensionStep={OCR_BOX_EXTENSION_STEP}
-	          {isFileLoading}
-	          {isBuilding}
-	          isInitializing={isInitializingOcr}
-	          isRunning={isRunningOcr}
-	          isCancelling={isCancellingOcr}
-	          {ocrProgress}
-	          {ocrProgressPercent}
-	          onPageRangeChange={handleOcrPageRangeChange}
-	          onRuntimeSettingChange={handleOcrRuntimeSettingChange}
-	          onRun={runLocalOcr}
-	          onCancel={cancelLocalOcr}
-	        />
+      <OcrControls
+        pdfPageCount={pdfInstance?.numPages || 1}
+        hasPdf={Boolean(pdfFile)}
+        {pageStart}
+        {pageEnd}
+        modelSize={ocrModelSize}
+        watermarkCleanup={ocrWatermarkCleanup}
+        workerPoolSize={ocrWorkerPoolSize}
+        resolutionQuality={ocrResolutionQuality}
+        boxExtension={ocrBoxExtension}
+        minWorkerPoolSize={OCR_MIN_WORKER_POOL_SIZE}
+        maxWorkerPoolSize={OCR_MAX_WORKER_POOL_SIZE}
+        minBoxExtension={OCR_BOX_EXTENSION_MIN}
+        maxBoxExtension={OCR_BOX_EXTENSION_MAX}
+        boxExtensionStep={OCR_BOX_EXTENSION_STEP}
+        {isFileLoading}
+        {isBuilding}
+        isInitializing={isInitializingOcr}
+        isRunning={isRunningOcr}
+        isCancelling={isCancellingOcr}
+        {ocrProgress}
+        {ocrProgressPercent}
+        onPageRangeChange={handleOcrPageRangeChange}
+        onRuntimeSettingChange={handleOcrRuntimeSettingChange}
+        onRun={runLocalOcr}
+        onCancel={cancelLocalOcr}
+      />
 
-	        <OcrResultTree
-	          {flatOcrLines}
-	          {filteredOcrLines}
-	          bind:ocrTreeSearch
-	          {ocrTreeSearchTerm}
-	          {ocrTreeSortMode}
-	          bind:ocrTreeScrollContainer
-	          isOcrBusy={isInitializingOcr || isRunningOcr || isCancellingOcr}
-	          stickySearchTop={OCR_TREE_STICKY_SEARCH_TOP}
-	          stickyPageTop={OCR_TREE_STICKY_PAGE_TOP}
-	          {selectedPageNumber}
-	          {selectedLineIndex}
-	          {autosizeTextarea}
-	          {getHighlightedTextSegments}
-	          {doesOcrPageMatchSearch}
-	          {selectLine}
-	          {deleteLine}
-	          {updateLineText}
-	          {setOcrTreeSortMode}
-	        />
+      <OcrResultTree
+        {flatOcrLines}
+        {filteredOcrLines}
+        bind:ocrTreeSearch
+        {ocrTreeSearchTerm}
+        {ocrTreeSortMode}
+        bind:ocrTreeScrollContainer
+        isOcrBusy={isInitializingOcr || isRunningOcr || isCancellingOcr}
+        stickySearchTop={OCR_TREE_STICKY_SEARCH_TOP}
+        stickyPageTop={OCR_TREE_STICKY_PAGE_TOP}
+        {selectedPageNumber}
+        {selectedLineIndex}
+        {autosizeTextarea}
+        {getHighlightedTextSegments}
+        {doesOcrPageMatchSearch}
+        {selectLine}
+        {deleteLine}
+        {updateLineText}
+        {setOcrTreeSortMode}
+      />
 
-        {#if timingSummary}
-          <p class="text-sm text-sky-700 bg-sky-50 border border-sky-300 rounded-lg px-4 py-3">{timingSummary}</p>
-        {/if}
+      {#if timingSummary}
+        <p class="text-sm text-sky-700 bg-sky-50 border border-sky-300 rounded-lg px-4 py-3">{timingSummary}</p>
+      {/if}
 
-        {#if errorMessage}
-          <p class="text-sm text-red-700 bg-red-50 border border-red-300 rounded-lg px-4 py-3 whitespace-pre-line">{errorMessage}</p>
-        {/if}
+      {#if errorMessage}
+        <p class="text-sm text-red-700 bg-red-50 border border-red-300 rounded-lg px-4 py-3 whitespace-pre-line">{errorMessage}</p>
+      {/if}
+    </aside>
 
-      </aside>
-
-      <main class="flex flex-col w-full lg:w-[70%] min-w-0 h-fit lg:sticky lg:top-5 lg:self-start">
-        <div
-          class="relative h-fit pb-4 min-h-[85vh] border-black border-2 rounded-lg bg-white shadow-[2px_2px_0px_rgba(0,0,0,1)]"
-          role="region"
-          aria-label={$t('ocr_lab.pdf_preview_title')}
-          on:dragenter={handlePreviewDragEnter}
-          on:dragover={handlePreviewDragOver}
-          on:dragleave={handlePreviewDragLeave}
-          on:drop={handleDrop}
-        >
-          <input bind:this={fileInput} type="file" accept="application/pdf" class="hidden" on:change={handleFileChange} />
-
-          {#if pdfFile}
-            <div class="relative z-10 h-full flex flex-col">
-              <div class="h-[85vh] rounded-lg relative w-full bg-white">
-                <div class="flex flex-col h-full absolute w-full inset-0 z-10 bg-white rounded-md">
-                  <div class="flex items-center flex-col justify-start w-full px-2 md:px-4 py-2 bg-white border-b-2 border-black rounded-t-md overflow-x-auto">
-                    <div class="flex z-10 items-center justify-between w-full">
-                      <div class="w-[70%] text-gray-600 font-serif flex gap-1 sm:gap-2 items-center text-sm md:text-base">
-                        <span class="truncate">{pdfFile.name}</span>
-                        <span class="text-gray-300">|</span>
-                        <div class="flex items-center gap-1 flex-nowrap">
-                          <input
-                            type="number"
-                            min="1"
-                            max={pdfInstance?.numPages || 1}
-                            value={selectedPageNumber}
-                            on:change={(event) => {
-                              const nextPage = parseInt(event.currentTarget.value, 10);
-                              if (!Number.isNaN(nextPage) && nextPage >= 1 && nextPage <= (pdfInstance?.numPages || 1)) {
-                                selectedPageNumber = nextPage;
-                                selectedLineIndex = 0;
-                              } else {
-                                event.currentTarget.value = String(selectedPageNumber);
-                              }
-                            }}
-                            class="w-15 text-center border-b border-gray-300 focus:border-black outline-none bg-transparent p-0 text-gray-800"
-                          />
-                          <span class="min-w-12">/ {pdfInstance?.numPages || 0}</span>
-                        </div>
-                      </div>
-
-                      <div class="flex items-center gap-1 w-[30%] flex-[0]">
-                        <button on:click={zoomPreviewOut} class="p-1 md:p-2 rounded-lg hover:bg-gray-100 text-gray-600" title={$t('tooltip.zoom_out')}>
-                          <ZoomOut size={20} />
-                        </button>
-                        <span class="min-w-[30px] text-center text-gray-600 text-sm md:text-base md:min-w-[40px]">
-                          {Math.round(previewScale * 100)}%
-                        </span>
-                        <button on:click={zoomPreviewIn} class="p-1 md:p-2 rounded-lg hover:bg-gray-100 text-gray-600" title={$t('tooltip.zoom_in')}>
-                          <ZoomIn size={20} />
-                        </button>
-                        <button on:click={resetPreviewZoom} class="p-1 md:p-2 rounded-lg hover:bg-gray-100 text-gray-600" title={$t('tooltip.reset')}>
-                          <RotateCw size={20} />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div
-                    class="relative flex-1 overflow-hidden bg-gray-50 single-view-container"
-                    bind:clientWidth={previewWrapWidth}
-                    bind:clientHeight={previewWrapHeight}
-                  >
-                    <button
-                      on:click={goToPreviousPreviewPage}
-                      disabled={selectedPageNumber <= 1}
-                      class="absolute left-2 top-1/2 -translate-y-1/2 p-1 md:left-4 md:p-2 rounded-full bg-white shadow-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed z-20 border-2 border-black"
-                    >
-                      <ChevronLeft size={24} />
-                    </button>
-
-                    <div bind:this={previewScrollContainer} class="w-full h-full overflow-auto flex">
-                      <div class="m-auto p-4 min-w-max min-h-max">
-                        <div class="relative mx-auto w-fit">
-                          <canvas
-                            bind:this={previewCanvas}
-                            class="block bg-white cursor-crosshair"
-                            on:pointerdown={startNewSelection}
-                            on:pointermove={handlePreviewPointerMove}
-                            on:pointerup={finishBBoxDrag}
-                            on:pointercancel={finishBBoxDrag}
-                          ></canvas>
-
-                          {#if selectedLines.length && previewCanvas && previewRenderedKey === previewRenderKey}
-                            <div class="absolute inset-0 pointer-events-none">
-                              {#each selectedLines as line, lineIndex}
-                                {@const overlayRect = getOverlayRect(line)}
-                                {#if overlayRect}
-                                  <button
-                                    class="group absolute pointer-events-auto border-2 transition-colors {lineIndex === selectedLineIndex ? 'border-yellow-500 bg-yellow-300/35' : 'border-sky-400 bg-sky-200/20 hover:bg-sky-200/30'}"
-                                    style:left={`${overlayRect.left}px`}
-                                    style:top={`${overlayRect.top}px`}
-                                    style:width={`${Math.max(4, overlayRect.width)}px`}
-                                    style:height={`${Math.max(4, overlayRect.height)}px`}
-                                    title={line.text}
-                                    on:click={() => selectLine(Number(selectedPageNumber), lineIndex)}
-                                    on:dblclick|stopPropagation|preventDefault={() => startPreviewTextEdit(lineIndex)}
-                                    on:pointerdown={(event) => {
-                                      selectLine(Number(selectedPageNumber), lineIndex, { locatePreview: false });
-                                      startBBoxDrag(event, 'move');
-                                    }}
-                                  >
-                                    {#if lineIndex === selectedLineIndex}
-                                      {#each resizeHandles as handle}
-                                        <span
-                                          class="absolute w-3 h-3 bg-white border-2 border-yellow-600 rounded-full opacity-0 transition-opacity group-hover:opacity-100 group-focus:opacity-100 {handle[1]}"
-                                          on:pointerdown|stopPropagation={(event) => startBBoxDrag(event, handle[0])}
-                                        ></span>
-                                      {/each}
-                                    {/if}
-                                  </button>
-                                  {#if previewEditingLineIndex === lineIndex && Number(previewEditingPageNumber) === Number(selectedPageNumber)}
-                                    <textarea
-                                      bind:this={previewEditingTextarea}
-                                      bind:value={previewEditingText}
-                                      rows="1"
-                                      class="absolute z-30 pointer-events-auto resize-none rounded-md border-2 border-black bg-yellow-50/95 px-2 py-1 text-xs leading-snug text-gray-900 shadow-[2px_2px_0px_rgba(0,0,0,1)] outline-none"
-                                      style:left={`${overlayRect.left}px`}
-                                      style:top={`${overlayRect.top}px`}
-                                      style:width={`${Math.max(140, overlayRect.width)}px`}
-                                      style:min-height={`${Math.max(34, overlayRect.height)}px`}
-                                      spellcheck="false"
-                                      on:dblclick|stopPropagation
-                                      on:pointerdown|stopPropagation
-                                      on:keydown={(event) => {
-                                        if (event.key === 'Enter' && !event.shiftKey) {
-                                          event.preventDefault();
-                                          commitPreviewTextEdit();
-                                        }
-                                        if (event.key === 'Escape') {
-                                          event.preventDefault();
-                                          cancelPreviewTextEdit();
-                                        }
-                                      }}
-                                      on:blur={commitPreviewTextEdit}
-                                    ></textarea>
-                                  {/if}
-                                {/if}
-                              {/each}
-                            </div>
-                          {/if}
-
-                          {#if newSelectionState && previewRenderedKey === previewRenderKey}
-                            {@const newSelectionBBox = getNewSelectionBBox()}
-                            {@const newSelectionRect = newSelectionBBox ? imageBBoxToOverlayRect(newSelectionBBox) : null}
-                            {#if newSelectionRect}
-                              <div
-                                class="absolute pointer-events-none border-2 border-dashed border-emerald-700 bg-emerald-300/20"
-                                style:left={`${newSelectionRect.left}px`}
-                                style:top={`${newSelectionRect.top}px`}
-                                style:width={`${Math.max(4, newSelectionRect.width)}px`}
-                                style:height={`${Math.max(4, newSelectionRect.height)}px`}
-                              ></div>
-                            {/if}
-                          {/if}
-
-                        </div>
-                      </div>
-                    </div>
-
-                    <button
-                      on:click={goToNextPreviewPage}
-                      disabled={selectedPageNumber >= (pdfInstance?.numPages || 1)}
-                      class="absolute right-2 top-1/2 -translate-y-1/2 p-1 md:right-4 md:p-2 rounded-full bg-white shadow-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed z-20 border-2 border-black"
-                    >
-                      <ChevronRight size={24} />
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div class="flex flex-col md:flex-row md:justify-end gap-3 md:gap-2 pt-4 relative z-10 mx-3 md:mr-3 md:mx-0">
-                <button
-                  class="btn flex gap-2 items-center justify-center font-bold bg-white text-black border-2 border-black rounded-lg px-4 py-2 shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all disabled:bg-gray-300 disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0 w-full md:w-auto"
-                  on:click={() => fileInput?.click()}
-                  title={$t('tooltip.upload_new')}
-                >
-                  <Upload size={16} />
-                  {$t('btn.upload_new')}
-                </button>
-                <button
-                  class="btn flex gap-2 items-center justify-center font-bold bg-green-500 text-black border-2 border-black rounded-lg px-4 py-2 shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0 w-full md:w-auto {(!pdfFile || isFileLoading) ? 'disabled:bg-gray-300 disabled:cursor-not-allowed' : 'disabled:bg-green-500 disabled:cursor-wait'}"
-                  on:click={generateSearchablePdf}
-                  disabled={!pdfFile || isFileLoading || isBuilding}
-                  aria-busy={isBuilding}
-                  title={$t('tooltip.export_pdf')}
-                >
-                  {#if isBuilding}
-                    <Loader2 size={16} class="animate-spin" />
-                  {:else}
-                    <Download size={16} />
-                  {/if}
-                  {$t('btn.generate_pdf')}
-                </button>
-              </div>
-            </div>
-            {:else}
-              <div
-                class="absolute inset-0"
-                role="button"
-                tabindex="0"
-                on:click={() => fileInput?.click()}
-                on:keydown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault();
-                    fileInput?.click();
-                  }
-                }}
-              >
-                <DropzoneView isDragging={isPreviewDragging} hasInstance={false} />
-              </div>
-            {/if}
-
-            {#if pdfFile && isPreviewDragging}
-              <div class="absolute inset-0 z-30">
-                <DropzoneView isDragging={true} hasInstance={true} />
-              </div>
-            {/if}
-
-            {#if isFileLoading}
-              <div class="absolute inset-0 z-40 bg-white/80 flex items-center justify-center">
-                <div class="animate-spin rounded-full h-12 w-12 border-4 border-black border-t-transparent"></div>
-              </div>
-            {/if}
-        </div>
-      </main>
+    <OcrPdfPreview
+      {pdfFile}
+      pdfPageCount={pdfInstance?.numPages || 0}
+      bind:selectedPageNumber
+      bind:selectedLineIndex
+      {selectedLines}
+      {previewScale}
+      {previewRenderKey}
+      {previewRenderedKey}
+      bind:previewCanvas
+      bind:previewWrapWidth
+      bind:previewWrapHeight
+      bind:previewScrollContainer
+      {previewEditingLineIndex}
+      {previewEditingPageNumber}
+      bind:previewEditingText
+      bind:previewEditingTextarea
+      {newSelectionState}
+      {resizeHandles}
+      {isPreviewDragging}
+      {isFileLoading}
+      {isBuilding}
+      {handleFileChange}
+      {handlePreviewDragEnter}
+      {handlePreviewDragOver}
+      {handlePreviewDragLeave}
+      {handleDrop}
+      {goToPreviousPreviewPage}
+      {goToNextPreviewPage}
+      {zoomPreviewOut}
+      {zoomPreviewIn}
+      {resetPreviewZoom}
+      {startNewSelection}
+      {handlePreviewPointerMove}
+      {finishBBoxDrag}
+      {selectLine}
+      {startBBoxDrag}
+      {startPreviewTextEdit}
+      {commitPreviewTextEdit}
+      {cancelPreviewTextEdit}
+      {getOverlayRect}
+      {getNewSelectionBBox}
+      {imageBBoxToOverlayRect}
+      {generateSearchablePdf}
+    />
   </div>
 
   <HelpModal bind:showHelpModal />
