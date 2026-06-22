@@ -7,6 +7,8 @@ export const GET: RequestHandler = async () => {
     const pages = [
         { loc: DOMAIN, lastmod: now, changefreq: 'monthly', priority: '1.0' },
         { loc: `${DOMAIN}?lang=zh`, lastmod: now, changefreq: 'monthly', priority: '0.8' },
+        { loc: `${DOMAIN}ocr`, lastmod: now, changefreq: 'monthly', priority: '0.9' },
+        { loc: `${DOMAIN}ocr?lang=zh`, lastmod: now, changefreq: 'monthly', priority: '0.7' },
         { loc: `${DOMAIN}about`, lastmod: now, changefreq: 'monthly', priority: '0.8' },
         { loc: `${DOMAIN}about?lang=zh`, lastmod: now, changefreq: 'monthly', priority: '0.6' },
     ];

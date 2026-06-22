@@ -3,7 +3,15 @@
   <img src="https://raw.githubusercontent.com/anig1scur/tocify/refs/heads/main/static/favicon.svg" width="36" />
 </h1>
 
-Tocify is a free, online and open-source web application to add, edit, or generate Table of Contents (ToCs) / bookmarks for PDFs. It uses AI to parse scanned directory images or raw text into structured outlines, and creates clickable bookmarks & printable TOC pages for PDFs in cross platforms.
+Tocify is a free, online, open-source PDF toolkit that runs in your browser. It helps you add, edit, or generate PDF Table of Contents (ToCs) / bookmarks, and it can also create searchable double-layer PDFs with local OCR.
+
+## Features
+
+- Add, edit, and export clickable PDF bookmarks / outlines.
+- Generate structured ToCs from scanned directory pages or raw text with AI.
+- Create printable ToC pages and insert them into PDFs.
+- Run OCR locally in the browser and export searchable PDFs without uploading files.
+- Process PDFs privately on your device.
 
 </div>
 

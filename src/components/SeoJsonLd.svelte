@@ -47,7 +47,7 @@
 <svelte:head>
   <title>{title}</title>
   <meta name="description" content={description || $t('meta.description')} />
-  <meta name="keywords" content="add bookmarks to PDF, PDF table of contents, clickable PDF outline, PDF bookmark editor, create PDF TOC, generate PDF outline, PDF 目录生成, PDF 添加书签, 扫描版 PDF 目录, PDF 在线免费工具" />
+  <meta name="keywords" content="add bookmarks to PDF, PDF table of contents, clickable PDF outline, PDF bookmark editor, create PDF TOC, generate PDF outline, searchable PDF, OCR PDF, local OCR, double-layer PDF, PDF 目录生成, PDF 添加书签, PDF OCR, 可搜索 PDF, 扫描版 PDF 目录, PDF 在线免费工具" />
   
   <link rel="canonical" href={url} />
   <link rel="alternate" hreflang="en" href="{url}" />

@@ -2056,7 +2056,7 @@
     class="flex flex-col mt-5 lg:flex-row lg:items-start lg:mt-8 p-2 md:p-4 md:pr-3 gap-4 lg:gap-8 mx-auto w-[95%] md:w-[90%] xl:w-[80%] 3xl:w-[75%] max-w-6xl justify-between"
   >
     <aside class="w-full lg:w-[35%] lg:min-h-[85vh] flex-shrink-0 flex flex-col gap-4">
-      <Header activePage="ocr" on:openhelp={() => (showHelpModal = true)} />
+      <Header activePage="ocr" showHelp={false} on:openhelp={() => (showHelpModal = true)} />
 
       <OcrControls
         pdfPageCount={pdfInstance?.numPages || 1}

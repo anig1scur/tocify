@@ -17,7 +17,7 @@
       <Logo />
       <h1 class="text-3xl tracking-widest font-semibold">Tocify</h1>
     </div>
-    <p class="text-xs text-gray-700 mt-1 pl-1">PDF ToC & OCR Toolkit</p>
+    <p class="text-xs text-gray-700 mt-1 pl-1">{$t('header.tagline')}</p>
     <div class="flex items-end gap-2 mt-3 text-xs font-semibold">
       <a
         href="/"

@@ -15,7 +15,11 @@
   const cardClass = "relative bg-white border-2 border-black rounded-xl p-6 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[3px] hover:translate-y-[3px] transition-all duration-200";
 </script>
 
-<SeoJsonLd title={$t('seo.why_title')} description={$t('seo.why_desc')} />
+<SeoJsonLd
+  title={$t('seo.why_title')}
+  description={$t('seo.why_desc')}
+  url="https://tocify.aeriszhu.com/about"
+/>
 
 <div class="min-h-screen flex font-['HuiwenMincho'] text-neutral-800 flex-col bg-yellow-50 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:20px_20px]">
   
@@ -28,7 +32,7 @@
       >
          <a href="/" class="group inline-flex items-center gap-2 px-5 py-2 border-2 border-black bg-white rounded-full shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] active:scale-95 transition-all font-bold mb-10 text-sm uppercase tracking-wider">
            <ArrowLeft size={16} class="group-hover:-translate-x-1 transition-transform"/>
-           Back to Tool
+           {$t('seo.back_to_tools')}
          </a>
 
          <h1 class="text-3xl md:text-5xl mb-8 leading-tight tracking-tight text-gray-900">
