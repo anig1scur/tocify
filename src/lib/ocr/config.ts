@@ -1,7 +1,8 @@
 import type { OcrModelSize, OcrResolutionQuality, OcrWasmPaths } from './types';
 
 export const OCR_MIN_WORKER_POOL_SIZE = 1;
-export const OCR_MAX_WORKER_POOL_SIZE = 4;
+export const OCR_WORKER_POOL_SIZE_DEFAULT = 2;
+export const OCR_MAX_WORKER_POOL_SIZE = 8;
 export const OCR_RUNTIME_SETTINGS_STORAGE_KEY = 'tocify.ocr.runtimeSettings';
 export const OCR_MODEL_SIZE_DEFAULT: OcrModelSize = 'tiny';
 export const OCR_SELECTION_HISTORY_LIMIT = 80;

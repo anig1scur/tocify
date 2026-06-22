@@ -4,6 +4,11 @@
 
   import '../../lib/i18n';
   import Tooltip from '../../components/Tooltip.svelte';
+  import {
+    OCR_MAX_WORKER_POOL_SIZE,
+    OCR_MIN_WORKER_POOL_SIZE,
+    OCR_WORKER_POOL_SIZE_DEFAULT,
+  } from '$lib/ocr/config';
   import type { OcrModelSize, OcrProgress, OcrResolutionQuality } from '$lib/ocr/types';
 
   export let pdfPageCount = 1;
@@ -11,12 +16,12 @@
   export let pageStart = 1;
   export let pageEnd = 1;
   export let modelSize: OcrModelSize = 'tiny';
-  export let workerPoolSize = 4;
+  export let workerPoolSize = OCR_WORKER_POOL_SIZE_DEFAULT;
   export let resolutionQuality: OcrResolutionQuality = 'standard';
   export let watermarkCleanup = false;
   export let boxExtension = 2.0;
-  export let minWorkerPoolSize = 1;
-  export let maxWorkerPoolSize = 4;
+  export let minWorkerPoolSize = OCR_MIN_WORKER_POOL_SIZE;
+  export let maxWorkerPoolSize = OCR_MAX_WORKER_POOL_SIZE;
   export let minBoxExtension = 1.0;
   export let maxBoxExtension = 3.0;
   export let boxExtensionStep = 0.1;

@@ -7,6 +7,7 @@ import {
   OCR_MIN_WORKER_POOL_SIZE,
   OCR_MODEL_SIZE_DEFAULT,
   OCR_RESOLUTION_QUALITY_SIZES,
+  OCR_WORKER_POOL_SIZE_DEFAULT,
   ORT_JSEP_WASM_PATHS,
   ORT_PLAIN_WASM_PATHS,
 } from './config';
@@ -17,7 +18,7 @@ let workerFetchSupportPromise: Promise<boolean> | null = null;
 export function clampOcrWorkerPoolSize(value: unknown) {
   return Math.max(
     OCR_MIN_WORKER_POOL_SIZE,
-    Math.min(OCR_MAX_WORKER_POOL_SIZE, Math.floor(Number(value)) || 4),
+    Math.min(OCR_MAX_WORKER_POOL_SIZE, Math.floor(Number(value)) || OCR_WORKER_POOL_SIZE_DEFAULT),
   );
 }
 

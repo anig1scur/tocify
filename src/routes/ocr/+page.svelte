@@ -53,6 +53,7 @@
     OCR_TREE_STICKY_PAGE_HEIGHT,
     OCR_TREE_STICKY_PAGE_TOP,
     OCR_TREE_STICKY_SEARCH_TOP,
+    OCR_WORKER_POOL_SIZE_DEFAULT,
     PREVIEW_DEFAULT_SCALE,
     PREVIEW_LOCATED_BOX_HORIZONTAL_PADDING,
     PREVIEW_MAX_SCALE,
@@ -112,7 +113,7 @@
   let pageStart = 1;
   let pageEnd = 1;
   let ocrModelSize: OcrModelSize = 'tiny';
-  let ocrWorkerPoolSize = 4;
+  let ocrWorkerPoolSize = OCR_WORKER_POOL_SIZE_DEFAULT;
   let ocrResolutionQuality: OcrResolutionQuality = 'standard';
   let ocrWatermarkCleanup = false;
   let ocrBoxExtension = 2.0;

@@ -24,6 +24,13 @@ const INVISIBLE_TEXT_COLOR = rgb(0, 0, 0);
 const MIN_TEXT_HORIZONTAL_SCALE = 25;
 const MAX_TEXT_HORIZONTAL_SCALE = 400;
 const LINES_PER_RENDER_TICK = 200;
+const VERTICAL_TEXT_ASPECT_RATIO = 1.8;
+const VERTICAL_TEXT_MIN_CHARS = 2;
+const MIN_LAYOUT_FONT_SIZE = 2;
+const TEXT_AREA_FONT_SCALE = 1.35;
+const HORIZONTAL_LINE_ADVANCE_RATIO = 1.12;
+const VERTICAL_ROW_ADVANCE_RATIO = 1.08;
+const VERTICAL_COLUMN_ADVANCE_RATIO = 1.08;
 
 export interface SearchableOcrLine {
   text: string;
@@ -66,9 +73,14 @@ interface RawLineLike {
   points?: unknown;
 }
 
+interface WrappedTextLine {
+  text: string;
+  unitWidth: number;
+}
+
 let fontBytesPromise: Promise<ArrayBuffer> | null = null;
 
-function getWidthAtSize(font: PDFFont, text: string, size: number, widthCache: Map<string, number>) {
+function getWidthAtUnitSize(font: PDFFont, text: string, widthCache: Map<string, number>) {
   let widthAtUnitSize = widthCache.get(text);
 
   if (widthAtUnitSize === undefined) {
@@ -76,7 +88,11 @@ function getWidthAtSize(font: PDFFont, text: string, size: number, widthCache: M
     widthCache.set(text, widthAtUnitSize);
   }
 
-  return widthAtUnitSize * size;
+  return widthAtUnitSize;
+}
+
+function getUnitWidths(font: PDFFont, chars: string[], widthCache: Map<string, number>) {
+  return chars.map((char) => getWidthAtUnitSize(font, char, widthCache));
 }
 
 async function yieldToEventLoop() {
@@ -88,6 +104,20 @@ function getTextHorizontalScale(measuredWidth: number, targetWidth: number) {
   return Math.max(
     MIN_TEXT_HORIZONTAL_SCALE,
     Math.min(MAX_TEXT_HORIZONTAL_SCALE, (targetWidth / measuredWidth) * 100),
+  );
+}
+
+function shouldDrawVerticalText(charCount: number, lineWidth: number, lineHeight: number) {
+  return (
+    charCount >= VERTICAL_TEXT_MIN_CHARS &&
+    lineHeight / Math.max(1, lineWidth) >= VERTICAL_TEXT_ASPECT_RATIO
+  );
+}
+
+function getAreaBasedFontSize(charCount: number, lineWidth: number, lineHeight: number) {
+  return Math.max(
+    MIN_LAYOUT_FONT_SIZE,
+    Math.sqrt((lineWidth * lineHeight) / Math.max(1, charCount)) * TEXT_AREA_FONT_SCALE,
   );
 }
 
@@ -116,6 +146,182 @@ function drawInvisibleFittedText(
   );
 }
 
+function wrapTextToWidth(
+  chars: string[],
+  unitWidths: number[],
+  size: number,
+  maxWidth: number,
+) {
+  const lines: WrappedTextLine[] = [];
+  const maxUnitWidth = maxWidth / size;
+  let currentLine = '';
+  let currentUnitWidth = 0;
+
+  for (let index = 0; index < chars.length; index += 1) {
+    const char = chars[index];
+    const charUnitWidth = unitWidths[index];
+
+    if (currentLine && currentUnitWidth + charUnitWidth > maxUnitWidth) {
+      lines.push({ text: currentLine, unitWidth: currentUnitWidth });
+      currentLine = char;
+      currentUnitWidth = charUnitWidth;
+    } else {
+      currentLine += char;
+      currentUnitWidth += charUnitWidth;
+    }
+  }
+
+  if (currentLine) {
+    lines.push({ text: currentLine, unitWidth: currentUnitWidth });
+  }
+
+  return lines;
+}
+
+function getHorizontalLayout(
+  chars: string[],
+  unitWidths: number[],
+  lineWidth: number,
+  lineHeight: number,
+) {
+  const charCount = chars.length;
+  const maxSize = Math.max(
+    MIN_LAYOUT_FONT_SIZE,
+    Math.min(lineHeight * 0.8, getAreaBasedFontSize(charCount, lineWidth, lineHeight)),
+  );
+  let low = MIN_LAYOUT_FONT_SIZE;
+  let high = maxSize;
+  let bestSize = low;
+  let bestLines = wrapTextToWidth(chars, unitWidths, low, lineWidth);
+
+  for (let attempt = 0; attempt < 14; attempt += 1) {
+    const size = (low + high) / 2;
+    const lines = wrapTextToWidth(chars, unitWidths, size, lineWidth);
+    const lineAdvance = size * HORIZONTAL_LINE_ADVANCE_RATIO;
+    const fits = lines.length * lineAdvance <= lineHeight + 0.5;
+
+    if (fits) {
+      bestSize = size;
+      bestLines = lines;
+      low = size;
+    } else {
+      high = size;
+    }
+  }
+
+  return {
+    size: bestSize,
+    lines: bestLines,
+    lineAdvance: bestSize * HORIZONTAL_LINE_ADVANCE_RATIO,
+  };
+}
+
+function drawHorizontalOcrLine(
+  page: PDFPage,
+  font: PDFFont,
+  fontKey: PDFName,
+  chars: string[],
+  unitWidths: number[],
+  x: number,
+  y2: number,
+  lineWidth: number,
+  lineHeight: number,
+  pdfHeight: number,
+) {
+  const layout = getHorizontalLayout(chars, unitWidths, lineWidth, lineHeight);
+  const topY = pdfHeight - (y2 - lineHeight);
+  const usedHeight = layout.lines.length * layout.lineAdvance;
+  const topPadding = Math.max(0, (lineHeight - usedHeight) / 2);
+
+  for (let lineIndex = 0; lineIndex < layout.lines.length; lineIndex += 1) {
+    const line = layout.lines[lineIndex];
+    const y = topY - topPadding - (lineIndex * layout.lineAdvance) - layout.size;
+
+    drawInvisibleFittedText(
+      page,
+      font,
+      fontKey,
+      line.text,
+      x,
+      y,
+      layout.size,
+      lineWidth,
+      line.unitWidth * layout.size,
+    );
+  }
+}
+
+function drawVerticalOcrLine(
+  page: PDFPage,
+  font: PDFFont,
+  fontKey: PDFName,
+  chars: string[],
+  unitWidths: number[],
+  x: number,
+  y1: number,
+  lineWidth: number,
+  lineHeight: number,
+  pdfHeight: number,
+) {
+  const charCount = chars.length;
+  const maxSize = Math.max(
+    MIN_LAYOUT_FONT_SIZE,
+    Math.min(lineWidth * 0.85, getAreaBasedFontSize(charCount, lineWidth, lineHeight)),
+  );
+  let size = MIN_LAYOUT_FONT_SIZE;
+  let rowsPerColumn = charCount;
+  let columnCount = 1;
+  const maxColumnCount = Math.max(
+    1,
+    Math.min(charCount, Math.floor(lineWidth / (MIN_LAYOUT_FONT_SIZE * VERTICAL_COLUMN_ADVANCE_RATIO))),
+  );
+
+  for (let columns = 1; columns <= maxColumnCount; columns += 1) {
+    const rows = Math.ceil(charCount / columns);
+    const candidate = Math.min(
+      maxSize,
+      lineHeight / (rows * VERTICAL_ROW_ADVANCE_RATIO),
+      lineWidth / (columns * VERTICAL_COLUMN_ADVANCE_RATIO),
+    );
+
+    if (candidate > size) {
+      size = candidate;
+      rowsPerColumn = rows;
+      columnCount = columns;
+    }
+  }
+
+  const rowAdvance = size * VERTICAL_ROW_ADVANCE_RATIO;
+  const columnAdvance = size * VERTICAL_COLUMN_ADVANCE_RATIO;
+  const usedWidth = columnCount * columnAdvance;
+  const leftPadding = Math.max(0, (lineWidth - usedWidth) / 2);
+  const topY = pdfHeight - y1;
+
+  for (let charIndex = 0; charIndex < chars.length; charIndex += 1) {
+    const char = chars[charIndex];
+    const columnIndex = Math.floor(charIndex / rowsPerColumn);
+    const rowIndex = charIndex % rowsPerColumn;
+    const rowsInColumn = Math.min(rowsPerColumn, chars.length - columnIndex * rowsPerColumn);
+    const measuredWidth = unitWidths[charIndex] * size;
+    const topPadding = Math.max(0, (lineHeight - rowsInColumn * rowAdvance) / 2);
+    const columnX = x + leftPadding + (columnCount - 1 - columnIndex) * columnAdvance;
+    const glyphX = columnX + Math.max(0, (columnAdvance - Math.min(columnAdvance, measuredWidth)) / 2);
+    const glyphY = topY - topPadding - rowIndex * rowAdvance - size;
+
+    drawInvisibleFittedText(
+      page,
+      font,
+      fontKey,
+      char,
+      glyphX,
+      glyphY,
+      size,
+      columnAdvance,
+      measuredWidth,
+    );
+  }
+}
+
 async function drawOcrPageTextLayer(
   page: PDFPage,
   font: PDFFont,
@@ -133,18 +339,36 @@ async function drawOcrPageTextLayer(
     const lineWidth = Math.max(1, (x2 - x1) * scaleX);
     const lineHeight = Math.max(1, (y2 - y1) * scaleY);
     const x = x1 * scaleX;
-    let size = Math.max(4, lineHeight * 0.8);
-    const writableWidth = lineWidth + Math.max(0.5, size * 0.12);
+    const chars = Array.from(line.text);
+    const unitWidths = getUnitWidths(font, chars, widthCache);
 
-    let measuredWidth = getWidthAtSize(font, line.text, size, widthCache);
-    if (measuredWidth > writableWidth) {
-      size = Math.max(2, size * (writableWidth / measuredWidth));
-      measuredWidth = getWidthAtSize(font, line.text, size, widthCache);
+    if (shouldDrawVerticalText(chars.length, lineWidth, lineHeight)) {
+      drawVerticalOcrLine(
+        page,
+        font,
+        fontKey,
+        chars,
+        unitWidths,
+        x,
+        y1 * scaleY,
+        lineWidth,
+        lineHeight,
+        pdfHeight,
+      );
+    } else {
+      drawHorizontalOcrLine(
+        page,
+        font,
+        fontKey,
+        chars,
+        unitWidths,
+        x,
+        y2 * scaleY,
+        lineWidth,
+        lineHeight,
+        pdfHeight,
+      );
     }
-
-    const y = pdfHeight - (y2 * scaleY) + Math.max(0, (lineHeight - size) * 0.25);
-
-    drawInvisibleFittedText(page, font, fontKey, line.text, x, y, size, writableWidth, measuredWidth);
 
     if ((lineIndex + 1) % LINES_PER_RENDER_TICK === 0) {
       await yieldToEventLoop();
