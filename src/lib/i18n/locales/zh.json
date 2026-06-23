@@ -56,6 +56,12 @@
     "font_loaded": "字体 {font} 加载成功！",
     "font_load_failed": "字体 {font} 加载失败。正在使用备用字体。"
   },
+  "pwa": {
+    "offline_ready": "Tocify 已可离线打开。",
+    "update_ready": "新版本可用。",
+    "refresh": "刷新",
+    "close": "关闭"
+  },
   "label": {
     "start": "开始",
     "end": "结束",

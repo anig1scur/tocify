@@ -60,6 +60,12 @@
     "font_loaded": "Font {font} loaded successfully!",
     "font_load_failed": "Font {font} load failed. Using fallback."
   },
+  "pwa": {
+    "offline_ready": "Tocify is ready to open offline.",
+    "update_ready": "A new version is available.",
+    "refresh": "Refresh",
+    "close": "Close"
+  },
   "label": {
     "start": "START",
     "end": "END",
