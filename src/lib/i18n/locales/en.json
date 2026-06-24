@@ -3,6 +3,12 @@
     "title": "Tocify · Add Bookmarks & Table of Contents to PDF online | 在浏览器中为 PDF 添加书签",
     "description": "Free online tool to add bookmarks and table of contents to PDF files, AI-powered outline generator for scanned documents. 为 PDF 添加目录/书签的在线免费工具，AI 驱动的 PDF 目录生成器。开源、私密、基于浏览器。"
   },
+  "header": {
+    "toc": "ToC",
+    "ocr": "OCR",
+    "github": "View project on GitHub",
+    "help": "How to use"
+  },
   "settings": {
     "title": "ToC Settings",
     "toggle_expand": "Toggle Expand/Collapse",
@@ -186,6 +192,52 @@
     "subtitle": "Drag & drop a file here, or",
     "btn_select": "Click to Select File"
   },
+  "ocr_lab": {
+    "title": "OCR Searchable PDF",
+    "meta_title": "Tocify · OCR Searchable PDF",
+    "meta_description": "Run browser OCR and create searchable double-layer PDFs locally.",
+    "start_page": "Start Page",
+    "end_page": "End Page",
+    "model_size": "Model",
+    "model_size_hint": "OCR runs locally in your browser. PP-OCRv6 Small is more accurate for dense text and scans but takes longer to load and run. PP-OCRv6 Tiny is faster and lighter.",
+    "model_small": "PP-OCRv6 Small",
+    "model_tiny": "PP-OCRv6 Tiny",
+    "watermark_cleanup": "Watermark Cleanup",
+    "watermark_cleanup_hint": "Only affects the temporary image sent to OCR. It removes mid-gray watermarks and strengthens black text for watermarked scans, but adds a little per-page processing time.",
+    "worker_count": "Workers",
+    "worker_count_hint": "How many OCR sessions run in parallel. More workers can be faster on powerful machines, but may make the browser heavier or less stable.",
+    "resolution_quality": "Resolution",
+    "resolution_quality_hint": "Controls the page image size sent to OCR. Low is faster; Standard fits most PDFs; High/Ultra can help small text or blurry scans but run slower.",
+    "box_extension": "Box Extension",
+    "box_extension_hint": "Expands detected text boxes. Higher values can recover clipped characters, but may merge nearby text.",
+    "resolution_low": "Low",
+    "resolution_standard": "Standard",
+    "resolution_high": "High",
+    "resolution_ultra": "Ultra",
+    "run_local": "Run Local OCR",
+    "local_loading_button": "Loading Model...",
+    "local_running_button": "Running OCR...",
+    "cancel_ocr": "Cancel OCR",
+    "local_canceling_button": "Canceling OCR...",
+    "local_timing": "Local OCR finished in {seconds}s for {pages} pages.",
+    "search_placeholder": "Search OCR text or page...",
+    "search_no_results": "No matching OCR text.",
+    "sort_low_confidence": "Low score",
+    "sort_reading_order": "Reading",
+    "delete_selected_line": "Delete selected line",
+    "pdf_preview_title": "PDF Preview",
+    "errors": {
+      "load_failed": "Failed to load this PDF.",
+      "not_pdf": "This file does not look like a valid PDF. Make sure you selected the original .pdf file.",
+      "no_pdf": "Upload the original PDF first.",
+      "local_failed": "Failed to run local OCR.",
+      "local_wasm_failed": "The browser OCR backend failed to initialize. Refresh the page and try again; if it still fails, reduce Workers or use another browser.",
+      "worker_fetch_unsupported": "This browser does not support fetch inside Web Workers, so local OCR cannot run. Use the latest Chrome, Edge, Safari, or Firefox.",
+      "engine_timeout": "The OCR engine did not respond in time. On Firefox, try Workers = 1, Tiny model, or Chrome/Edge if it keeps happening.",
+      "page_timeout": "OCR did not finish page {page} in time. Try a lower resolution, Tiny model, or fewer pages.",
+      "build_failed": "Failed to build the searchable PDF."
+    }
+  },
   "offset": {
     "title": "Confirm Page Offset By The First ToC Item",
     "found_prefix": "We found",
@@ -226,7 +278,7 @@
     "faq_4_q": "Can Tocify run on the client side?",
     "faq_4_a": "Yes, we provide clients for <b>macOS</b> and <b>Windows</b>.<br>You can download them from the GitHub Releases page:<br><a href='https://github.com/anig1scur/tocify/releases' target='_blank' class='text-blue-600 hover:underline'>Download Releases</a>",
     "faq_5_q": "Which shortcuts does Tocify support?",
-    "faq_5_a": "• <b>Ctrl/Cmd + Z</b>: Undo<br>• <b>Ctrl/Cmd + Shift + Z</b>: Redo<br>• <b>Click the dot or blank area</b>: Select a TOC item<br>• <b>Shift + Click</b>: Select a TOC range<br>• <b>Up/Down Arrows</b>: Quickly switch navigation input<br>• <b>Drag the handle</b>: Drag TOC items / groups"
+    "faq_5_a": "• <b>Ctrl/Cmd + Z</b>: Undo<br>• <b>Ctrl/Cmd + Shift + Z</b>: Redo<br>• <b>Click the dot or blank area</b>: Select a TOC item<br>• <b>Shift + Click</b>: Select a TOC range<br>• <b>Delete/Backspace</b>: Delete selected TOC items<br>• <b>Up/Down Arrows</b>: Quickly switch navigation input<br>• <b>Drag the handle</b>: Drag TOC items / groups"
   },
   "star_request": {
     "title": "Enjoying Tocify?",

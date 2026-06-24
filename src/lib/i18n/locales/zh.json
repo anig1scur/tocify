@@ -1,4 +1,10 @@
 {
+  "header": {
+    "toc": "目录",
+    "ocr": "OCR",
+    "github": "在 GitHub 查看项目",
+    "help": "使用帮助"
+  },
   "settings": {
     "title": "目录设置",
     "toggle_expand": "展开 / 折叠切换",
@@ -182,6 +188,52 @@
     "subtitle": "将文件拖拽到此处或",
     "btn_select": "点击选择文件"
   },
+  "ocr_lab": {
+    "title": "OCR 可搜索 PDF",
+    "meta_title": "Tocify · OCR 可搜索 PDF",
+    "meta_description": "在浏览器中运行 OCR，并在本地生成可搜索的双层 PDF。",
+    "start_page": "起始页",
+    "end_page": "结束页",
+    "model_size": "模型",
+    "model_size_hint": "OCR 会在你的浏览器中本地运行。PP-OCRv6 Small 对密集文字和扫描件更准确，但加载和识别更慢。PP-OCRv6 Tiny 更快、更轻量。",
+    "model_small": "PP-OCRv6 Small",
+    "model_tiny": "PP-OCRv6 Tiny",
+    "watermark_cleanup": "水印清理",
+    "watermark_cleanup_hint": "仅影响送入 OCR 的临时图像。开启后会擦除中灰水印并增强黑白文字，适合带水印扫描件，但每页会多一点处理时间。",
+    "worker_count": "Worker 数量",
+    "worker_count_hint": "同时运行的 OCR 会话数量。设备性能强时可以调高；浏览器变卡、发热或会话失败时调低。",
+    "resolution_quality": "识别清晰度",
+    "resolution_quality_hint": "送入 OCR 的页面图片尺寸。低更快；标准适合多数 PDF；高/极高更适合小字或模糊扫描件，但会更慢。",
+    "box_extension": "框扩展",
+    "box_extension_hint": "扩展文字检测框范围。调高可以减少截字，但可能把相邻文本合到一起。",
+    "resolution_low": "低",
+    "resolution_standard": "标准",
+    "resolution_high": "高",
+    "resolution_ultra": "极高",
+    "run_local": "运行本地 OCR",
+    "local_loading_button": "模型加载中...",
+    "local_running_button": "OCR 识别中...",
+    "cancel_ocr": "取消 OCR",
+    "local_canceling_button": "正在取消 OCR...",
+    "local_timing": "本地 OCR 完成：{pages} 页共 {seconds} 秒。",
+    "search_placeholder": "搜索 OCR 文本、页码...",
+    "search_no_results": "没有匹配的 OCR 文本。",
+    "sort_low_confidence": "低分优先",
+    "sort_reading_order": "阅读顺序",
+    "delete_selected_line": "删除选中行",
+    "pdf_preview_title": "PDF 预览",
+    "errors": {
+      "load_failed": "加载 PDF 失败。",
+      "not_pdf": "这个文件看起来不是有效的 PDF。请确认你选择的是原始 .pdf 文件。",
+      "no_pdf": "请先上传原始 PDF。",
+      "local_failed": "运行本地 OCR 失败。",
+      "local_wasm_failed": "浏览器 OCR 后端初始化失败。请刷新页面后重试；如果仍失败，降低 Worker 数量或换一个浏览器。",
+      "worker_fetch_unsupported": "当前浏览器的 Web Worker 不支持 fetch，无法运行本地 OCR。请使用最新版 Chrome、Edge、Safari 或 Firefox。",
+      "engine_timeout": "OCR 引擎长时间没有响应。Firefox 下可以先尝试 Worker = 1、Tiny 模型；如果仍发生，建议换 Chrome/Edge。",
+      "page_timeout": "第 {page} 页 OCR 长时间没有完成。请尝试降低识别清晰度、使用 Tiny 模型，或减少页数。",
+      "build_failed": "生成双层 PDF 失败。"
+    }
+  },
   "offset": {
     "title": "通过首个目录项校准页码偏移",
     "found_prefix": "我们发现了",
@@ -234,7 +286,7 @@
     "faq_4_q": "Tocify 是否可以在客户端运行？",
     "faq_4_a": "是的，我们提供 <b>macOS</b> 和 <b>Windows</b> 客户端。<br>您可以前往 GitHub Releases 页面下载：<br><a href='https://github.com/anig1scur/tocify/releases' target='_blank' class='text-blue-600 hover:underline'>Download Releases</a>",
     "faq_5_q": "Tocify 支持哪些快捷键？",
-    "faq_5_a": "• <b>Ctrl/Cmd + Z</b>: 撤销<br>• <b>Ctrl/Cmd + Shift + Z</b>: 重做 (撤销撤销)<br>• <b>单击圆点或空白区域</b>: 选中目录项<br>• <b>Shift + 单击</b>: 区间选择目录项<br>• <b>上下键</b>: 快速切换 导航输入框<br>• <b>拖动拖拽柄</b>: 拖拽目录项 / 目录组"
+    "faq_5_a": "• <b>Ctrl/Cmd + Z</b>: 撤销<br>• <b>Ctrl/Cmd + Shift + Z</b>: 重做 (撤销撤销)<br>• <b>单击圆点或空白区域</b>: 选中目录项<br>• <b>Shift + 单击</b>: 区间选择目录项<br>• <b>Delete/Backspace</b>: 删除选中目录项<br>• <b>上下键</b>: 快速切换 导航输入框<br>• <b>拖动拖拽柄</b>: 拖拽目录项 / 目录组"
   },
   "star_request": {
     "title": "喜欢 Tocify 吗？",

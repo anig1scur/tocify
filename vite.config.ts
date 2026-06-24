@@ -15,7 +15,7 @@ export default defineConfig({
           'client/**/*.{js,css,ico,png,svg,webp,webmanifest,mjs}',
           'prerendered/**/*.{html,json}'
         ],
-        maximumFileSizeToCacheInBytes: 3 * 1024 * 1024
+        maximumFileSizeToCacheInBytes: 12 * 1024 * 1024
       }
     })
   ],
@@ -35,7 +35,7 @@ export default defineConfig({
         }
       }
     },
-    target: 'es2018',
+    target: 'es2020',
     chunkSizeWarningLimit: 1000
   }
 });

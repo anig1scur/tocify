@@ -91,26 +91,38 @@
     batchOffsetInput = '';
   }
 
-  function handleKeydown(e: KeyboardEvent) {
-    const target = e.target as HTMLElement | null;
-    const tagName = target?.tagName;
-    if (tagName === 'INPUT' || tagName === 'TEXTAREA' || target?.isContentEditable) return;
+  function isEditableKeyboardTarget(target: EventTarget | null) {
+    const element = target instanceof HTMLElement ? target : null;
+    return Boolean(element?.closest('input, textarea, select, [contenteditable]'));
+  }
 
+  function handleKeydown(e: KeyboardEvent) {
+    if (e.isComposing || isEditableKeyboardTarget(e.target)) return;
+
+    let handled = false;
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
-      if (e.shiftKey) {
-        e.preventDefault();
-        redo();
-      } else {
-        e.preventDefault();
-        undo();
-      }
+      handled = true;
+      if (e.shiftKey) redo();
+      else undo();
     } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'y') {
-      e.preventDefault();
+      handled = true;
       redo();
+    } else if (
+      (e.key === 'Delete' || e.key === 'Backspace') &&
+      !e.metaKey &&
+      !e.ctrlKey &&
+      !e.altKey
+    ) {
+      handled = deleteSelectedTocItems();
     } else if (e.key === 'Escape' && selectedIds.size > 0) {
-      e.preventDefault();
+      handled = true;
       clearSelection();
     }
+
+    if (!handled) return;
+
+    e.preventDefault();
+    e.stopPropagation();
   }
 
   let isDragging = false;
@@ -800,6 +812,27 @@
 
     $tocItems = deleteItemRecursive($tocItems);
   };
+
+  function deleteSelectedTocItems() {
+    if (selectedIds.size === 0) return false;
+
+    const flatItems = flattenTocItems($tocItems);
+    const selectedRootIds = new Set(getSelectedRootIds(flatItems, selectedIds));
+    if (selectedRootIds.size === 0) return false;
+
+    saveHistory();
+    const deleteItemsRecursive = (items: TocEntry[]): TocEntry[] =>
+      items
+        .filter((item) => !selectedRootIds.has(item.id))
+        .map((item) => ({
+          ...item,
+          children: item.children?.length ? deleteItemsRecursive(item.children) : [],
+        }));
+
+    $tocItems = deleteItemsRecursive($tocItems);
+    clearSelection();
+    return true;
+  }
 
   const TOC_REGEX = /^(\d+(?:\.\d+)*)\s+(.*?)\s+(-?\d+)$/;
 

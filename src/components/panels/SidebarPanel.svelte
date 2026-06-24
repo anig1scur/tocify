@@ -33,7 +33,7 @@
 </script>
 
 <div class="w-full lg:w-[35%] flex-shrink-0">
-  <Header on:openhelp={() => dispatch('openhelp')} />
+  <Header activePage="toc" on:openhelp={() => dispatch('openhelp')} />
 
   <ApiSetting
     on:change={(e) => dispatch('apiConfigChange', e.detail)}
