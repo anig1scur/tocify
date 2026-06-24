@@ -21,3 +21,7 @@
 </script>
 
 {@render children()}
+
+{#await import('../components/PwaPrompt.svelte') then { default: PwaPrompt }}
+  <PwaPrompt />
+{/await}
