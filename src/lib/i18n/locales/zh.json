@@ -249,18 +249,6 @@
     "progress": "{current} / {total}",
     "partial_failure_title": "部分页面请求失败"
   },
-  "client": {
-    "title": "在客户端运行",
-    "download_btn": "下载 Tocify",
-    "mac_hint": "如果应用提示已损坏，请在终端运行此命令。",
-    "byo_title": "使用自定义 API Key",
-    "report_issue": "反馈问题",
-    "btn_open": "客户端 App",
-    "btn_fold": "收起",
-    "copy_cmd": "复制命令",
-    "copied": "已复制",
-    "snooze": "不再展示"
-  },
   "seo": {
     "why_title": "为什么选择 Tocify?",
     "why_desc": "Tocify 是开源/免费/在线的 PDF 目录或书签添加/编辑/生成工具，它完全基于浏览器运行。无论您有扫描文档还是电子书，我们的 AI 驱动解决方案都能在几分钟内格式化并插入书签，或生成实体可点击的目录，让您的 PDF 易于导航。",

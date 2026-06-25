@@ -44,7 +44,6 @@
   import ChapterExportModal from '../components/modals/ChapterExportModal.svelte';
   import StarRequestModal from '../components/modals/StarRequestModal.svelte';
 
-  import DownloadBanner from '../components/DownloadBanner.svelte';
   import SidebarPanel from '../components/panels/SidebarPanel.svelte';
   import PreviewPanel from '../components/panels/PreviewPanel.svelte';
   import RecognitionIgnoreEditor from '../components/RecognitionIgnoreEditor.svelte';
@@ -172,6 +171,8 @@
     if (!tocViewCache) {
       $pdfService = new PDFService();
     }
+
+    localStorage.removeItem('tocify_client_promo_hidden_until');
 
     const hideUntil = localStorage.getItem('tocify_hide_graph_entrance_until');
     if (hideUntil) {
@@ -1270,8 +1271,6 @@
     ></div>
   {/if}
 </div>
-
-<DownloadBanner />
 
 {#if toastProps.show}
   <Toast

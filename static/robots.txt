@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://tocify.aeriszhu.com/sitemap.xml
+Sitemap: https://pdf.aeriszhu.com/sitemap.xml

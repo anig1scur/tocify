@@ -736,8 +736,10 @@
       editorDoc = sourceDoc;
     }
     if (syncSelection && parsed.pages.length > 0 && !parsed.pages.some((page) => page.page === selectedPageNumber)) {
-      selectedPageNumber = parsed.pages[0].page;
-      selectedLineIndex = 0;
+      setOcrSelectionState(
+        getOcrSelectionFallbackForPage(selectedPageNumber, parsed.pages)
+          ?? { pageNumber: parsed.pages[0].page, lineIndex: 0 },
+      );
     }
     return parsed;
   }
@@ -956,6 +958,34 @@
     selectedLineIndex = lines.length
       ? Math.max(0, Math.min(lines.length - 1, selection.lineIndex))
       : 0;
+  }
+
+  function getOcrSelectionFallbackForPage(
+    pageNumber: unknown,
+    pages: any[],
+  ): OcrSelectionState | null {
+    const currentPageNumber = Number(pageNumber);
+    const targetPageNumber = Number.isFinite(currentPageNumber) ? currentPageNumber : 1;
+    const candidates = pages
+      .map((page: any) => ({
+        pageNumber: Number(page?.page),
+        lineCount: Array.isArray(page?.lines) ? page.lines.length : 0,
+      }))
+      .filter((page) => Number.isFinite(page.pageNumber) && page.lineCount > 0)
+      .sort((a, b) => a.pageNumber - b.pageNumber);
+
+    const previousPage = [...candidates].reverse().find((page) => page.pageNumber < targetPageNumber);
+    if (previousPage) {
+      return {
+        pageNumber: previousPage.pageNumber,
+        lineIndex: previousPage.lineCount - 1,
+      };
+    }
+
+    const nextPage = candidates.find((page) => page.pageNumber > targetPageNumber);
+    return nextPage
+      ? { pageNumber: nextPage.pageNumber, lineIndex: 0 }
+      : null;
   }
 
   function syncSelectionMutation() {
@@ -1339,14 +1369,28 @@
     const line = page.lines[lineIndex];
     if (!line) return;
     const selectionBefore = getCurrentOcrSelectionState();
+    const selectedLineIndexBeforeDelete = Math.max(0, Number(selectedLineIndex) || 0);
     const lineId = getOcrLineEditorId(line);
     const historyLine = cloneOcrHistoryLine(line, lineId);
     page.lines.splice(lineIndex, 1);
     if (Number(selectedPageNumber) === Number(pageNumber)) {
-      selectedLineIndex = Math.max(0, Math.min(selectedLineIndex, page.lines.length - 1));
+      if (page.lines.length) {
+        if (selectedLineIndexBeforeDelete === lineIndex) {
+          selectedLineIndex = Math.max(0, Math.min(lineIndex, page.lines.length - 1));
+        } else if (selectedLineIndexBeforeDelete > lineIndex) {
+          selectedLineIndex = selectedLineIndexBeforeDelete - 1;
+        } else {
+          selectedLineIndex = Math.min(selectedLineIndexBeforeDelete, page.lines.length - 1);
+        }
+      } else {
+        setOcrSelectionState(
+          getOcrSelectionFallbackForPage(pageNumber, Array.isArray(editorDoc?.pages) ? editorDoc.pages : [])
+            ?? { pageNumber: Math.max(1, Number(pageNumber) - 1), lineIndex: 0 },
+        );
+      }
     }
     editorDoc = { ...editorDoc };
-    syncJsonFromEditor(true);
+    syncJsonFromEditor();
     commitOcrSelectionHistory({
       type: 'delete',
       pageNumber,
@@ -2047,7 +2091,7 @@
 <SeoJsonLd
   title={$t('ocr_lab.meta_title')}
   description={$t('ocr_lab.meta_description')}
-  url="https://tocify.aeriszhu.com/ocr"
+  url="https://pdf.aeriszhu.com/ocr"
 />
 
 <div class="min-h-screen flex text-neutral-800 flex-col">

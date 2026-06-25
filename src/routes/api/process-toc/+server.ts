@@ -5,7 +5,7 @@ import { error, json } from '@sveltejs/kit';
 export const POST = withRateLimit(async ({ request }) => {
   const origin = request.headers.get('origin');
   const allowedOrigins = [
-    'https://tocify.aeriszhu.com', 'https://tocify.vercel.app',
+    'https://pdf.aeriszhu.com', 'https://tocify.aeriszhu.com', 'https://tocify.vercel.app',
     'http://localhost:5173', 'http://127.0.0.1:5173'
   ];
 

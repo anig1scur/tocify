@@ -3,8 +3,8 @@
 
   export let title: string;
   export let description: string | undefined = undefined;
-  export let url: string = 'https://tocify.aeriszhu.com';
-  export let image: string = 'https://tocify.aeriszhu.com/og-image.png';
+  export let url: string = 'https://pdf.aeriszhu.com';
+  export let image: string = 'https://pdf.aeriszhu.com/og-image.png';
 
   const siteName = 'Tocify';
 
