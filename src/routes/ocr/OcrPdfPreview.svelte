@@ -81,6 +81,24 @@
       openFilePicker();
     }
   }
+
+  function blurFocusedField(event: PointerEvent) {
+    const activeElement = document.activeElement;
+    if (!(activeElement instanceof HTMLElement)) return;
+    if (activeElement === document.body || activeElement === document.documentElement) return;
+
+    const target = event.target;
+    if (target instanceof Node && activeElement.contains(target)) return;
+
+    if (
+      target instanceof HTMLElement
+      && target.closest('input, textarea, select, [contenteditable="true"]')
+    ) {
+      return;
+    }
+
+    activeElement.blur();
+  }
 </script>
 
 <main class="flex flex-col w-full lg:w-[70%] min-w-0 h-fit lg:sticky lg:top-5 lg:self-start">
@@ -92,6 +110,7 @@
     on:dragover={handlePreviewDragOver}
     on:dragleave={handlePreviewDragLeave}
     on:drop={handleDrop}
+    on:pointerdown|capture={blurFocusedField}
   >
     <input bind:this={fileInput} type="file" accept="application/pdf" class="hidden" on:change={handleFileChange} />
 

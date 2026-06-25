@@ -615,14 +615,16 @@
             <div class="flex items-center gap-2">
               <input
                 id="api_key"
-                type={showApiKey ? 'text' : 'password'}
-                name="provider-api-key"
-                autocomplete="new-password"
+                type="text"
+                name="tocify-provider-api-token"
+                autocomplete="off"
                 autocapitalize="off"
                 autocorrect="off"
                 spellcheck="false"
+                data-form-type="other"
                 data-1p-ignore="true"
                 data-lpignore="true"
+                class:text-security-disc={!showApiKey && Boolean(config.apiKey)}
                 class="min-w-0 flex-1 outline-none placeholder:text-gray-400 placeholder:italic [&::placeholder]:text-xs "
                 placeholder={$t('settings.api_key_placeholder')}
                 bind:value={config.apiKey}
@@ -752,6 +754,10 @@
   .animate-notice-shake {
     animation: notice-shake 0.32s ease-in-out;
     transform-origin: center;
+  }
+
+  .text-security-disc {
+    -webkit-text-security: disc;
   }
 
   @keyframes notice-shake {

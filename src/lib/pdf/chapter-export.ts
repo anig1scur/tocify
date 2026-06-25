@@ -113,6 +113,15 @@ export function getMergedChapterFilename(baseFilename: string, chapters: Exporta
   return `${getBaseFilename(baseFilename || 'document')}_chapters.pdf`;
 }
 
+export function getChapterArchiveFilename(baseFilename: string, chapters: ExportableChapter[]) {
+  if (chapters.length === 1) {
+    const baseName = getBaseFilename(getChapterFilename(baseFilename, chapters[0]));
+    return `${baseName}.zip`;
+  }
+
+  return `${getBaseFilename(baseFilename || 'document')}_chapters.zip`;
+}
+
 export function mergeChapterRanges(chapters: ExportableChapter[]) {
   const ranges = chapters
     .map((chapter) => ({startPage: chapter.startPage, endPage: chapter.endPage}))

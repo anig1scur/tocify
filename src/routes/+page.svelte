@@ -21,6 +21,7 @@
     createPageMapForRanges,
     filterSelectedChapterRoots,
     findTocItemById,
+    getChapterArchiveFilename,
     getChapterFilename,
     getMergedChapterFilename,
     mergeChapterRanges,
@@ -34,6 +35,7 @@
   import {setPageLabels} from '$lib/pdf/page-labels';
   import {createEmptyApiConfig} from '$lib/llm/core';
   import type {RecognitionIgnoreRegion} from '$lib/pdf/recognition-ignore';
+  import {createZipBlob, getUniqueZipFilename, type ZipFileEntry} from '$lib/utils/zip';
 
   import Toast from '../components/Toast.svelte';
   import Footer from '../components/Footer.svelte';
@@ -56,6 +58,7 @@
 
   const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
   const TWO_SECONDS = 2000;
+  const SEPARATE_EXPORT_ZIP_THRESHOLD = 10;
 
   let pdfjs: typeof PdfjsLibTypes | null = null;
   let PdfLib: typeof import('pdf-lib') | null = null;
@@ -305,22 +308,27 @@
     }));
   }
 
-  async function savePdfBytes(pdfBytes: Uint8Array, suggestedName: string, preferSavePicker = true) {
+  type SavePickerType = {
+    description: string;
+    accept: Record<string, string[]>;
+  };
+
+  async function saveBlob(
+    blob: Blob,
+    suggestedName: string,
+    pickerType: SavePickerType,
+    preferSavePicker = true,
+  ) {
     const isSupported = preferSavePicker && 'showSaveFilePicker' in window;
 
     if (isSupported) {
       try {
         const fileHandle = await (window as any).showSaveFilePicker({
           suggestedName,
-          types: [
-            {
-              description: 'PDF Document',
-              accept: {'application/pdf': ['.pdf']},
-            },
-          ],
+          types: [pickerType],
         });
         const writable = await fileHandle.createWritable();
-        await writable.write(pdfBytes);
+        await writable.write(blob);
         await writable.close();
         return true;
       } catch (err: any) {
@@ -330,8 +338,7 @@
       }
     }
 
-    const pdfBlob = new Blob([pdfBytes as BlobPart], {type: 'application/pdf'});
-    const url = URL.createObjectURL(pdfBlob);
+    const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
     link.download = suggestedName;
@@ -340,6 +347,18 @@
     document.body.removeChild(link);
     setTimeout(() => URL.revokeObjectURL(url), 1000);
     return true;
+  }
+
+  async function savePdfBytes(pdfBytes: Uint8Array, suggestedName: string, preferSavePicker = true) {
+    return saveBlob(
+      new Blob([pdfBytes as BlobPart], {type: 'application/pdf'}),
+      suggestedName,
+      {
+        description: 'PDF Document',
+        accept: {'application/pdf': ['.pdf']},
+      },
+      preferSavePicker,
+    );
   }
 
   // Only trigger updatePDF when config content actually changes, not just reference
@@ -922,6 +941,11 @@
         );
         if (!saved) return;
       } else {
+        const shouldZipSeparateExport =
+          selectedRootChapters.length > SEPARATE_EXPORT_ZIP_THRESHOLD;
+        const zipEntries: ZipFileEntry[] = [];
+        const usedZipFilenames = new Set<string>();
+
         for (const chapter of selectedRootChapters) {
           const chapterDoc = await PDFDocument.create();
           const pageIndices = Array.from(
@@ -943,11 +967,30 @@
             await setOutline(chapterDoc, [chapterOutline]);
           }
 
-          await savePdfBytes(
-            await chapterDoc.save(),
-            getChapterFilename(pdfState.filename, chapter),
-            false,
+          const chapterBytes = await chapterDoc.save();
+          const filename = getChapterFilename(pdfState.filename, chapter);
+
+          if (shouldZipSeparateExport) {
+            zipEntries.push({
+              name: getUniqueZipFilename(filename, usedZipFilenames),
+              data: chapterBytes,
+            });
+          } else {
+            const saved = await savePdfBytes(chapterBytes, filename, false);
+            if (!saved) return;
+          }
+        }
+
+        if (shouldZipSeparateExport) {
+          const saved = await saveBlob(
+            createZipBlob(zipEntries),
+            getChapterArchiveFilename(pdfState.filename, selectedRootChapters),
+            {
+              description: 'ZIP Archive',
+              accept: {'application/zip': ['.zip']},
+            },
           );
+          if (!saved) return;
         }
       }
 
