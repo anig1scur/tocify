@@ -40,16 +40,17 @@
   $: isBusy = isInitializing || isRunning || isCancelling;
   $: isRunDisabled = !hasPdf || isFileLoading || isBusy || isBuilding;
 
-  const fieldControlClass = 'mt-1 box-border h-11 min-w-0 w-full rounded-lg border-2 border-black bg-white px-3 py-0 text-base leading-none outline-none disabled:bg-gray-100 disabled:text-gray-500';
-  const fieldLabelClass = 'flex items-center gap-1 text-xs uppercase tracking-wide text-gray-500';
+  const fieldControlClass = 'mt-1 box-border h-9 min-w-0 w-full rounded-md border-2 border-black bg-white px-2 py-0 text-sm leading-none outline-none disabled:bg-gray-100 disabled:text-gray-500 sm:h-11 sm:rounded-lg sm:px-3 sm:text-base';
+  const fieldLabelClass = 'flex min-w-0 items-center gap-1 text-[10px] uppercase tracking-wide text-gray-500 sm:text-xs';
+  const fieldLabelTextClass = 'truncate';
 </script>
 
-<div class="border-black border-2 rounded-lg p-3 shadow-[2px_2px_0px_rgba(0,0,0,1)] bg-white">
-  <div class="grid gap-3">
-    <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+<div class="border-black border-2 rounded-lg p-2 shadow-[2px_2px_0px_rgba(0,0,0,1)] bg-white sm:p-3">
+  <div class="grid gap-2 sm:gap-3">
+    <div class="grid grid-cols-2 gap-2 sm:gap-3">
       <label class="block min-w-0">
         <span class={fieldLabelClass}>
-          {$t('ocr_lab.start_page')}
+          <span class={fieldLabelTextClass}>{$t('ocr_lab.start_page')}</span>
         </span>
         <input
           class={fieldControlClass}
@@ -67,7 +68,7 @@
 
       <label class="block min-w-0">
         <span class={fieldLabelClass}>
-          {$t('ocr_lab.end_page')}
+          <span class={fieldLabelTextClass}>{$t('ocr_lab.end_page')}</span>
         </span>
         <input
           class={fieldControlClass}
@@ -82,10 +83,12 @@
           disabled={!hasPdf || isBusy}
         />
       </label>
+    </div>
 
+    <div class="grid grid-cols-2 gap-2 sm:gap-3">
       <label class="block min-w-0">
         <span class={fieldLabelClass}>
-          {$t('ocr_lab.worker_count')}
+          <span class={fieldLabelTextClass}>{$t('ocr_lab.worker_count')}</span>
           <Tooltip text={$t('ocr_lab.worker_count_hint')} width="w-64" position="right">
             <span class="mb-0.5 inline-flex h-3 w-3 items-center justify-center rounded-full border border-gray-300 text-[8px] normal-case leading-none text-gray-500">i</span>
           </Tooltip>
@@ -103,12 +106,10 @@
           disabled={isBusy}
         />
       </label>
-    </div>
 
-    <div class="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1.2fr)]">
       <label class="block min-w-0">
         <span class={fieldLabelClass}>
-          {$t('ocr_lab.model_size')}
+          <span class={fieldLabelTextClass}>{$t('ocr_lab.model_size')}</span>
           <Tooltip text={$t('ocr_lab.model_size_hint')} width="w-64" position="right">
             <span class="mb-0.5 inline-flex h-3 w-3 items-center justify-center rounded-full border border-gray-300 text-[8px] normal-case leading-none text-gray-500">i</span>
           </Tooltip>
@@ -126,10 +127,12 @@
           <option value="small">{$t('ocr_lab.model_small')}</option>
         </select>
       </label>
+    </div>
 
+    <div class="grid grid-cols-2 gap-2 sm:gap-3">
       <label class="block min-w-0">
         <span class={fieldLabelClass}>
-          {$t('ocr_lab.resolution_quality')}
+          <span class={fieldLabelTextClass}>{$t('ocr_lab.resolution_quality')}</span>
           <Tooltip text={$t('ocr_lab.resolution_quality_hint')} width="w-64" position="right">
             <span class="mb-0.5 inline-flex h-3 w-3 items-center justify-center rounded-full border border-gray-300 text-[8px] normal-case leading-none text-gray-500">i</span>
           </Tooltip>
@@ -152,7 +155,7 @@
 
       <label class="block min-w-0">
         <span class={fieldLabelClass}>
-          {$t('ocr_lab.box_extension')}
+          <span class={fieldLabelTextClass}>{$t('ocr_lab.box_extension')}</span>
           <Tooltip text={$t('ocr_lab.box_extension_hint')} width="w-64" position="right">
             <span class="mb-0.5 inline-flex h-3 w-3 items-center justify-center rounded-full border border-gray-300 text-[8px] normal-case leading-none text-gray-500">i</span>
           </Tooltip>
@@ -173,9 +176,9 @@
       </label>
     </div>
 
-    <div class="flex items-center justify-between gap-3 py-1 ">
-      <span class={fieldLabelClass}>
-        {$t('ocr_lab.watermark_cleanup')}
+    <div class="flex min-w-0 items-center justify-between gap-3 py-1">
+      <span class={`${fieldLabelClass} flex-1`}>
+        <span class={fieldLabelTextClass}>{$t('ocr_lab.watermark_cleanup')}</span>
         <Tooltip text={$t('ocr_lab.watermark_cleanup_hint')} width="w-72" position="right">
           <span class="mb-0.5 inline-flex h-3 w-3 items-center justify-center rounded-full border border-gray-300 text-[8px] normal-case leading-none text-gray-500">i</span>
         </Tooltip>

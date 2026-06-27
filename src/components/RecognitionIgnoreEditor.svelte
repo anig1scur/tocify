@@ -413,142 +413,148 @@
 
 {#if isOpen}
   <div
-    class="fixed inset-0 z-[70] bg-black/30 backdrop-blur-md p-2 md:p-6 flex items-center justify-center"
+    class="fixed inset-0 bg-black/40 backdrop-blur-md flex items-center justify-center z-50 p-4"
     transition:fade={{duration: 150}}
     on:click|self={() => (isOpen = false)}
     role="presentation"
   >
     <div
-      class="w-full max-w-5xl h-[90vh] max-h-screen bg-white border border-gray-200 rounded-lg shadow-xl overflow-hidden flex flex-col"
+      class="bg-white rounded-lg p-5 md:p-6 w-[90%] md:w-[80%] max-w-5xl h-[90vh] max-h-[90vh] overflow-hidden border-2 border-gray-300 flex flex-col"
       transition:fly={{y: 20, duration: 200}}
       role="dialog"
       aria-modal="true"
       aria-label={$t('recognition_ignore.title')}
     >
-      <div class="flex items-center justify-between gap-3 border-b border-gray-200 px-4 py-3">
-        <p class="min-w-0 truncate text-xl font-semibold text-gray-900">{$t('recognition_ignore.instruction')}</p>
+      <div class="flex justify-between items-start gap-4 mb-4">
+        <div class="min-w-0">
+          <h2 class="truncate text-xl md:text-2xl font-bold">{$t('recognition_ignore.instruction')}</h2>
+        </div>
         <button
           on:click={() => (isOpen = false)}
-          class="p-2 rounded-md hover:bg-gray-100"
+          class="p-1 rounded-full text-black hover:bg-gray-100 transition-colors"
           title={$t('recognition_ignore.close')}
+          aria-label={$t('recognition_ignore.close')}
         >
-          <X size={20} />
+          <X size={24} />
         </button>
       </div>
 
-      <div class="grid md:grid-cols-[136px_minmax(0,1fr)_260px] gap-0 min-h-0 flex-1">
-        <aside class="min-h-0 overflow-auto border-b md:border-b-0 md:border-r border-gray-200 bg-white p-2">
-          <div class="flex flex-col gap-2">
-            {#each selectedPageNumbers as page}
-              <button
-                class="rounded-md p-1.5 text-center transition-colors {page === currentPage ? 'bg-blue-50' : 'bg-white hover:bg-blue-50'}"
-                on:click={() => {
-                  currentPage = page;
-                  focusedRegionId = '';
-                }}
-              >
-                <canvas
-                  class="mx-auto block rounded bg-white shadow-sm"
-                  use:pageThumb={page}
-                ></canvas>
-                <div class="mt-1 text-center text-xs text-gray-600">
-                  {$t('offset.page_n', {values: {n: page}})}
-                </div>
-              </button>
-            {/each}
-          </div>
-        </aside>
-
-        <div class="min-h-0 overflow-hidden bg-gray-100 p-3 md:p-4">
-          <div
-            class="w-full h-full flex items-center justify-center"
-            bind:this={canvasWrap}
-            bind:clientWidth={canvasWrapWidth}
-            bind:clientHeight={canvasWrapHeight}
-          >
-            <canvas
-              bind:this={canvasElement}
-              class="max-w-full bg-white border border-gray-200 cursor-crosshair touch-none"
-              on:pointerdown={handlePointerDown}
-              on:pointermove={handlePointerMove}
-              on:pointerup={finishDrawing}
-              on:pointercancel={finishDrawing}
-            ></canvas>
-          </div>
-        </div>
-
-        <aside class="border-t md:border-t-0 md:border-l border-gray-200 bg-white flex min-h-0 flex-col">
-          <div class="min-h-0 flex-1 overflow-auto p-3">
-            <div class="flex items-center justify-between gap-2 mb-3">
-              <h3 class="font-bold text-sm">{$t('recognition_ignore.current_page_regions')}</h3>
-              <button
-                on:click={clearCurrentPage}
-                class="p-1.5 rounded hover:bg-gray-100 disabled:opacity-40"
-                title={$t('recognition_ignore.clear_page')}
-                disabled={currentPageRegions.length === 0}
-              >
-                <RotateCcw size={16} />
-              </button>
-            </div>
-            {#if selectedPageNumbers.length > 1 && selectedPageRegionCount > 0}
-              <button
-                class="mb-3 flex w-full items-center justify-center gap-2 rounded border border-gray-200 bg-white px-2 py-2 text-sm font-bold shadow-sm transition-all hover:bg-blue-50"
-                on:click={applyCurrentAreasToAllPages}
-              >
-                <Copy size={15} />
-                {$t('recognition_ignore.apply_all_pages')}
-              </button>
-            {/if}
-
-            {#if currentPageRegions.length === 0}
-              <div class="rounded-lg border border-dashed border-gray-300 bg-gray-50 px-3 py-8 text-center">
-                <div class="mx-auto mb-2 flex h-9 w-9 items-center justify-center rounded-full bg-white text-gray-400">
-                  <Eraser size={18} />
-                </div>
-                <p class="mt-1 text-xs text-gray-500">{$t('recognition_ignore.empty_hint')}</p>
-              </div>
-            {:else}
-              <div class="flex flex-col gap-2">
-                {#each currentPageRegions as region, index (region.id)}
-                  <div
-                    class="flex items-center justify-between gap-2 border rounded p-2 text-left transition-colors {focusedRegionId === region.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:bg-gray-100'}"
-                    on:click={() => focusRegion(region)}
-                    on:keydown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        focusRegion(region);
-                      }
-                    }}
-                    role="button"
-                    tabindex="0"
-                  >
-                    <div class="min-w-0">
-                      <div class="text-sm font-bold">
-                        {$t('recognition_ignore.region_n', {values: {n: index + 1}})}
-                      </div>
-                    </div>
-                    <button
-                      on:click|stopPropagation={() => deleteRegion(region.id)}
-                      class="p-1.5 rounded text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
-                      title={$t('settings.remove')}
-                    >
-                      <Trash2 size={16} />
-                    </button>
+      <div class="min-h-0 flex-1 overflow-hidden rounded-lg border-2 border-black">
+        <div class="grid h-full md:grid-cols-[136px_minmax(0,1fr)_260px] gap-0 min-h-0">
+          <aside class="min-h-0 overflow-auto border-b md:border-b-0 md:border-r border-black/10 bg-white p-2">
+            <div class="flex flex-col gap-2">
+              {#each selectedPageNumbers as page}
+                <button
+                  class="rounded-md border p-1.5 text-center transition-colors {page === currentPage ? 'border-black bg-yellow-100/70' : 'border-transparent bg-white hover:bg-gray-100'}"
+                  on:click={() => {
+                    currentPage = page;
+                    focusedRegionId = '';
+                  }}
+                >
+                  <canvas
+                    class="mx-auto block rounded bg-white shadow-sm"
+                    use:pageThumb={page}
+                  ></canvas>
+                  <div class="mt-1 text-center text-xs text-gray-600">
+                    {$t('offset.page_n', {values: {n: page}})}
                   </div>
-                {/each}
-              </div>
-            {/if}
+                </button>
+              {/each}
+            </div>
+          </aside>
+
+          <div class="min-h-0 overflow-hidden bg-gray-50 p-3 md:p-4">
+            <div
+              class="w-full h-full flex items-center justify-center"
+              bind:this={canvasWrap}
+              bind:clientWidth={canvasWrapWidth}
+              bind:clientHeight={canvasWrapHeight}
+            >
+              <canvas
+                bind:this={canvasElement}
+                class="max-w-full bg-white border-2 border-black cursor-crosshair touch-none"
+                on:pointerdown={handlePointerDown}
+                on:pointermove={handlePointerMove}
+                on:pointerup={finishDrawing}
+                on:pointercancel={finishDrawing}
+              ></canvas>
+            </div>
           </div>
 
-          <div class="border-t border-gray-200 p-3">
-            <button
-              class="flex w-full items-center justify-center rounded-md bg-blue-500 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-600"
-              on:click={() => (isOpen = false)}
-            >
-              {$t('recognition_ignore.done')}
-            </button>
-          </div>
-        </aside>
+          <aside class="border-t md:border-t-0 md:border-l border-black/10 bg-white flex min-h-0 flex-col">
+            <div class="min-h-0 flex-1 overflow-auto p-3">
+              <div class="flex items-center justify-between gap-2 mb-3">
+                <h3 class="font-bold text-sm">{$t('recognition_ignore.current_page_regions')}</h3>
+                <button
+                  on:click={clearCurrentPage}
+                  class="p-1.5 rounded hover:bg-gray-100 disabled:opacity-40"
+                  title={$t('recognition_ignore.clear_page')}
+                  disabled={currentPageRegions.length === 0}
+                >
+                  <RotateCcw size={16} />
+                </button>
+              </div>
+              {#if selectedPageNumbers.length > 1 && selectedPageRegionCount > 0}
+                <button
+                  class="mb-3 flex w-full items-center justify-center gap-2 rounded-lg border-2 border-black bg-yellow-300 px-2 py-2 text-sm font-bold text-black shadow-[1px_1px_0px_rgba(0,0,0,1)] transition-all hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]"
+                  on:click={applyCurrentAreasToAllPages}
+                >
+                  <Copy size={15} />
+                  {$t('recognition_ignore.apply_all_pages')}
+                </button>
+              {/if}
+
+              {#if currentPageRegions.length === 0}
+                <div class="rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 px-3 py-8 text-center">
+                  <div class="mx-auto mb-2 flex h-9 w-9 items-center justify-center rounded-full bg-white text-gray-400">
+                    <Eraser size={18} />
+                  </div>
+                  <p class="mt-1 text-xs text-gray-500">{$t('recognition_ignore.empty_hint')}</p>
+                </div>
+              {:else}
+                <div class="flex flex-col gap-2">
+                  {#each currentPageRegions as region, index (region.id)}
+                    <div
+                      class="flex items-center justify-between gap-2 border rounded p-2 text-left transition-colors {focusedRegionId === region.id ? 'border-black bg-yellow-100/70' : 'border-gray-200 bg-white hover:bg-gray-100'}"
+                      on:click={() => focusRegion(region)}
+                      on:keydown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          focusRegion(region);
+                        }
+                      }}
+                      role="button"
+                      tabindex="0"
+                    >
+                      <div class="min-w-0">
+                        <div class="text-sm font-bold">
+                          {$t('recognition_ignore.region_n', {values: {n: index + 1}})}
+                        </div>
+                      </div>
+                      <button
+                        on:click|stopPropagation={() => deleteRegion(region.id)}
+                        class="p-1.5 rounded text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
+                        title={$t('settings.remove')}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  {/each}
+                </div>
+              {/if}
+            </div>
+          </aside>
+        </div>
+      </div>
+
+      <div class="flex flex-col sm:flex-row gap-3 justify-end mt-5">
+        <button
+          type="button"
+          class="inline-flex items-center justify-center px-4 py-2 font-bold bg-green-500 text-black border-2 border-black rounded-lg shadow-[1px_1px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
+          on:click={() => (isOpen = false)}
+        >
+          {$t('recognition_ignore.done')}
+        </button>
       </div>
     </div>
   </div>
