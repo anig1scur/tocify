@@ -858,7 +858,7 @@
       setTimeout(() => {
         const isDismissed = localStorage.getItem('tocify_hide_star_request') === 'true';
         if (!isDismissed) {
-          if (Math.random() <= 0.1) {
+          if (Math.random() < 1 / 33) {
             showStarRequestModal = true;
           }
         }
