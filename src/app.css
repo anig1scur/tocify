@@ -77,6 +77,33 @@ select.form-select:disabled {
   cursor: not-allowed;
 }
 
+textarea.ocr-text-field {
+  border: 0;
+  border-bottom: 1px solid #d1d5db;
+  border-radius: 0;
+  outline: none;
+  box-shadow: none;
+  transition: border-color .15s ease;
+}
+
+textarea.ocr-text-field:focus {
+  border-bottom-color: #3b82f6;
+  outline: none;
+  box-shadow: none;
+}
+
+input.ocr-search-input,
+input.ocr-search-input:focus {
+  border: 0;
+  border-radius: 0;
+  outline: none;
+  box-shadow: none;
+}
+
+.ocr-search-control:focus-within {
+  border-color: #3b82f6;
+}
+
 @media (forced-colors: active) {
   select.form-select {
     appearance: auto;

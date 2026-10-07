@@ -212,7 +212,7 @@
                                 bind:this={previewEditingTextarea}
                                 bind:value={previewEditingText}
                                 rows="1"
-                                class="absolute z-30 pointer-events-auto resize-none rounded-md border-2 border-black bg-yellow-50/95 px-2 py-1 text-xs leading-snug text-gray-900 shadow-[2px_2px_0px_var(--hard-shadow-color)] outline-none"
+                                class="ocr-text-field absolute z-30 pointer-events-auto resize-none bg-yellow-50/95 px-2 py-1 text-xs leading-snug text-gray-900"
                                 style:left={`${overlayRect.left}px`}
                                 style:top={`${overlayRect.top}px`}
                                 style:width={`${Math.max(140, overlayRect.width)}px`}

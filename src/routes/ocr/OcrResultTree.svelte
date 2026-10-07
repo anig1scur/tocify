@@ -54,10 +54,10 @@
 {#if flatOcrLines.length}
   <div>
     <div class="sticky z-40 mb-2 pointer-events-none" style:top={`${stickySearchTop}px`}>
-      <div class="pointer-events-auto bg-white/70 backdrop-blur-sm border-2 border-black rounded-lg px-2 py-1.5 flex items-center gap-2">
+      <div class="ocr-search-control pointer-events-auto bg-white/70 backdrop-blur-sm border-2 border-black rounded-lg px-2 py-1.5 flex items-center gap-2">
         <Search size={15} class="text-gray-500 shrink-0" />
         <input
-          class="min-w-0 flex-1 bg-transparent outline-none text-sm placeholder:text-gray-400"
+          class="ocr-search-input min-w-0 flex-1 bg-transparent outline-none text-sm placeholder:text-gray-400"
           type="text"
           bind:value={ocrTreeSearch}
           placeholder={$t('ocr_lab.search_placeholder')}
@@ -152,7 +152,7 @@
 	                      <textarea
 	                        use:autosizeTextarea={item.line.text}
 	                        rows="1"
-	                        class="relative block w-full resize-none overflow-hidden border-0 border-transparent bg-transparent px-0 py-0.5 text-sm leading-[1.55] focus:border-slate-300 focus:outline-none {ocrTreeSearchTerm ? 'text-transparent caret-gray-800 selection:bg-sky-200 focus:bg-transparent' : 'text-gray-800 focus:bg-white/40'}"
+	                        class="ocr-text-field relative block w-full resize-none overflow-hidden bg-transparent px-0 py-0.5 text-sm leading-[1.55] {ocrTreeSearchTerm ? 'text-transparent caret-gray-800 selection:bg-sky-200' : 'text-gray-800'}"
 	                        value={item.line.text}
 	                        spellcheck="false"
 	                        on:focus={() => selectLine(item.pageNumber, item.lineIndex)}
