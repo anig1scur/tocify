@@ -10,10 +10,17 @@ export const POST = withRateLimit(async ({ request }) => {
       return json({ error: 'Invalid tocItems' }, { status: 400 });
     }
 
+    // Only the "custom" provider legitimately requires a client-supplied key
+    // (the server has no credential of its own for an arbitrary endpoint).
+    // For built-in providers, ignore any client-supplied apiKey so this route
+    // can't be used to launder/test attacker-supplied or stolen credentials
+    // against the AI providers via the server's trusted egress.
+    const safeApiKey = provider === 'custom' ? apiKey : undefined;
+
     const graph = await generateBoardOnServer({
       request,
       tocItems,
-      apiKey,
+      apiKey: safeApiKey,
       provider,
       customBaseUrl,
       doubaoEndpointIdText,
