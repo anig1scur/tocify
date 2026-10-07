@@ -1,5 +1,6 @@
 <script context="module" lang="ts">
   let tocViewCache: any = null;
+  let defaultPdfLoad: Promise<void> | null = null;
 </script>
 
 <script lang="ts">
@@ -14,6 +15,7 @@
   import '../lib/i18n';
   import {pdfService, tocItems, curFileFingerprint, tocConfig, autoSaveEnabled, type TocConfig} from '../stores';
   import {PDFService, type PDFState, type TocItem} from '$lib/pdf/service';
+  import {workspacePdfFiles} from '$lib/pdf/workspace-files';
   import {
     type ExportableChapter,
     buildChapterExportItems,
@@ -65,6 +67,7 @@
 
   let isDragging = false;
   let isFileLoading = false;
+  let isViewActive = false;
   let isAiLoading = false;
   let isPreviewLoading = false;
   let isTocConfigExpanded = false;
@@ -212,9 +215,36 @@
   });
 
   onDestroy(() => {
+    isViewActive = false;
     saveTocViewCache();
     unsubscribeTocItems();
   });
+
+  onMount(() => {
+    isViewActive = true;
+    void loadDefaultPdf();
+  });
+
+  async function loadDefaultPdf() {
+    if (defaultPdfLoad) {
+      isFileLoading = true;
+      await defaultPdfLoad;
+      if (isViewActive) restoreTocViewCache();
+      return;
+    }
+
+    if (originalPdfInstance) return;
+    const file = get(workspacePdfFiles).ocr;
+    if (!file) return;
+
+    const loading = loadPdfFile(file, {showLoadHint: false});
+    defaultPdfLoad = loading;
+    try {
+      await loading;
+    } finally {
+      if (defaultPdfLoad === loading) defaultPdfLoad = null;
+    }
+  }
 
   function restoreTocViewCache() {
     if (!tocViewCache) return;
@@ -690,7 +720,7 @@
     }
   };
 
-  const loadPdfFile = async (file: File) => {
+  const loadPdfFile = async (file: File, {showLoadHint = true} = {}) => {
     if (!file) return;
 
     renderQueue.clear();
@@ -822,7 +852,10 @@
           activeRangeIndex = 0;
         }
       }
-      toastProps = {show: true, message: $t('msg.pdf_loaded'), type: 'success'};
+      workspacePdfFiles.update((files) => ({...files, toc: file}));
+      if (showLoadHint) {
+        toastProps = {show: true, message: $t('msg.pdf_loaded'), type: 'success'};
+      }
     } catch (error: any) {
       console.error('Error loading PDF:', error);
       toastProps = {show: true, message: $t('toast.error_loading_pdf', {values: {msg: error.message}}), type: 'error'};
@@ -832,6 +865,7 @@
       isFileLoading = false;
 
       autoSaveEnabled.set(true);
+      if (!isViewActive) saveTocViewCache();
     }
   };
 

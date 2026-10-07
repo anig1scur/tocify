@@ -20,7 +20,6 @@
   export let onDragEnd: () => void = () => {};
   export let onSelect: (item: TocItem, event: MouseEvent) => void = () => {};
   export let onSelectionDragStart: (item: TocItem, event: MouseEvent) => void = () => {};
-  export let onSelectionDragEnter: (item: TocItem) => void = () => {};
   export let selectedIds: Set<string> = new Set();
   export let searchQuery = '';
 
@@ -192,6 +191,7 @@
   }
 
   function handleRowMouseDown(event: MouseEvent) {
+    if (event.button !== 0) return;
     if (isSelectionBlockedTarget(event.target)) return;
 
     if (event.shiftKey) {
@@ -205,6 +205,7 @@
   }
 
   function handleSelectionDotMouseDown(event: MouseEvent) {
+    if (event.button !== 0) return;
     event.preventDefault();
     event.stopPropagation();
 
@@ -275,7 +276,6 @@
       data-is-dnd-shadow-item-hint={isShadowItem}
       data-toc-item-id={item.id}
       on:mouseenter={handleMouseEnter}
-      on:mouseover={() => onSelectionDragEnter(item)}
       on:mousedown={handleRowMouseDown}
       on:click={handleRowClick}
     >
@@ -299,7 +299,9 @@
             </div>
             <button
               type="button"
-              on:click|stopPropagation
+              on:click|stopPropagation={(event) => {
+                if (event.detail === 0) onSelect(item, event);
+              }}
               on:mousedown={handleSelectionDotMouseDown}
               class="relative -left-0.5 w-3 h-3 rounded-full border-2 flex-shrink-0 transition-all duration-150 {isSelected ? 'bg-amber-400 border-amber-500 scale-100' : 'border-gray-400 scale-90 opacity-0 group-hover:opacity-60 hover:!opacity-100 hover:!scale-100 hover:!border-amber-400'}"
               title={$t('toc.select_item')}
@@ -410,7 +412,6 @@
               {onDragEnd}
               {onSelect}
               {onSelectionDragStart}
-              {onSelectionDragEnter}
               {selectedIds}
               {searchQuery}
               {currentPage}

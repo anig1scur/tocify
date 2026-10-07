@@ -52,6 +52,9 @@
   let isSelectionDragging = false;
   let selectionDragAnchorId: string | null = null;
   let selectionDragMode: 'add' | 'remove' = 'add';
+  let selectionDragOrigin: {x: number; y: number} | null = null;
+  let hasSelectionDragMoved = false;
+  let selectionBeforeDrag = new Set<string>();
   let tocSearchQuery = '';
 
   let historyStack: TocEntry[][] = [];
@@ -86,6 +89,7 @@
   }
 
   function clearSelection() {
+    handleMouseUp();
     selectedIds = new Set();
     selectionAnchorId = null;
     showBatchOffsetEditor = false;
@@ -363,7 +367,12 @@
     return ancestorIds;
   }
 
-  function selectRange(anchorId: string, targetId: string, mode: 'add' | 'remove' = 'add') {
+  function selectRange(
+    anchorId: string,
+    targetId: string,
+    mode: 'add' | 'remove' = 'add',
+    baseSelection = selectedIds,
+  ) {
     const flatItems = flattenTocItems($tocItems);
     const indexMap = getFlatIndexMap(flatItems);
     const anchorIndex = indexMap.get(anchorId);
@@ -373,7 +382,7 @@
 
     const start = Math.min(anchorIndex, targetIndex);
     const end = Math.max(anchorIndex, targetIndex);
-    const nextSelection = new Set(selectedIds);
+    const nextSelection = new Set(baseSelection);
     flatItems.slice(start, end + 1).forEach((flatItem) => {
       if (mode === 'remove') {
         nextSelection.delete(flatItem.id);
@@ -412,23 +421,31 @@
   }
 
   function handleSelectionDragStart(item: TocEntry, event: MouseEvent) {
+    if (event.button !== 0) return;
     isSelectionDragging = true;
     selectionDragAnchorId = item.id;
     selectionAnchorId = item.id;
     selectionDragMode = selectedIds.has(item.id) ? 'remove' : 'add';
+    selectionDragOrigin = {x: event.clientX, y: event.clientY};
+    hasSelectionDragMoved = false;
+    selectionBeforeDrag = new Set(selectedIds);
 
     selectRange(item.id, item.id, selectionDragMode);
 
     window.getSelection()?.removeAllRanges();
   }
 
-  function handleSelectionDragEnter(item: TocEntry) {
-    if (!isSelectionDragging || !selectionDragAnchorId) return;
-    selectRange(selectionDragAnchorId, item.id, selectionDragMode);
-  }
-
   function handleSelectionDragMove(event: MouseEvent) {
-    if (!isSelectionDragging || !selectionDragAnchorId) return;
+    if (!isSelectionDragging || !selectionDragAnchorId || !selectionDragOrigin) return;
+    if (!(event.buttons & 1)) {
+      handleMouseUp();
+      return;
+    }
+    if (!hasSelectionDragMoved) {
+      const distance = Math.hypot(event.clientX - selectionDragOrigin.x, event.clientY - selectionDragOrigin.y);
+      if (distance < 6) return;
+      hasSelectionDragMoved = true;
+    }
 
     const element = document
       .elementFromPoint(event.clientX, event.clientY)
@@ -436,7 +453,7 @@
     const itemId = element?.dataset.tocItemId;
 
     if (!itemId) return;
-    selectRange(selectionDragAnchorId, itemId, selectionDragMode);
+    selectRange(selectionDragAnchorId, itemId, selectionDragMode, selectionBeforeDrag);
   }
 
   function adjustSelectedPageOffset(delta: number) {
@@ -655,6 +672,9 @@
     $dragDisabled = true;
     isSelectionDragging = false;
     selectionDragAnchorId = null;
+    selectionDragOrigin = null;
+    hasSelectionDragMoved = false;
+    selectionBeforeDrag = new Set();
   }
 
   function handleDndConsider(e: CustomEvent<{items: TocEntry[]}>) {
@@ -852,6 +872,8 @@
   on:mousemove={handleSelectionDragMove}
   on:mouseup={handleMouseUp}
   on:touchend={handleMouseUp}
+  on:touchcancel={handleMouseUp}
+  on:blur={handleMouseUp}
   bind:innerWidth
 />
 
@@ -996,7 +1018,7 @@
             {/if}
 
             {#if showTocSearch}
-              <div class={selectedCount >= 1 ? 'px-2 pb-2' : ''}>
+              <div class={selectedCount >= 1 ? 'px-2 pt-2 pb-2' : 'pt-2'}>
                 <div class="relative">
                   <Search size={15} aria-hidden="true" class="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
                   <input
@@ -1004,7 +1026,7 @@
                     bind:value={tocSearchQuery}
                     aria-label={$t('toc.search_placeholder') || 'Search ToC...'}
                     placeholder={$t('toc.search_placeholder') || 'Search ToC...'}
-                    class="h-8 w-full min-w-0 bg-white pl-8 pr-8 text-sm placeholder:text-gray-400"
+                    class="h-8 w-full min-w-0 bg-transparent pl-8 pr-8 text-sm placeholder:text-gray-400"
                   />
                   {#if tocSearchQuery}
                     <button
@@ -1057,7 +1079,6 @@
               onDragEnd={handleDragEnd}
               onSelect={handleSelectItem}
               onSelectionDragStart={handleSelectionDragStart}
-              onSelectionDragEnter={handleSelectionDragEnter}
               {currentPage}
               {isPreview}
               {pageOffset}

@@ -1,5 +1,6 @@
 <script context="module" lang="ts">
   let ocrViewCache: any = null;
+  let defaultPdfLoad: Promise<void> | null = null;
   let activeOcrRunPromise: Promise<void> | null = null;
   let activeOcrRunState: any = null;
   let activeOcrRunControl: { runId: number; cancelled: boolean } | null = null;
@@ -9,6 +10,7 @@
 
 <script lang="ts">
   import { onDestroy, onMount, tick } from 'svelte';
+  import { get } from 'svelte/store';
   import { t } from 'svelte-i18n';
   import * as pdfjsLib from 'pdfjs-dist';
 
@@ -18,6 +20,7 @@
   import SeoJsonLd from '../../components/SeoJsonLd.svelte';
   import HelpModal from '../../components/modals/HelpModal.svelte';
   import { buildSearchablePdf, normalizeSearchableOcr } from '$lib/pdf/searchable';
+  import { workspacePdfFiles } from '$lib/pdf/workspace-files';
   import { isLegacyBrowser } from '$lib/utils';
   import OcrControls from './OcrControls.svelte';
   import OcrPdfPreview from './OcrPdfPreview.svelte';
@@ -99,6 +102,7 @@
   let localOcrRuntimeKey = '';
 
   let isFileLoading = false;
+  let isViewActive = false;
   let isInitializingOcr = false;
   let isRunningOcr = false;
   let isCancellingOcr = false;
@@ -312,9 +316,12 @@
   }
 
   onMount(() => {
+    isViewActive = true;
     restoreOcrRuntimeSettings();
     syncOcrRunStateFromModule();
     ocrRunSyncInterval = window.setInterval(syncOcrRunStateFromModule, 250);
+
+    void loadDefaultPdf();
 
     return () => {
       if (ocrRunSyncInterval) {
@@ -329,8 +336,30 @@
   });
 
   onDestroy(() => {
+    isViewActive = false;
     saveOcrViewCache();
   });
+
+  async function loadDefaultPdf() {
+    if (defaultPdfLoad) {
+      isFileLoading = true;
+      await defaultPdfLoad;
+      if (isViewActive) restoreOcrViewCache();
+      return;
+    }
+
+    if (pdfInstance) return;
+    const file = get(workspacePdfFiles).toc;
+    if (!file) return;
+
+    const loading = loadPdf(file);
+    defaultPdfLoad = loading;
+    try {
+      await loading;
+    } finally {
+      if (defaultPdfLoad === loading) defaultPdfLoad = null;
+    }
+  }
 
   function restoreOcrViewCache() {
     if (!ocrViewCache) return;
@@ -680,10 +709,12 @@
       pageEnd = instance.numPages;
       selectedPageNumber = 1;
       resetPreviewViewForDocument();
+      workspacePdfFiles.update((files) => ({...files, ocr: file}));
     } catch (error: any) {
       errorMessage = error?.message || $t('ocr_lab.errors.load_failed');
     } finally {
       isFileLoading = false;
+      if (!isViewActive) saveOcrViewCache();
     }
   }
 
