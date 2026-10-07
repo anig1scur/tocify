@@ -68,7 +68,6 @@
   let isAiLoading = false;
   let isPreviewLoading = false;
   let isTocConfigExpanded = false;
-  let showNextStepHint = false;
   let addPhysicalTocPage = false;
   
   let highlightPageNum = 0;
@@ -224,7 +223,6 @@
       pdfjs,
       PdfLib,
       isTocConfigExpanded,
-      showNextStepHint,
       addPhysicalTocPage,
       highlightPageNum,
       hasShownTocHint,
@@ -232,7 +230,6 @@
       offsetPreviewPageNum,
       selectedChapterExportIds,
       chapterExportMode,
-      toastProps,
       originalPdfInstance,
       tocPdfInstance,
       pdfState,
@@ -270,7 +267,6 @@
       pdfjs,
       PdfLib,
       isTocConfigExpanded,
-      showNextStepHint,
       addPhysicalTocPage,
       highlightPageNum,
       hasShownTocHint,
@@ -278,7 +274,6 @@
       offsetPreviewPageNum,
       selectedChapterExportIds,
       chapterExportMode,
-      toastProps,
       originalPdfInstance,
       tocPdfInstance,
       pdfState,
@@ -448,7 +443,6 @@
   };
 
   const unsubscribeTocItems = tocItems.subscribe((items) => {
-    if (items.length > 0) showNextStepHint = false;
     if (isFileLoading) return;
 
     if (!isPreviewMode) return;
@@ -707,7 +701,6 @@
 
     isFileLoading = true;
     autoSaveEnabled.set(false);
-    showNextStepHint = false;
     hasShownTocHint = false;
     showOffsetModal = false;
     showChapterExportModal = false;
@@ -829,6 +822,7 @@
           activeRangeIndex = 0;
         }
       }
+      toastProps = {show: true, message: $t('msg.pdf_loaded'), type: 'success'};
     } catch (error: any) {
       console.error('Error loading PDF:', error);
       toastProps = {show: true, message: $t('toast.error_loading_pdf', {values: {msg: error.message}}), type: 'error'};
@@ -836,13 +830,6 @@
       updateViewerInstance();
       await tick();
       isFileLoading = false;
-
-      const hideHintUntil = localStorage.getItem('tocify_hide_next_step_hint_until');
-      if (hideHintUntil && Date.now() < parseInt(hideHintUntil, 10)) {
-        showNextStepHint = false;
-      } else {
-        showNextStepHint = true;
-      }
 
       autoSaveEnabled.set(true);
     }
@@ -1003,7 +990,6 @@
   }
 
   const generateTocFromAI = async () => {
-    showNextStepHint = false;
 
     if (!originalPdfInstance) {
       toastProps = {show: true, message: $t('toast.load_pdf_first'), type: 'error'};
@@ -1253,12 +1239,6 @@
     recognitionIgnoreEditor?.openEditor(e.detail.pageNum);
   }
 
-  const handleCloseNextStepHint = () => {
-    showNextStepHint = false;
-    const expiry = Date.now() + THIRTY_DAYS;
-    localStorage.setItem('tocify_hide_next_step_hint_until', expiry.toString());
-  };
-
   const handleViewerMessage = (event: CustomEvent<{message: string; type: 'success' | 'error' | 'info'}>) => {
     toastProps = {show: true, message: event.detail.message, type: event.detail.type};
   };
@@ -1267,7 +1247,7 @@
 {#if !showGraphDrawer && tocItems && isGraphEntranceVisible}
   <button
     transition:fly={{x: -50, duration: 300}}
-    class="fixed -left-1 p-1 md:p-2 md:left-0 top-[40vh] z-40 bg-white border-2 border-black border-l-0 rounded-r-lg shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:bg-yellow-200 transition-colors flex flex-col items-center gap-2 group"
+    class="fixed -left-1 p-1 md:p-2 md:left-0 top-[40vh] z-40 bg-white border-2 border-black border-l-0 rounded-r-lg shadow-[2px_2px_0px_0px_var(--hard-shadow-color)] hover:bg-yellow-200 transition-colors flex flex-col items-center gap-2 group"
     on:click={() => (showGraphDrawer = true)}
     title="Show Content Graph"
   >
@@ -1340,7 +1320,6 @@
       {tocPdfInstance}
       {isAiLoading}
       {aiError}
-      {showNextStepHint}
       {config}
       {customApiConfig}
       {tocPageCount}
@@ -1350,7 +1329,6 @@
       bind:addPhysicalTocPage
       bind:isTocConfigExpanded
       on:openhelp={() => (showHelpModal = true)}
-      on:closeNextStepHint={handleCloseNextStepHint}
       on:apiConfigChange={handleApiConfigChange}
       on:apiConfigSave={handleApiConfigSave}
       on:updateField={(e) => updateTocField(e.detail.path, e.detail.value)}
@@ -1399,7 +1377,6 @@
       bind:highlightPageNum
       bind:isDragging
       on:fileselect={(e) => loadPdfFile(e.detail)}
-      on:viewerMessage={handleViewerMessage}
       on:updateActiveRange={handleUpdateActiveRange}
       on:togglePreview={togglePreviewMode}
       on:export={exportPDF}

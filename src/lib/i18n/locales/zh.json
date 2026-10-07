@@ -24,6 +24,14 @@
     "font_hei": "思源黑体",
     "font_song": "思源宋体",
     "api_settings_title": "API 设置",
+    "llm_provider": "LLM Provider",
+    "provider_auto": "自动选择",
+    "provider_gemini": "谷歌 Gemini",
+    "provider_qwen": "通义千问",
+    "provider_doubao": "豆包",
+    "provider_zhipu": "智谱",
+    "provider_custom": "自定义 / 兼容 OpenAI",
+    "get_api_key": "获取密钥",
     "api_key_hint": "仅存储在本地，不会上传到服务器",
     "api_key_placeholder": "网页内置 key，也可使用自定义 Key",
     "custom_model_label": "自定义模型",
@@ -31,7 +39,7 @@
     "custom_base_url_placeholder": "https://api.openai.com/v1",
     "custom_text_model_label": "自定义文本模型",
     "custom_vision_model_label": "自定义视觉模型",
-    "vision_prompt_label": "目录结构补充说明",
+    "vision_prompt_label": "目录结构提示词",
     "vision_prompt_placeholder": "编辑完整的目录图片识别模板。留空时使用内置模板。",
     "vision_prompt_reset": "恢复默认模板",
     "vision_prompt_template_select": "选择目录识别模板",
@@ -63,7 +71,6 @@
     "font_load_failed": "字体 {font} 加载失败。正在使用备用字体。"
   },
   "pwa": {
-    "offline_ready": "Tocify 已可离线打开。",
     "update_ready": "新版本可用。",
     "refresh": "刷新",
     "close": "关闭"
@@ -80,10 +87,12 @@
     "open": "编辑忽略区域",
     "close": "关闭",
     "instruction": "拖拽擦除识别前要忽略的内容",
+    "move_region": "移动区域",
+    "resize_region": "调整区域大小",
     "current_page_regions": "当前页区域",
     "apply_all_pages": "应用到所有页",
     "region_n": "区域 {n}",
-    "empty_hint": "在页面上拖拽即可添加忽略区域",
+    "empty_hint": "拖拽擦除",
     "clear_page": "清空当前页区域",
     "done": "完成"
   },
@@ -127,24 +136,12 @@
     "yes_this_page": "是的！就是这一页！",
     "skip_this_item": "跳过此项",
     "save": "保存",
-    "saved": "已保存",
-    "close_hint": "关闭提示"
+    "saved": "已保存"
   },
   "status": {
     "loading_rendering": "正在加载 PDF...",
     "load_pdf_first": "请先加载 PDF 文件",
     "generating": "AI 正在生成目录..."
-  },
-  "hint": {
-    "next_step_title": "下一步",
-    "step_1_text": "在右侧选择目录页面所在",
-    "step_1_bold": "范围",
-    "step_2_text": "点击下方",
-    "step_2_bold": "生成目录按钮",
-    "or_text": "或者你也可以在下方的编辑器中",
-    "manual_add_bold": "手动添加章节",
-    "manual_add_text": " ",
-    "multi_select_tip": "提示：按住 Shift 再单击，可以区间多选目录项。"
   },
   "tooltip": {
     "generate_ai": "从所选页面智能生成目录",
@@ -160,6 +157,8 @@
   },
   "chapter_export": {
     "title": "按章节导出",
+    "selection_actions": "选择章节",
+    "export_mode": "导出方式",
     "close": "关闭章节导出",
     "select_all": "全选",
     "clear_selection": "清空",

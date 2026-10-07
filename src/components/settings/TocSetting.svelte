@@ -77,13 +77,16 @@
   }
 </script>
 
-<div class="border-black border-2 rounded-lg p-2 my-4 shadow-[2px_2px_0px_rgba(0,0,0,1)] bg-white">
-  <div class="flex justify-between items-center">
+<section class="toc-settings border-black border-2 rounded-lg p-2 my-4 shadow-[2px_2px_0px_var(--hard-shadow-color)] bg-white" aria-label={$t('settings.title')}>
+  <div class="flex justify-between items-center gap-2">
     <h2>{$t('settings.title')}</h2>
     <button
+      type="button"
       class="w-6 h-6 flex items-center justify-center transition-transform duration-200"
       on:click={() => dispatch('toggleExpand')}
       aria-label={$t('settings.toggle_expand')}
+      aria-expanded={isTocConfigExpanded}
+      aria-controls="toc-settings-options"
       class:rotate-180={isTocConfigExpanded}
     >
       <svg
@@ -101,8 +104,8 @@
   </div>
 
   {#if isTocConfigExpanded}
-    <div transition:slide={{duration: 200}}>
-      <div class="border-gray-600 border-2 rounded-md my-2 p-2 w-full">
+    <div id="toc-settings-options" transition:slide={{duration: 200}}>
+      <div class="toc-settings-option">
         <div class="flex gap-2 items-center">
           <label
             class="whitespace-nowrap text-sm"
@@ -113,23 +116,23 @@
             id="page_offset"
             value={config.pageOffset}
             on:input={(e) => updateField('pageOffset', parseInt((e.target as HTMLInputElement).value, 10) || 0)}
-            class="w-20 border-2 border-gray-300 rounded px-1 focus:outline-none focus:bg-gray-50 transition-colors"
+            class="w-20 border border-gray-300 rounded px-1 focus:outline-none focus:bg-gray-50 transition-colors"
           />
         </div>
         <div class="text-xs text-gray-500 mt-1">{$t('settings.offset_hint')}</div>
       </div>
 
-      <div class="border-gray-600 border-2 rounded-md my-2 p-2 w-full">
+      <div class="toc-settings-option">
         <PrefixSettings
           settings={config.prefixSettings}
           on:change={handlePrefixChange}
         />
       </div>
 
-      <div class="border-gray-600 border-2 rounded-md my-2 p-2 w-full">
+      <div class="toc-settings-option">
         <div class="flex justify-between items-center">
           <div class="flex items-center gap-1">
-            <h3>{$t('settings.page_labels')}</h3>
+            <h3 class="text-sm">{$t('settings.page_labels')}</h3>
             <a href="https://pdfa.org/pdf-ux-page-labels/" target="_blank" class="text-gray-400 hover:text-black transition-colors" title="Learn more about PDF Page Labels">
               <HelpCircle size={14} />
             </a>
@@ -150,9 +153,7 @@
                 : $t('settings.page_labels')}
               disabled={pageLabelsDisabled}
             />
-            <div
-              class="w-11 h-6 bg-gray-200 peer-focus:outline-none border-2 border-black rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-white after:border-black after:border-2 after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-gray-800"
-            ></div>
+            <span class="settings-toggle" aria-hidden="true"></span>
           </label>
         </div>
 
@@ -173,25 +174,24 @@
         {/if}
       </div>
 
-      <div class="mt-3 border-gray-600 border-2 rounded-md my-2 p-2 w-full">
+      <div class="toc-settings-option">
         <div class="flex justify-between items-center">
-          <h3>{$t('settings.add_physical_page')}</h3>
+          <h3 class="text-sm">{$t('settings.add_physical_page')}</h3>
           <label class="relative inline-flex items-center cursor-pointer">
             <input
               id="add_physical_page"
               type="checkbox"
               class="sr-only peer"
               bind:checked={addPhysicalTocPage}
+              aria-label={$t('settings.add_physical_page')}
             />
-            <div
-              class="w-11 h-6 bg-gray-200 peer-focus:outline-none border-2 border-black rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-white after:border-black after:border-2 after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-gray-800"
-            ></div>
+            <span class="settings-toggle" aria-hidden="true"></span>
           </label>
         </div>
 
         {#if addPhysicalTocPage}
           <div transition:slide={{duration: 200}}>
-            <div class="border-gray-600 border-2 rounded-md my-2 p-2 w-full">
+            <div class="mt-3 w-full">
               <div class="flex gap-2 items-center">
                 <label
                   class="whitespace-nowrap text-sm"
@@ -202,12 +202,12 @@
                   id="insert_at_page"
                   value={config.insertAtPage || 2}
                   on:input={(e) => updateField('insertAtPage', parseInt((e.target as HTMLInputElement).value, 10) || 2)}
-                  class="w-20 border-2 border-gray-300 rounded px-1 focus:outline-none focus:bg-gray-50"
+                  class="w-20 border border-gray-300 rounded px-1 focus:outline-none focus:bg-gray-50"
                   min={1}
                 />
                 <button
                   on:click={() => dispatch('jumpToTocPage')}
-                  class="ml-auto px-2 py-0.5 bg-white text-black border-2 border-black rounded-md shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all text-sm"
+                  class="ml-auto px-2 py-0.5 bg-white text-black border border-gray-300 rounded-md hover:bg-gray-50 transition-colors text-sm"
                   title={$t('tooltip.jump_toc')}
                   disabled={!tocPdfInstance}
                 >
@@ -223,7 +223,7 @@
                 </label>
                 <select
                   id="font_family"
-                  class="border-2 border-gray-300 rounded px-1 focus:outline-none focus:bg-gray-50 text-sm py-1"
+                  class="form-select"
                   value={config.fontFamily || 'huiwen'}
                   on:change={(e) => updateField('fontFamily', (e.target as HTMLSelectElement).value)}
                 >
@@ -263,27 +263,27 @@
               <div class="w-full md:w-1/2">
                 <h3 class="my-3 font-bold">{$t('settings.first_level')}</h3>
 
-                <div class="border-gray-600 border-2  rounded-md my-3 p-2 w-full flex items-center justify-between">
+                <div class="my-3 w-full flex items-center justify-between gap-2">
                   <label for="first_level_font_size">{$t('settings.font_size')}</label>
                   <input
                     type="number"
                     id="first_level_font_size"
                     value={config.firstLevel.fontSize}
                     on:input={(e) => updateField('firstLevel.fontSize', parseInt((e.target as HTMLInputElement).value, 10) || 0)}
-                    class="w-[50%] border-2 border-gray-300 rounded px-1 focus:outline-none focus:bg-gray-50"
+                    class="w-[50%] border border-gray-300 rounded px-1 focus:outline-none focus:bg-gray-50"
                   />
                 </div>
-                <div class="border-gray-600 border-2 rounded-md my-3 p-2 w-full flex items-center justify-between">
+                <div class="my-3 w-full flex items-center justify-between gap-2">
                   <label for="first_level_dot_leader">{$t('settings.dot_leader')}</label>
                   <input
                     type="text"
                     id="first_level_dot_leader"
                     value={config.firstLevel.dotLeader}
                     on:input={(e) => updateField('firstLevel.dotLeader', (e.target as HTMLInputElement).value)}
-                    class="w-[50%] border-2 border-gray-300 rounded px-1 focus:outline-none focus:bg-gray-50"
+                    class="w-[50%] border border-gray-300 rounded px-1 focus:outline-none focus:bg-gray-50"
                   />
                 </div>
-                <div class="border-gray-600 border-2 rounded-md my-3 p-2 w-full flex items-center justify-between">
+                <div class="my-3 w-full flex items-center justify-between gap-2">
                   <label for="first_level_color">{$t('settings.color')}</label>
                   <input
                     type="color"
@@ -293,7 +293,7 @@
                     class="w-[50%]"
                   />
                 </div>
-                <div class="border-gray-600 border-2 rounded-md my-3 p-2 w-full flex items-center justify-between">
+                <div class="my-3 w-full flex items-center justify-between gap-2">
                   <label for="first_level_line_spacing">{$t('settings.spacing')}</label>
                   <input
                     type="number"
@@ -301,7 +301,7 @@
                     id="first_level_line_spacing"
                     value={config.firstLevel.lineSpacing}
                     on:input={(e) => updateField('firstLevel.lineSpacing', parseFloat((e.target as HTMLInputElement).value) || 1)}
-                    class="w-[50%] border-2 border-gray-300 rounded px-1 focus:outline-none focus:bg-gray-50"
+                    class="w-[50%] border border-gray-300 rounded px-1 focus:outline-none focus:bg-gray-50"
                   />
                 </div>
               </div>
@@ -309,27 +309,27 @@
               <div class="w-full md:w-1/2">
                 <h3 class="my-3 font-bold">{$t('settings.other_levels')}</h3>
 
-                <div class="border-gray-600 border-2 rounded-md my-3 p-2 w-full flex items-center justify-between">
+                <div class="my-3 w-full flex items-center justify-between gap-2">
                   <label for="other_levels_font_size">{$t('settings.font_size')}</label>
                   <input
                     type="number"
                     id="other_levels_font_size"
                     value={config.otherLevels.fontSize}
                     on:input={(e) => updateField('otherLevels.fontSize', parseInt((e.target as HTMLInputElement).value, 10) || 0)}
-                    class="w-[50%] border-2 border-gray-300 rounded px-1 focus:outline-none focus:bg-gray-50"
+                    class="w-[50%] border border-gray-300 rounded px-1 focus:outline-none focus:bg-gray-50"
                   />
                 </div>
-                <div class="border-gray-600 border-2 rounded-md my-3 p-2 w-full flex items-center justify-between">
+                <div class="my-3 w-full flex items-center justify-between gap-2">
                   <label for="other_levels_dot_leader">{$t('settings.dot_leader')}</label>
                   <input
                     type="text"
                     id="other_levels_dot_leader"
                     value={config.otherLevels.dotLeader}
                     on:input={(e) => updateField('otherLevels.dotLeader', (e.target as HTMLInputElement).value)}
-                    class="w-[50%] border-2 border-gray-300 rounded px-1 focus:outline-none focus:bg-gray-50"
+                    class="w-[50%] border border-gray-300 rounded px-1 focus:outline-none focus:bg-gray-50"
                   />
                 </div>
-                <div class="border-gray-600 border-2 rounded-md my-3 p-2 w-full flex items-center justify-between">
+                <div class="my-3 w-full flex items-center justify-between gap-2">
                   <label for="other_levels_color">{$t('settings.color')}</label>
                   <input
                     type="color"
@@ -339,7 +339,7 @@
                     class="w-[50%]"
                   />
                 </div>
-                <div class="border-gray-600 border-2 rounded-md my-3 p-2 w-full flex items-center justify-between">
+                <div class="my-3 w-full flex items-center justify-between gap-2">
                   <label for="other_levels_line_spacing">{$t('settings.spacing')}</label>
                   <input
                     type="number"
@@ -347,7 +347,7 @@
                     id="other_levels_line_spacing"
                     value={config.otherLevels.lineSpacing}
                     on:input={(e) => updateField('otherLevels.lineSpacing', parseFloat((e.target as HTMLInputElement).value) || 1)}
-                    class="w-[50%] border-2 border-gray-300 rounded px-1 focus:outline-none focus:bg-gray-50"
+                    class="w-[50%] border border-gray-300 rounded px-1 focus:outline-none focus:bg-gray-50"
                   />
                 </div>
               </div>
@@ -357,4 +357,15 @@
       </div>
     </div>
   {/if}
-</div>
+</section>
+
+<style>
+  .toc-settings-option {
+    width: 100%;
+    padding: 14px 0;
+  }
+
+  .toc-settings-option + .toc-settings-option {
+    border-top: 1px solid #e5e7eb;
+  }
+</style>

@@ -350,7 +350,7 @@
 
 </script>
 
-<div class="border-black border-2 rounded-lg p-2 my-4 shadow-[2px_2px_0px_rgba(0,0,0,1)] bg-white">
+<div class="api-settings border-black border-2 rounded-lg p-2 my-4 shadow-[2px_2px_0px_var(--hard-shadow-color)] bg-white">
   <div class="flex justify-between items-center">
     <div class="flex items-center gap-2">
       <h2>
@@ -358,10 +358,13 @@
       </h2>
     </div>
     <button
+      type="button"
       class="w-6 h-6 flex items-center justify-center transition-transform duration-200"
       class:rotate-180={isExpanded}
       on:click={() => (isExpanded = !isExpanded)}
       aria-label="Toggle API Settings"
+      aria-expanded={isExpanded}
+      aria-controls="api-settings-options"
     >
       <svg
         xmlns="http://www.w3.org/2000/svg"
@@ -379,29 +382,30 @@
 
   {#if isExpanded}
     <div
-      class="mt-3"
+      id="api-settings-options"
+      class="mt-1"
       transition:slide={{duration: 200}}
     >
-      <div class="flex flex-col gap-3">
-        <div class="border-black border-2 rounded-md p-2 w-full">
+      <div class="flex flex-col">
+        <div class="api-settings-option">
           <label
             class="font-bold mb-1 text-sm flex items-center"
             for="llm_provider">
-            <Sparkles size={14} strokeWidth={3} class="inline-block mr-1"/>LLM Provider</label
+            <Sparkles size={14} strokeWidth={3} class="inline-block mr-1"/>{$t('settings.llm_provider')}</label
           >
           <div class="flex items-center gap-3">
             <select
               id="llm_provider"
-              class="w-full bg-white outline-none text-sm"
+              class="form-select w-full"
               bind:value={config.provider}
               on:change={markDirty}
             >
-              <option value="">Auto</option>
-              <option value="gemini">Gemini</option>
-              <option value="qwen">Qwen</option>
-              <option value="doubao">Doubao</option>
-              <option value="zhipu">Zhipu</option>
-              <option value="custom">Custom / OpenAI Compatible</option>
+              <option value="">{$t('settings.provider_auto')}</option>
+              <option value="gemini">{$t('settings.provider_gemini')}</option>
+              <option value="qwen">{$t('settings.provider_qwen')}</option>
+              <option value="doubao">{$t('settings.provider_doubao')}</option>
+              <option value="zhipu">{$t('settings.provider_zhipu')}</option>
+              <option value="custom">{$t('settings.provider_custom')}</option>
             </select>
 
             {#each getVisibleProviderLinks() as providerLink}
@@ -411,7 +415,7 @@
                 rel="noreferrer"
                 class="shrink-0 inline-flex items-center gap-1 text-xs text-gray-600 hover:text-black"
               >
-                <span>Get Key</span>
+                <span>{$t('settings.get_api_key')}</span>
                 <ExternalLink size={12} strokeWidth={2.5} />
               </a>
             {/each}
@@ -420,7 +424,7 @@
 
         {#if config.provider === 'gemini'}
           <div
-            class="border-black border-2 rounded-md p-2 w-full"
+            class="api-settings-option"
             transition:slide={{duration: 200}}
           >
             <label
@@ -437,7 +441,7 @@
               spellcheck="false"
               data-1p-ignore="true"
               data-lpignore="true"
-              class="w-full outline-none text-sm placeholder-gray-400"
+              class="api-settings-input text-sm placeholder-gray-400"
               placeholder={KNOWN_PROVIDER_MODELS.gemini.text[0]}
               value={getSingleModelValue('gemini')}
               on:input={(e) => {
@@ -450,7 +454,7 @@
 
         {#if config.provider === 'qwen'}
           <div
-            class="border-black border-2 rounded-md p-2 w-full"
+            class="api-settings-option"
             transition:slide={{duration: 200}}
           >
             <label
@@ -467,7 +471,7 @@
               spellcheck="false"
               data-1p-ignore="true"
               data-lpignore="true"
-              class="w-full outline-none text-sm placeholder-gray-400"
+              class="api-settings-input text-sm placeholder-gray-400"
               placeholder={KNOWN_PROVIDER_MODELS.qwen.vision[0]}
               value={getSingleModelValue('qwen')}
               on:input={(e) => {
@@ -480,7 +484,7 @@
 
         {#if config.provider === 'zhipu'}
           <div
-            class="border-black border-2 rounded-md p-2 w-full"
+            class="api-settings-option"
             transition:slide={{duration: 200}}
           >
             <label
@@ -497,7 +501,7 @@
               spellcheck="false"
               data-1p-ignore="true"
               data-lpignore="true"
-              class="w-full outline-none text-sm placeholder-gray-400"
+              class="api-settings-input text-sm placeholder-gray-400"
               placeholder={KNOWN_PROVIDER_MODELS.zhipu.vision[0]}
               value={getSingleModelValue('zhipu')}
               on:input={(e) => {
@@ -510,7 +514,7 @@
 
         {#if config.provider === 'custom'}
           <div
-            class="border-black border-2 rounded-md p-2 w-full"
+            class="api-settings-option"
             transition:slide={{duration: 200}}
           >
             <label
@@ -525,7 +529,7 @@
               autocapitalize="off"
               autocorrect="off"
               spellcheck="false"
-              class="w-full outline-none text-sm placeholder-gray-400"
+              class="api-settings-input text-sm placeholder-gray-400"
               placeholder={$t('settings.custom_base_url_placeholder') || DEFAULT_CUSTOM_BASE_URL}
               maxlength="512"
               bind:value={config.customBaseUrl}
@@ -534,7 +538,7 @@
           </div>
 
           <div
-            class="border-black border-2 rounded-md p-2 w-full"
+            class="api-settings-option"
             transition:slide={{duration: 200}}
           >
             <label
@@ -551,7 +555,7 @@
               spellcheck="false"
               data-1p-ignore="true"
               data-lpignore="true"
-              class="w-full outline-none text-sm placeholder-gray-400"
+              class="api-settings-input text-sm placeholder-gray-400"
               placeholder={DEFAULT_CUSTOM_MODEL}
               maxlength="200"
               value={getSingleModelValue('custom')}
@@ -565,7 +569,7 @@
 
         {#if config.provider === 'doubao'}
           <div
-            class="border-black border-2 rounded-md p-2 w-full"
+            class="api-settings-option"
             transition:slide={{duration: 200}}
           >
             <label
@@ -575,7 +579,7 @@
             <input
               id="doubao_ep_text"
               type="text"
-              class="w-full outline-none text-sm placeholder-gray-400"
+              class="api-settings-input text-sm placeholder-gray-400"
               placeholder="ep-..."
               bind:value={config.doubaoEndpointIdText}
               on:input={markDirty}
@@ -583,7 +587,7 @@
           </div>
 
           <div
-            class="border-black border-2 rounded-md p-2 w-full"
+            class="api-settings-option"
             transition:slide={{duration: 200}}
           >
             <label
@@ -593,7 +597,7 @@
             <input
               id="doubao_ep_vision"
               type="text"
-              class="w-full outline-none text-sm placeholder-gray-400"
+              class="api-settings-input text-sm placeholder-gray-400"
               placeholder="ep-..."
               bind:value={config.doubaoEndpointIdVision}
               on:input={markDirty}
@@ -602,7 +606,7 @@
         {/if}
 
         {#if config.provider}
-          <div class="border-black border-2 rounded-md p-2 w-full">
+          <div class="api-settings-option">
             <label
               class="flex items-center gap-1.5 font-bold mb-1 text-sm"
               for="api_key"
@@ -625,7 +629,7 @@
                 data-1p-ignore="true"
                 data-lpignore="true"
                 class:text-security-disc={!showApiKey && Boolean(config.apiKey)}
-                class="min-w-0 flex-1 outline-none placeholder:text-gray-400 placeholder:italic [&::placeholder]:text-xs "
+                class="api-settings-input min-w-0 flex-1 placeholder:text-gray-400 placeholder:italic [&::placeholder]:text-xs"
                 placeholder={$t('settings.api_key_placeholder')}
                 bind:value={config.apiKey}
                 on:input={markDirty}
@@ -654,7 +658,7 @@
           </div>
         {/if}
 
-        <div class="border-black border-2 rounded-md p-2 w-full">
+        <div class="api-settings-option">
           <div class="mb-1 flex items-center justify-between gap-2">
             <label
               class="block font-bold text-sm"
@@ -739,7 +743,7 @@
         </div>
 
         <button
-          class="w-full font-bold transition-all duration-200 text-black border-2 border-black rounded px-3 py-2
+          class="w-full font-bold transition-all duration-200 text-black border border-gray-300 rounded px-3 py-2
           {isSaved ? 'bg-lime-400' : 'bg-yellow-400 hover:bg-yellow-300'}"
           on:click={save}
         >
@@ -751,6 +755,21 @@
 </div>
 
 <style>
+  .api-settings-option {
+    width: 100%;
+    padding: 14px 0;
+  }
+
+  .api-settings-option + .api-settings-option {
+    border-top: 1px solid #e5e7eb;
+  }
+
+  .api-settings-input {
+    width: 100%;
+    min-height: 32px;
+    padding: 4px 8px;
+  }
+
   .animate-notice-shake {
     animation: notice-shake 0.32s ease-in-out;
     transform-origin: center;

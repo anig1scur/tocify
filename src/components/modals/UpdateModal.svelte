@@ -45,13 +45,13 @@
     on:click|self={handleClose}
   >
     <div
-      class="bg-white rounded-lg p-0 max-w-lg w-full max-h-[85vh] flex flex-col border-4 border-black shadow-[12px_12px_0px_rgba(0,0,0,1)] relative overflow-hidden"
+      class="bg-white rounded-lg p-0 max-w-lg w-full max-h-[85vh] flex flex-col border-4 border-black shadow-[12px_12px_0px_var(--hard-shadow-color)] relative overflow-hidden"
       transition:fly={{y: 20, duration: 200}}
       on:click|stopPropagation
     >
       <div class="bg-yellow-300 border-b-4 border-black p-5 flex justify-between items-center">
         <div class="flex items-center gap-3">
-          <div class="bg-white p-2 border-2 border-black rounded shadow-[2px_2px_0px_rgba(0,0,0,1)]">
+          <div class="bg-white p-2 border-2 border-black rounded shadow-[2px_2px_0px_var(--hard-shadow-color)]">
             <Sparkles
               size={24}
               class="text-black"
@@ -104,7 +104,7 @@
         <button
           on:click={handleClose}
           disabled={isUpdating}
-          class="px-4 py-3 font-bold border-2 border-black rounded bg-white text-black hover:bg-gray-100 transition-all active:translate-x-[2px] active:translate-y-[2px] shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-[2px_2px_0px_rgba(0,0,0,1)] active:shadow-none disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-[2px_2px_0px_rgba(0,0,0,1)] disabled:translate-x-0 disabled:translate-y-0"
+          class="px-4 py-3 font-bold border-2 border-black rounded bg-white text-black hover:bg-gray-100 transition-all active:translate-x-[2px] active:translate-y-[2px] shadow-[2px_2px_0px_var(--hard-shadow-color)] hover:shadow-[2px_2px_0px_var(--hard-shadow-color)] active:shadow-none disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-[2px_2px_0px_var(--hard-shadow-color)] disabled:translate-x-0 disabled:translate-y-0"
         >
           Later
         </button>
@@ -112,7 +112,7 @@
         <button
           on:click={handleUpdateClick}
           disabled={isUpdating}
-          class="flex items-center justify-center gap-2 px-4 py-3 font-bold border-2 border-black rounded bg-green-400 text-black transition-all active:translate-x-[2px] active:translate-y-[2px] shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:bg-green-300 active:shadow-none disabled:bg-green-200 disabled:cursor-not-allowed disabled:shadow-[2px_2px_0px_rgba(0,0,0,1)] disabled:translate-x-0 disabled:translate-y-0"
+          class="flex items-center justify-center gap-2 px-4 py-3 font-bold border-2 border-black rounded bg-green-400 text-black transition-all active:translate-x-[2px] active:translate-y-[2px] shadow-[2px_2px_0px_var(--hard-shadow-color)] hover:shadow-[2px_2px_0px_var(--hard-shadow-color)] hover:bg-green-300 active:shadow-none disabled:bg-green-200 disabled:cursor-not-allowed disabled:shadow-[2px_2px_0px_var(--hard-shadow-color)] disabled:translate-x-0 disabled:translate-y-0"
         >
           {#if isUpdating}
             <Loader2

@@ -10,6 +10,7 @@
     ArrowUp,
     ArrowDown,
     Hash,
+    ListChecks,
     X,
     Search,
   } from 'lucide-svelte';
@@ -860,7 +861,7 @@
       placeholder={$t('toc.outline_placeholder')}
       bind:value={text}
       on:input={handleInput}
-      class="w-full h-full border-2 border-black rounded-lg p-2 text-sm myfocus leading-6 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none pr-10"
+      class="toc-editor-field w-full h-full border-2 border-black rounded-lg p-2 text-sm myfocus leading-6 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none pr-10"
     ></textarea>
 
     {#if hasInvalidLines}
@@ -922,25 +923,30 @@
 
       {#if selectedCount >= 1 || showTocSearch}
         <div class="sticky top-12 z-30 mb-3 ml-12 pointer-events-none">
-          <div class="pointer-events-auto flex flex-col gap-2">
+          <div class="toc-floating-tools pointer-events-auto flex flex-col gap-1 {selectedCount >= 1 ? 'rounded-lg border-2 border-black/95 bg-white/70 backdrop-blur-sm' : ''}">
             {#if selectedCount >= 1}
-              <div class="flex flex-wrap items-center gap-2 bg-white/35 backdrop-blur-sm border-2 border-black/95 rounded-lg px-3 py-2">
-                <span class="text-xs font-semibold text-gray-700">
-                  {$t('toc.batch_operations')} {$t('toc.selected_count', {values: {count: selectedCount}})}
+              <div class="relative flex flex-wrap items-center gap-2 pl-3 pr-10 pt-2 {showTocSearch ? 'pb-1' : 'pb-2'}">
+                <span class="inline-flex items-center gap-2 text-xs font-semibold text-gray-700">
+                  <span class="inline-flex shrink-0" title={$t('toc.batch_operations')}>
+                    <ListChecks size={16} aria-hidden="true" />
+                    <span class="sr-only">{$t('toc.batch_operations')}</span>
+                  </span>
+                  {$t('toc.selected_count', {values: {count: selectedCount}})}
                 </span>
                 <button
+                  type="button"
                   on:click={clearSelection}
-                  class="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold border-2 border-transparent rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+                  class="absolute right-1 top-1 inline-flex h-7 w-7 items-center justify-center rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+                  aria-label={$t('toc.clear_selection')}
                   title={$t('toc.clear_selection')}
                 >
                   <X size={14} />
-                  {$t('toc.clear_selection')}
                 </button>
-                <div class="flex items-center gap-2">
+                <div class="flex flex-wrap items-center gap-2">
                   <button
                     on:click={() => adjustSelectedLevels(-1)}
                     title={$t('toc.promote_selected_hint')}
-                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-blue-400 text-black border-2 border-black rounded-lg shadow-[1px_1px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
+                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-blue-400 text-black border-2 border-black rounded-lg shadow-[1px_1px_0px_var(--hard-shadow-color)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
                   >
                     <ArrowUp size={14} />
                     {$t('toc.promote_selected')}
@@ -948,7 +954,7 @@
                   <button
                     on:click={() => adjustSelectedLevels(1)}
                     title={$t('toc.demote_selected_hint')}
-                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-lime-400 text-black border-2 border-black rounded-lg shadow-[1px_1px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
+                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-lime-400 text-black border-2 border-black rounded-lg shadow-[1px_1px_0px_var(--hard-shadow-color)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
                   >
                     <ArrowDown size={14} />
                     {$t('toc.demote_selected')}
@@ -966,7 +972,7 @@
                       <button
                         on:click={applyBatchOffset}
                         title={$t('toc.apply_offset_hint')}
-                        class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-yellow-400 text-black border-2 border-black rounded-lg shadow-[1px_1px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
+                        class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-yellow-400 text-black border-2 border-black rounded-lg shadow-[1px_1px_0px_var(--hard-shadow-color)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
                       >
                         <Hash size={14} />
                         {$t('toc.apply_offset')}
@@ -979,7 +985,7 @@
                         batchOffsetInput = '';
                       }}
                       title={$t('toc.offset_selected_hint')}
-                      class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-yellow-400 text-black border-2 border-black rounded-lg shadow-[1px_1px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
+                      class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-yellow-400 text-black border-2 border-black rounded-lg shadow-[1px_1px_0px_var(--hard-shadow-color)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
                     >
                       <Hash size={14} />
                       {$t('toc.offset_selected')}
@@ -990,24 +996,28 @@
             {/if}
 
             {#if showTocSearch}
-              <div class="bg-white/70 backdrop-blur-sm border-2 border-black rounded-lg px-2 py-1.5 flex items-center gap-2">
-                <Search size={15} class="text-gray-500 shrink-0" />
-                <input
-                  type="text"
-                  bind:value={tocSearchQuery}
-                  placeholder={$t('toc.search_placeholder') || 'Search ToC...'}
-                  class="min-w-0 flex-1 bg-transparent outline-none text-sm placeholder:text-gray-400"
-                />
-                {#if tocSearchQuery}
-                  <button
-                    type="button"
-                    on:click={() => (tocSearchQuery = '')}
-                    class="p-1 text-gray-500 hover:text-black"
-                    title={$t('toc.clear_search') || 'Clear search'}
-                  >
-                    <X size={14} />
-                  </button>
-                {/if}
+              <div class={selectedCount >= 1 ? 'px-2 pb-2' : ''}>
+                <div class="relative">
+                  <Search size={15} aria-hidden="true" class="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
+                  <input
+                    type="text"
+                    bind:value={tocSearchQuery}
+                    aria-label={$t('toc.search_placeholder') || 'Search ToC...'}
+                    placeholder={$t('toc.search_placeholder') || 'Search ToC...'}
+                    class="h-8 w-full min-w-0 bg-white pl-8 pr-8 text-sm placeholder:text-gray-400"
+                  />
+                  {#if tocSearchQuery}
+                    <button
+                      type="button"
+                      on:click={() => (tocSearchQuery = '')}
+                      class="absolute right-0.5 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded text-gray-500 hover:text-black"
+                      aria-label={$t('toc.clear_search') || 'Clear search'}
+                      title={$t('toc.clear_search') || 'Clear search'}
+                    >
+                      <X size={14} />
+                    </button>
+                  {/if}
+                </div>
               </div>
             {/if}
           </div>
@@ -1070,19 +1080,19 @@
     <div class="flex items-center gap-2 ml-12 mt-3 mb-4">
       <button
         on:click={addTocItem}
-        class="btn font-bold bg-yellow-400 text-black border-2 border-black rounded-lg px-4 py-2 shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all"
+        class="btn font-bold bg-yellow-400 text-black border-2 border-black rounded-lg px-4 py-2 shadow-[2px_2px_0px_var(--hard-shadow-color)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all"
       >
         {$t('btn.add_chapter')}
       </button>
       <button
         on:click={() => addMultipleTocItems(5)}
-        class="btn font-bold bg-gray-100 text-black border-2 border-black rounded-lg px-3 py-2 shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all text-sm"
+        class="btn font-bold bg-gray-100 text-black border-2 border-black rounded-lg px-3 py-2 shadow-[2px_2px_0px_var(--hard-shadow-color)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all text-sm"
       >
         +5
       </button>
       <button
         on:click={() => addMultipleTocItems(10)}
-        class="btn font-bold bg-gray-100 text-black border-2 border-black rounded-lg px-3 py-2 shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all text-sm"
+        class="btn font-bold bg-gray-100 text-black border-2 border-black rounded-lg px-3 py-2 shadow-[2px_2px_0px_var(--hard-shadow-color)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all text-sm"
       >
         +10
       </button>

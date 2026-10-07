@@ -26,10 +26,3 @@ Tocify is a free, online and open-source web application to add, edit, or genera
 ### 3. Edit style
 
 <img src="./screenshots/style.png" alt="Edit style" width="100%"/>
-
-
-## Support me
-
-You can support me by Alipay (scan QR code below) or [ko-fi](https://ko-fi.com/aerisz):
-
-![](./screenshots/support.webp)

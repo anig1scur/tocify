@@ -103,7 +103,7 @@
 
 <main class="flex flex-col w-full lg:w-[70%] min-w-0 h-fit lg:sticky lg:top-5 lg:self-start">
   <div
-    class="relative h-fit pb-4 min-h-[85vh] border-black border-2 rounded-lg bg-white shadow-[2px_2px_0px_rgba(0,0,0,1)]"
+    class="relative h-fit pb-4 min-h-[85vh] border-black border-2 rounded-lg bg-white shadow-[2px_2px_0px_var(--hard-shadow-color)]"
     role="region"
     aria-label={$t('ocr_lab.pdf_preview_title')}
     on:dragenter={handlePreviewDragEnter}
@@ -212,7 +212,7 @@
                                 bind:this={previewEditingTextarea}
                                 bind:value={previewEditingText}
                                 rows="1"
-                                class="absolute z-30 pointer-events-auto resize-none rounded-md border-2 border-black bg-yellow-50/95 px-2 py-1 text-xs leading-snug text-gray-900 shadow-[2px_2px_0px_rgba(0,0,0,1)] outline-none"
+                                class="absolute z-30 pointer-events-auto resize-none rounded-md border-2 border-black bg-yellow-50/95 px-2 py-1 text-xs leading-snug text-gray-900 shadow-[2px_2px_0px_var(--hard-shadow-color)] outline-none"
                                 style:left={`${overlayRect.left}px`}
                                 style:top={`${overlayRect.top}px`}
                                 style:width={`${Math.max(140, overlayRect.width)}px`}
@@ -268,7 +268,7 @@
 
         <div class="flex flex-col md:flex-row md:justify-end gap-3 md:gap-2 pt-4 relative z-10 mx-3 md:mr-3 md:mx-0">
           <button
-            class="btn flex gap-2 items-center justify-center font-bold bg-white text-black border-2 border-black rounded-lg px-4 py-2 shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all disabled:bg-gray-300 disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0 w-full md:w-auto"
+            class="btn flex gap-2 items-center justify-center font-bold bg-white text-black border-2 border-black rounded-lg px-4 py-2 shadow-[2px_2px_0px_var(--hard-shadow-color)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all disabled:bg-gray-300 disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0 w-full md:w-auto"
             on:click={openFilePicker}
             title={$t('tooltip.upload_new')}
           >
@@ -276,7 +276,7 @@
             {$t('btn.upload_new')}
           </button>
           <button
-            class="btn flex gap-2 items-center justify-center font-bold bg-green-500 text-black border-2 border-black rounded-lg px-4 py-2 shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0 w-full md:w-auto {(!pdfFile || isFileLoading) ? 'disabled:bg-gray-300 disabled:cursor-not-allowed' : 'disabled:bg-green-500 disabled:cursor-wait'}"
+            class="btn flex gap-2 items-center justify-center font-bold bg-green-500 text-black border-2 border-black rounded-lg px-4 py-2 shadow-[2px_2px_0px_var(--hard-shadow-color)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0 w-full md:w-auto {(!pdfFile || isFileLoading) ? 'disabled:bg-gray-300 disabled:cursor-not-allowed' : 'disabled:bg-green-500 disabled:cursor-wait'}"
             on:click={generateSearchablePdf}
             disabled={!pdfFile || isFileLoading || isBuilding}
             aria-busy={isBuilding}

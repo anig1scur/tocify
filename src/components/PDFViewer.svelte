@@ -39,7 +39,6 @@
   let selectionStartPage = 0;
 
   let pressTimer: number | null = null;
-  let loadedFilename: string = '';
 
   let autoScrollSpeed = 0;
   let autoScrollFrameId: number | null = null;
@@ -165,17 +164,6 @@
   $: if (originalPdfInstance && originalPdfInstance !== lastPageLabelsInstance) {
     lastPageLabelsInstance = originalPdfInstance;
     refreshPageLabels(originalPdfInstance);
-  }
-
-
-  $: if (originalPdfInstance && filename && filename !== loadedFilename) {
-    loadedFilename = filename;
-    tick().then(() => {
-      dispatch('fileloaded', {
-        message: $t('msg.pdf_loaded'),
-        type: 'success',
-      });
-    });
   }
 
   $: if (!originalPdfInstance) {
@@ -634,7 +622,7 @@
           {#if tocPdfInstance && jumpToTocPage}
             <button
               on:click={jumpToTocPage}
-              class="p-1 sm:min-w-12 py-0.5 rounded-lg hover:bg-gray-100 text-black border-2 border-black shadow-[1px_1px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all disabled:opacity-50 disabled:cursor-not-allowed text-xs"
+              class="p-1 sm:min-w-12 py-0.5 rounded-lg hover:bg-gray-100 text-black border-2 border-black shadow-[1px_1px_0px_var(--hard-shadow-color)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all disabled:opacity-50 disabled:cursor-not-allowed text-xs"
               title={$t('tooltip.jump_toc')}
             >
               <ListOrdered

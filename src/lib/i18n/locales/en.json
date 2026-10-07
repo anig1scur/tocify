@@ -28,6 +28,14 @@
     "font_hei": "SourceHan Sans",
     "font_song": "SourceHan Serif",
     "api_settings_title": "API Settings",
+    "llm_provider": "LLM Provider",
+    "provider_auto": "Auto",
+    "provider_gemini": "Gemini",
+    "provider_qwen": "Qwen",
+    "provider_doubao": "Doubao",
+    "provider_zhipu": "Zhipu",
+    "provider_custom": "Custom / OpenAI Compatible",
+    "get_api_key": "Get Key",
     "api_key_hint": "Stored locally only",
     "api_key_placeholder": "There's built-in keys, or use your own",
     "custom_model_label": "Custom Model",
@@ -67,7 +75,6 @@
     "font_load_failed": "Font {font} load failed. Using fallback."
   },
   "pwa": {
-    "offline_ready": "Tocify is ready to open offline.",
     "update_ready": "A new version is available.",
     "refresh": "Refresh",
     "close": "Close"
@@ -84,10 +91,12 @@
     "open": "Edit ignore areas",
     "close": "Close",
     "instruction": "Drag to erase content before recognition",
+    "move_region": "Move area",
+    "resize_region": "Resize area",
     "current_page_regions": "Current Page Areas",
     "apply_all_pages": "Apply to all pages",
     "region_n": "Area {n}",
-    "empty_hint": "Drag on the page to add an ignore area",
+    "empty_hint": "Drag to erase",
     "clear_page": "Clear current page areas",
     "done": "Done"
   },
@@ -131,24 +140,12 @@
     "yes_this_page": "Yes! This page !",
     "skip_this_item": "Skip This Item",
     "save": "Save",
-    "saved": "Saved",
-    "close_hint": "Close"
+    "saved": "Saved"
   },
   "status": {
     "loading_rendering": "Loading PDF...",
     "load_pdf_first": "Load a PDF first",
     "generating": "AI is generating ToC..."
-  },
-  "hint": {
-    "next_step_title": "Next Step",
-    "step_1_text": "Select the pages",
-    "step_1_bold": "range on the right",
-    "step_2_text": "Click the",
-    "step_2_bold": "Generate ToC button",
-    "or_text": "Or, you can",
-    "manual_add_bold": "manually add items",
-    "manual_add_text": "in the editor below",
-    "multi_select_tip": "Tip: hold Shift and click to select a range of TOC items."
   },
   "tooltip": {
     "generate_ai": "Generate ToC from selected pages using AI",
@@ -164,6 +161,8 @@
   },
   "chapter_export": {
     "title": "Export Chapters",
+    "selection_actions": "Select chapters",
+    "export_mode": "Export mode",
     "close": "Close chapter export",
     "select_all": "Select All",
     "clear_selection": "Clear",

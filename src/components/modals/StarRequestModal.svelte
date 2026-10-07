@@ -37,7 +37,7 @@
     on:click={close}
   >
     <div
-      class="bg-white rounded-xl p-8 max-w-md w-full border-4 border-black shadow-[8px_8px_0px_rgba(0,0,0,1)] relative overflow-hidden"
+      class="bg-white rounded-xl p-8 max-w-md w-full border-4 border-black shadow-[8px_8px_0px_var(--hard-shadow-color)] relative overflow-hidden"
       transition:fly={{ y: 20, duration: 300 }}
       on:click|stopPropagation
     >
@@ -74,7 +74,7 @@
 
           <button
             on:click={handleFeedback}
-            class="flex items-center justify-center gap-2 py-4 bg-yellow-400 border-4 border-black rounded-xl font-bold text-lg hover:bg-yellow-300 transition-all active:scale-95 shadow-[4px_4px_0px_rgba(0,0,0,1)]"
+            class="flex items-center justify-center gap-2 py-4 bg-yellow-400 border-4 border-black rounded-xl font-bold text-lg hover:bg-yellow-300 transition-all active:scale-95 shadow-[4px_4px_0px_var(--hard-shadow-color)]"
           >
             <MessageSquare size={24} />
             {$t('star_request.btn_feedback')}

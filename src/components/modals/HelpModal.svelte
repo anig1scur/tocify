@@ -25,7 +25,7 @@
     on:click={() => (showHelpModal = false)}
   >
     <div
-      class="bg-white rounded-lg p-6 max-w-5xl w-full max-h-[90vh] overflow-y-auto border-4 border-black shadow-[8px_8px_0px_rgba(0,0,0,1)]"
+      class="bg-white rounded-lg p-6 max-w-5xl w-full max-h-[90vh] overflow-y-auto border-4 border-black shadow-[8px_8px_0px_var(--hard-shadow-color)]"
       transition:fly={{y: 20, duration: 200}}
       on:click|stopPropagation
     >

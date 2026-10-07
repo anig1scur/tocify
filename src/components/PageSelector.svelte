@@ -26,7 +26,7 @@
   }
 </script>
 
-<div class="border-black border-2 rounded-lg p-3 my-4 bg-blue-100 shadow-[2px_2px_0px_rgba(0,0,0,1)]">
+<div class="border-black border-2 rounded-lg p-3 my-4 bg-blue-100 shadow-[2px_2px_0px_var(--hard-shadow-color)]">
   <div class="flex justify-between items-center mb-2">
     <h3 class="font-bold">{$t('label.toc_pages_selection')}</h3>
     <button

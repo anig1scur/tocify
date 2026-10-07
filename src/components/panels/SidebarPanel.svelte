@@ -1,5 +1,5 @@
 <script lang="ts">
-  import {fade, slide} from 'svelte/transition';
+  import {fade} from 'svelte/transition';
   import {t} from 'svelte-i18n';
   import {createEventDispatcher} from 'svelte';
 
@@ -8,7 +8,7 @@
   import TocSettings from '../settings/TocSetting.svelte';
   import AiPageSelector from '../PageSelector.svelte';
   import TocEditor from '../TocEditor.svelte';
-  import {Sparkles, X} from 'lucide-svelte';
+  import {Sparkles} from 'lucide-svelte';
   import {curFileFingerprint} from '../../stores';
 
   export let pdfState: any;
@@ -16,7 +16,6 @@
   export let tocPdfInstance: any;
   export let isAiLoading = false;
   export let aiError: string | null = null;
-  export let showNextStepHint = false;
 
   export let tocRanges: {start: number; end: number; id: string}[];
   export let activeRangeIndex: number;
@@ -53,35 +52,6 @@
     on:jumpToPage={(e) => dispatch('jumpToPage', e.detail)}
   />
 
-  {#if showNextStepHint && originalPdfInstance}
-    <div
-      class="relative border-black border-2 rounded-lg p-3 my-4 bg-yellow-200 shadow-[2px_2px_0px_rgba(0,0,0,1)]"
-      transition:fade={{duration: 200}}
-    >
-      <button
-        class="absolute top-1 right-1 p-1 hover:bg-black/10 rounded-full transition-colors"
-        on:click={() => dispatch('closeNextStepHint')}
-        title={$t('btn.close_hint')}
-      >
-        <X size={16} />
-      </button>
-      <h3 class="font-bold mb-2">{$t('hint.next_step_title')}:</h3>
-      <p class="text-sm text-gray-800">
-        1. {$t('hint.step_1_text')} <strong class="text-black">{$t('hint.step_1_bold')}</strong>
-      </p>
-      <p class="text-sm text-gray-800 mt-1">
-        2. {$t('hint.step_2_text')} <strong class="text-black">{$t('hint.step_2_bold')}</strong>
-      </p>
-      <p class="text-sm text-gray-800 mt-2">
-        {$t('hint.or_text')} <strong class="text-black">{$t('hint.manual_add_bold')}</strong>
-        {$t('hint.manual_add_text')}
-      </p>
-      <p class="text-sm text-gray-800 mt-1">
-        {$t('hint.multi_select_tip')}
-      </p>
-    </div>
-  {/if}
-
   {#if originalPdfInstance}
     <div transition:fade={{duration: 200}}>
       <AiPageSelector
@@ -97,7 +67,7 @@
   {/if}
 
   <button
-    class="btn w-full my-2 font-bold bg-blue-400 transition-all duration-300 text-black border-2 border-black rounded-lg px-3 py-2 shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] disabled:bg-gray-300 disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0"
+    class="btn w-full my-2 font-bold bg-blue-400 transition-all duration-300 text-black border-2 border-black rounded-lg px-3 py-2 shadow-[2px_2px_0px_var(--hard-shadow-color)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] disabled:bg-gray-300 disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0"
     on:click={() => dispatch('generateAi')}
     title={isAiLoading
       ? $t('status.generating')

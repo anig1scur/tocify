@@ -12,7 +12,7 @@
     ready = true;
   });
 
-  const cardClass = "relative bg-white border-2 border-black rounded-xl p-6 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[3px] hover:translate-y-[3px] transition-all duration-200";
+  const cardClass = "relative bg-white border-2 border-black rounded-xl p-6 shadow-[3px_3px_0px_0px_var(--hard-shadow-color)] hover:shadow-none hover:translate-x-[3px] hover:translate-y-[3px] transition-all duration-200";
 </script>
 
 <SeoJsonLd title={$t('seo.why_title')} description={$t('seo.why_desc')} />
@@ -26,7 +26,7 @@
         in:fly={{ y: 20, duration: 600, delay: 0, easing: cubicOut }} 
         class="mb-16"
       >
-         <a href="/" class="group inline-flex items-center gap-2 px-5 py-2 border-2 border-black bg-white rounded-full shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] active:scale-95 transition-all font-bold mb-10 text-sm uppercase tracking-wider">
+         <a href="/" class="group inline-flex items-center gap-2 px-5 py-2 border-2 border-black bg-white rounded-full shadow-[2px_2px_0px_0px_var(--hard-shadow-color)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] active:scale-95 transition-all font-bold mb-10 text-sm uppercase tracking-wider">
            <ArrowLeft size={16} class="group-hover:-translate-x-1 transition-transform"/>
            Back to Tool
          </a>
@@ -80,7 +80,7 @@
         
         <div 
           in:fly={{ y: 20, duration: 600, delay: 600 }}
-          class="bg-white border-2 border-black rounded-2xl p-6 md:p-10 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]"
+          class="bg-white border-2 border-black rounded-2xl p-6 md:p-10 shadow-[6px_6px_0px_0px_var(--hard-shadow-color)]"
         >
           <div class="space-y-3 relative">
             <div class="absolute left-[15px] top-4 bottom-4 w-0.5 border-l-2 border-dashed border-gray-300 -z-10 hidden md:block"></div>
@@ -122,7 +122,7 @@
           ] as faq}
             <div 
               in:fly={{ y: 20, duration: 500, delay: faq.delay }}
-              class="bg-white border-2 border-neutral-800 rounded-xl p-6 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-[5px_5px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-0.5 transition-all duration-200"
+              class="bg-white border-2 border-neutral-800 rounded-xl p-6 shadow-[3px_3px_0px_0px_var(--hard-shadow-color)] hover:shadow-[5px_5px_0px_0px_var(--hard-shadow-color)] hover:-translate-y-0.5 transition-all duration-200"
             >
               <h3 class="text-lg font-bold mb-3 flex items-start gap-2">
                 <span class="text-blue-500">Q.</span> {faq.q}

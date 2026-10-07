@@ -91,7 +91,7 @@
       style={customStyle}
       class={`
         absolute z-50 p-2 md:px-4 md:py-3 font-mono text-sm text-gray-900 border-2 border-black
-        shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]  rounded-md
+        shadow-[2px_2px_0px_0px_var(--hard-shadow-color)]  rounded-md
         backdrop-blur-sm break-words
         whitespace-pre-line text-left ${width} ${color}
         ${isTextCopiable ? 'cursor-copy active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all' : ''}

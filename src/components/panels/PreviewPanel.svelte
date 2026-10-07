@@ -50,10 +50,6 @@
     }
   }
 
-  function forwardFileLoadedEvent(e: CustomEvent) {
-    dispatch('viewerMessage', e.detail);
-  }
-
   function openRecognitionIgnoreEditor(e: CustomEvent<{pageNum: number}>) {
     dispatch('openRecognitionIgnore', e.detail);
   }
@@ -61,7 +57,7 @@
 
 <div class="flex flex-col w-full lg:w-[70%] lg:sticky lg:top-5 lg:self-start">
   <div
-    class="relative h-fit pb-4 min-h-[85vh] border-black border-2 rounded-lg bg-white shadow-[2px_2px_0px_rgba(0,0,0,1)]"
+    class="relative h-fit pb-4 min-h-[85vh] border-black border-2 rounded-lg bg-white shadow-[2px_2px_0px_var(--hard-shadow-color)]"
   >
     {#if isFileLoading}
       <div
@@ -102,7 +98,6 @@
           {activeRangeIndex}
           on:updateActiveRange
           on:openRecognitionIgnore={openRecognitionIgnoreEditor}
-          on:fileloaded={forwardFileLoadedEvent}
           {jumpToTocPage}
           {addPhysicalTocPage}
           {currentTocPath}

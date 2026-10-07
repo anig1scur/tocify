@@ -45,7 +45,7 @@
   const fieldLabelTextClass = 'truncate';
 </script>
 
-<div class="border-black border-2 rounded-lg p-2 shadow-[2px_2px_0px_rgba(0,0,0,1)] bg-white sm:p-3">
+<div class="border-black border-2 rounded-lg p-2 shadow-[2px_2px_0px_var(--hard-shadow-color)] bg-white sm:p-3">
   <div class="grid gap-2 sm:gap-3">
     <div class="grid grid-cols-2 gap-2 sm:gap-3">
       <label class="block min-w-0">
@@ -115,7 +115,7 @@
           </Tooltip>
         </span>
         <select
-          class={fieldControlClass}
+          class="form-select mt-1 h-9 w-full sm:h-11"
           value={modelSize}
           on:input={(event) =>
             onRuntimeSettingChange({
@@ -138,7 +138,7 @@
           </Tooltip>
         </span>
         <select
-          class={fieldControlClass}
+          class="form-select mt-1 h-9 w-full sm:h-11"
           value={resolutionQuality}
           on:input={(event) =>
             onRuntimeSettingChange({
@@ -201,7 +201,7 @@
 <div class="relative my-2">
   <button
     type="button"
-    class="btn w-full font-bold transition-all duration-300 text-black border-2 border-black rounded-lg px-3 py-2 shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0 {isBusy ? 'pr-12' : ''} {(isRunning || isInitializing || isCancelling || !isRunDisabled) ? 'bg-blue-400' : 'bg-gray-300'}"
+    class="btn w-full font-bold transition-all duration-300 text-black border-2 border-black rounded-lg px-3 py-2 shadow-[2px_2px_0px_var(--hard-shadow-color)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0 {isBusy ? 'pr-12' : ''} {(isRunning || isInitializing || isCancelling || !isRunDisabled) ? 'bg-blue-400' : 'bg-gray-300'}"
     on:click={onRun}
     disabled={isRunDisabled}
   >

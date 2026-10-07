@@ -14,7 +14,7 @@
 
 <div class="flex flex-col md:flex-row md:justify-end gap-3 md:gap-2 pt-4 relative z-10 mx-3 md:mr-3 md:mx-0">
   <button
-    class="btn flex gap-2 items-center justify-center font-bold bg-white text-black border-2 border-black rounded-lg px-4 py-2 shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all disabled:bg-gray-300 disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0 w-full md:w-auto"
+    class="btn flex gap-2 items-center justify-center font-bold bg-white text-black border-2 border-black rounded-lg px-4 py-2 shadow-[2px_2px_0px_var(--hard-shadow-color)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all disabled:bg-gray-300 disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0 w-full md:w-auto"
     on:click={() => dispatch('triggerUpload')}
     title={$t('tooltip.upload_new')}
     in:fly={{y: 10, duration: 250, delay: 0}}
@@ -23,7 +23,7 @@
     {$t('btn.upload_new')}
   </button>
   <button
-    class="btn flex gap-2 items-center justify-center font-bold bg-yellow-400 text-black border-2 border-black rounded-lg px-4 py-2 shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all disabled:bg-gray-300 disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0 w-full md:w-auto"
+    class="btn flex gap-2 items-center justify-center font-bold bg-yellow-400 text-black border-2 border-black rounded-lg px-4 py-2 shadow-[2px_2px_0px_var(--hard-shadow-color)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all disabled:bg-gray-300 disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0 w-full md:w-auto"
     on:click={() => dispatch('togglePreview')}
     disabled={!originalPdfInstance || isPreviewLoading}
     title={isPreviewMode
@@ -54,7 +54,7 @@
     in:fly={{y: 10, duration: 250, delay: 200}}
   >
     <button
-      class="btn flex-1 md:flex-none flex gap-2 items-center justify-center font-bold bg-green-500 text-black border-2 border-black rounded-l-lg px-4 py-2 shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all disabled:bg-gray-300 disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0"
+      class="btn flex-1 md:flex-none flex gap-2 items-center justify-center font-bold bg-green-500 text-black border-2 border-black rounded-l-lg px-4 py-2 shadow-[2px_2px_0px_var(--hard-shadow-color)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all disabled:bg-gray-300 disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0"
       on:click={() => dispatch('export')}
       disabled={!doc}
       title={$t('tooltip.export_pdf')}
@@ -63,7 +63,7 @@
       {$t('btn.generate_pdf')}
     </button>
     <button
-      class="btn flex items-center justify-center font-bold bg-green-500 text-black border-y-2 border-r-2 border-black rounded-r-lg px-2.5 py-2 shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all disabled:bg-gray-300 disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0"
+      class="btn flex items-center justify-center font-bold bg-green-500 text-black border-y-2 border-r-2 border-black rounded-r-lg px-2.5 py-2 shadow-[2px_2px_0px_var(--hard-shadow-color)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all disabled:bg-gray-300 disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0"
       on:click={() => dispatch('openChapterExport')}
       disabled={!doc}
       title={$t('tooltip.export_chapters')}

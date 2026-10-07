@@ -93,7 +93,7 @@
         <div class="flex-1 min-w-[120px]">
           <label class="text-xs text-gray-500 block mb-1">{$t('settings.style')}</label>
           <select
-            class="w-full h-8 text-sm border-2 border-gray-300 rounded px-2 bg-transparent focus:outline-none focus:ring-2 focus:ring-black/20"
+            class="form-select w-full h-8"
             value={seg.style}
             on:change={(e) =>
               updateSegment(i, { style: (e.target as HTMLSelectElement).value as PageLabelStyle })}

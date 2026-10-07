@@ -282,41 +282,44 @@
       <div
         class="flex items-center gap-1 flex-1 min-w-0 h-full"
       >
-        <div
-          data-drag-handle
-          class="cursor-grab active:cursor-grabbing rounded-md p-0.5 transition-opacity opacity-100 md:opacity-0 md:group-hover:opacity-100 text-gray-400"
-          on:mousedown={enableDrag}
-          on:touchstart={enableDrag}
-        >
-          <GripVertical size={12} />
-        </div>
-        <button
-          type="button"
-          on:click|stopPropagation
-          on:mousedown={handleSelectionDotMouseDown}
-          class="relative -left-0.5 w-3 h-3 rounded-full border-2 flex-shrink-0 transition-all duration-150 {isSelected ? 'bg-amber-400 border-amber-500 scale-100' : 'border-gray-400 scale-90 opacity-0 group-hover:opacity-60 hover:!opacity-100 hover:!scale-100 hover:!border-amber-400'}"
-          title={$t('toc.select_item')}
-          aria-label={$t('toc.select_item')}
-        ></button>
-
-        <button
-          on:click|stopPropagation={handleToggle}
-          class="hover:bg-gray-200 rounded-md text-gray-500 ml-[-4px]"
-          class:invisible={!item.children || item.children.length === 0}
-          title={$t('settings.toggle_expand')}
-        >
-          {#if item.open}
-            <ChevronDown size={16} />
-          {:else}
-            <ChevronRight size={16} />
+        <div class="toc-item-gutter flex w-12 shrink-0 flex-col items-center justify-center">
+          {#if $tocConfig.prefixSettings.enabled}
+            <span class="toc-item-number max-w-full truncate text-[10px] leading-3 text-gray-600 font-mono select-none" title={currentNumber} dir="rtl">
+              <bdi dir="ltr">{currentNumber}</bdi>
+            </span>
           {/if}
-        </button>
+          <div class="flex items-center gap-1">
+            <div
+              data-drag-handle
+              class="cursor-grab active:cursor-grabbing rounded-md p-0.5 transition-opacity opacity-100 md:opacity-0 md:group-hover:opacity-100 text-gray-400"
+              on:mousedown={enableDrag}
+              on:touchstart={enableDrag}
+            >
+              <GripVertical size={12} />
+            </div>
+            <button
+              type="button"
+              on:click|stopPropagation
+              on:mousedown={handleSelectionDotMouseDown}
+              class="relative -left-0.5 w-3 h-3 rounded-full border-2 flex-shrink-0 transition-all duration-150 {isSelected ? 'bg-amber-400 border-amber-500 scale-100' : 'border-gray-400 scale-90 opacity-0 group-hover:opacity-60 hover:!opacity-100 hover:!scale-100 hover:!border-amber-400'}"
+              title={$t('toc.select_item')}
+              aria-label={$t('toc.select_item')}
+            ></button>
 
-        {#if $tocConfig.prefixSettings.enabled}
-          <span class="text-xs text-gray-600 font-mono select-none pr-1">
-            {currentNumber}
-          </span>
-        {/if}
+            <button
+              on:click|stopPropagation={handleToggle}
+              class="hover:bg-gray-200 rounded-md text-gray-500 ml-[-4px]"
+              class:invisible={!item.children || item.children.length === 0}
+              title={$t('settings.toggle_expand')}
+            >
+              {#if item.open}
+                <ChevronDown size={16} />
+              {:else}
+                <ChevronRight size={16} />
+              {/if}
+            </button>
+          </div>
+        </div>
 
         <div class="relative flex-1 min-w-[100px]">
           {#if shouldHighlightTitle}
@@ -345,7 +348,7 @@
             on:keydown={handleTitleKeydown}
             on:keypress={(e) => e.key === 'Enter' && (e.target as HTMLElement).blur()}
             placeholder={prefix === '' ? $t('toc.new_chapter_default') : ($t('toc.new_item_default') || 'New Item')}
-            class="toc-item-title relative w-full bg-transparent border-2 border-black rounded px-2 py-1 text-sm myfocus focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-gray-400 {shouldHighlightTitle ? 'text-transparent caret-black' : ''}"
+            class="toc-editor-field toc-item-title relative w-full bg-transparent border-2 border-black rounded px-2 py-1 text-sm myfocus focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-gray-400 {shouldHighlightTitle ? 'text-transparent caret-black' : ''}"
           />
         </div>
       </div>
@@ -361,7 +364,7 @@
           handleUpdatePage();
         }}
         on:keypress={(e) => e.key === 'Enter' && (e.target as HTMLElement).blur()}
-        class="w-14 border-2 border-black rounded ml-1 pl-1.5 py-1 text-sm myfocus focus:outline-none focus:ring-2 focus:ring-blue-500"
+        class="toc-editor-field w-14 border-2 border-black rounded ml-1 pl-1.5 py-1 text-sm myfocus focus:outline-none focus:ring-2 focus:ring-blue-500"
       />
 
       <div class="flex">
