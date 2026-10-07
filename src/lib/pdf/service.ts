@@ -184,9 +184,10 @@ export class PDFService {
     }
   }
 
-  async initPreview(sourceDoc: PDFDocument) {
+  async initPreview(sourceDoc: PDFDocument, isCurrent = () => true) {
     if (!this.worker) return;
     const bytes = await sourceDoc.save();
+    if (!isCurrent()) return;
     await this.postWorkerMessage('INIT', { pdfBytes: bytes });
     await this.loadFonts('huiwen');
   }

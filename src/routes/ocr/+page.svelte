@@ -21,6 +21,7 @@
   import HelpModal from '../../components/modals/HelpModal.svelte';
   import { buildSearchablePdf, normalizeSearchableOcr } from '$lib/pdf/searchable';
   import { workspacePdfFiles } from '$lib/pdf/workspace-files';
+  import {renderQueue, isRenderCancelled} from '$lib/pdf/render-queue';
   import { isLegacyBrowser } from '$lib/utils';
   import OcrControls from './OcrControls.svelte';
   import OcrPdfPreview from './OcrPdfPreview.svelte';
@@ -140,6 +141,9 @@
   let previewRenderKey = '';
   let previewRenderedKey = '';
   let isPreviewRendering = false;
+  let previewRenderController: AbortController | null = null;
+  let previewRenderSequence = 0;
+  let previewRenderFrame = 0;
   let previewScrollContainer: HTMLDivElement | null = null;
   let previewLocateSequence = 0;
   let previewEditingLineIndex: number | null = null;
@@ -236,10 +240,10 @@
     void scrollSelectedOcrTreeItem();
   }
   $: if (pdfInstance && selectedPageNumber && previewCanvas && previewWrapWidth && previewWrapHeight) {
-    const nextPreviewRenderKey = `${selectedPageNumber}:${previewWrapWidth}:${previewWrapHeight}:${previewScale}:${selectedPageData?.imageWidth ?? 0}:${selectedPageData?.imageHeight ?? 0}`;
+    const nextPreviewRenderKey = `${renderQueue.getCacheKey('ocr-preview', pdfInstance)}:${selectedPageNumber}:${previewWrapWidth}:${previewWrapHeight}:${previewScale}:${selectedPageData?.imageWidth ?? 0}:${selectedPageData?.imageHeight ?? 0}`;
     if (nextPreviewRenderKey !== previewRenderKey) {
       previewRenderKey = nextPreviewRenderKey;
-      void renderPreviewPage();
+      schedulePreviewRender();
     }
   }
   $: ocrProgressPercent = ocrProgress
@@ -337,6 +341,7 @@
 
   onDestroy(() => {
     isViewActive = false;
+    cancelPreviewRender();
     saveOcrViewCache();
   });
 
@@ -696,6 +701,7 @@
       }
 
       if (pdfInstance) {
+        renderQueue.clearDocument(pdfInstance);
         await pdfInstance.destroy().catch(() => undefined);
       }
 
@@ -1561,6 +1567,9 @@
   }
 
   function resetPreviewViewForDocument() {
+    cancelPreviewRender();
+    previewRenderKey = '';
+    previewRenderedKey = '';
     resetPreviewZoom();
     previewLocateSequence += 1;
     previewEditingLineIndex = null;
@@ -1576,15 +1585,37 @@
     }
   }
 
+  function cancelPreviewRender() {
+    previewRenderSequence++;
+    previewRenderController?.abort();
+    previewRenderController = null;
+    if (previewRenderFrame) cancelAnimationFrame(previewRenderFrame);
+    previewRenderFrame = 0;
+  }
+
+  function schedulePreviewRender() {
+    cancelPreviewRender();
+    previewRenderFrame = requestAnimationFrame(() => {
+      previewRenderFrame = 0;
+      void renderPreviewPage();
+    });
+  }
+
   async function renderPreviewPage() {
     if (!pdfInstance || !previewCanvas) return;
     const requestedPage = selectedPageNumber;
     const requestedRenderKey = previewRenderKey;
+    const instance = pdfInstance;
+    const canvas = previewCanvas;
+    const sequence = previewRenderSequence;
+    const controller = new AbortController();
+    previewRenderController = controller;
     isPreviewRendering = true;
 
     try {
       await tick();
-      const page = await pdfInstance.getPage(requestedPage);
+      const page = await instance.getPage(requestedPage);
+      if (controller.signal.aborted || sequence !== previewRenderSequence) return;
       const baseViewport = page.getViewport({ scale: 1 });
       const baseFitScale = Math.min(
         Math.max(0.1, (previewWrapWidth - 40) / baseViewport.width),
@@ -1592,35 +1623,29 @@
       );
       const viewport = page.getViewport({ scale: previewScale * baseFitScale });
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      const offscreenCanvas = document.createElement('canvas');
-      offscreenCanvas.width = Math.floor(viewport.width * dpr);
-      offscreenCanvas.height = Math.floor(viewport.height * dpr);
-
-      const context = offscreenCanvas.getContext('2d', { alpha: false });
-      if (!context) throw new Error('Could not create canvas context for OCR preview.');
-
-      const renderTask = page.render({
-        canvasContext: context,
-        viewport,
-        transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined,
+      const bitmap = await renderQueue.enqueue(`orig-${requestedPage}`, instance, requestedPage, 0, {
+        scale: previewScale * baseFitScale * dpr,
+        signal: controller.signal,
       });
-      await renderTask.promise.then(() => page.cleanup()).catch(() => page.cleanup());
 
-      if (requestedRenderKey !== previewRenderKey || requestedPage !== selectedPageNumber || !previewCanvas) return;
+      if (controller.signal.aborted || sequence !== previewRenderSequence || requestedRenderKey !== previewRenderKey || instance !== pdfInstance || canvas !== previewCanvas || !canvas.isConnected) return;
 
-      const visibleContext = previewCanvas.getContext('2d', { alpha: false });
+      const visibleContext = canvas.getContext('2d', { alpha: false });
       if (!visibleContext) throw new Error('Could not create canvas context for OCR preview.');
 
-      previewCanvas.width = offscreenCanvas.width;
-      previewCanvas.height = offscreenCanvas.height;
+      canvas.width = bitmap.width;
+      canvas.height = bitmap.height;
       previewDisplayWidth = Math.floor(viewport.width);
       previewDisplayHeight = Math.floor(viewport.height);
       previewCanvas.style.width = `${previewDisplayWidth}px`;
       previewCanvas.style.height = `${previewDisplayHeight}px`;
-      visibleContext.drawImage(offscreenCanvas, 0, 0);
+      visibleContext.drawImage(bitmap, 0, 0);
+      canvas.dataset.renderKey = renderQueue.getCacheKey(`orig-${requestedPage}`, instance, previewScale * baseFitScale * dpr);
       previewRenderedKey = requestedRenderKey;
+    } catch (error) {
+      if (!isRenderCancelled(error)) console.error('OCR preview render error:', error);
     } finally {
-      if (requestedRenderKey === previewRenderKey) {
+      if (sequence === previewRenderSequence && requestedRenderKey === previewRenderKey) {
         isPreviewRendering = false;
       }
     }

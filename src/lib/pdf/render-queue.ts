@@ -1,152 +1,228 @@
-export type RenderTask = {
-  id: string;
-  pdfInstance: any;
-  pageNum: number;
-  priority: number;
-  resolve: (bitmap: ImageBitmap | HTMLCanvasElement) => void;
-  reject: (err: any) => void;
+import type {PDFDocumentProxy, RenderTask as PdfRenderTask} from 'pdfjs-dist';
+
+export type PageBitmap = ImageBitmap | HTMLCanvasElement;
+export type RenderOptions = {scale?: number; signal?: AbortSignal};
+
+type Subscriber = {
+  resolve: (bitmap: PageBitmap) => void;
+  reject: (error: unknown) => void;
+  signal?: AbortSignal;
+  onAbort?: () => void;
 };
 
+type RenderJob = {
+  key: string;
+  pdfInstance: PDFDocumentProxy;
+  pageNum: number;
+  scale: number;
+  priority: number;
+  generation: number;
+  cancelled: boolean;
+  renderTask?: PdfRenderTask;
+  subscribers: Set<Subscriber>;
+};
+
+export function isRenderCancelled(error: unknown): boolean {
+  return error instanceof Error && (error.name === 'AbortError' || error.name === 'RenderingCancelledException');
+}
+
 export class RenderQueue {
-  private queue: RenderTask[] = [];
+  private queue: RenderJob[] = [];
+  private pending = new Map<string, RenderJob>();
   private activeCount = 0;
-  private maxConcurrency = 6;
-  private STANDARD_RENDER_SCALE = 1.5;
-  private maxCacheItems = 80;
-  private cache = new Map<string, ImageBitmap | HTMLCanvasElement>();
+  private maxConcurrency = 3;
+  private maxCacheBytes = 64 * 1024 * 1024;
+  private maxPagePixels = 8 * 1024 * 1024;
+  private cacheBytes = 0;
+  private generation = 0;
+  private documentIds = new WeakMap<object, number>();
+  private nextDocumentId = 1;
+  private cache = new Map<string, PageBitmap>();
 
-  getCached(id: string): ImageBitmap | HTMLCanvasElement | undefined {
-    const cached = this.cache.get(id);
+  private getDocumentId(pdfInstance: PDFDocumentProxy): number {
+    let id = this.documentIds.get(pdfInstance);
+    if (!id) {
+      id = this.nextDocumentId++;
+      this.documentIds.set(pdfInstance, id);
+    }
+    return id;
+  }
+
+  private normalizeScale(scale = 1.5): number {
+    return Math.max(0.05, Math.round((Number.isFinite(scale) ? scale : 1.5) * 1000) / 1000);
+  }
+
+  getCacheKey(id: string, pdfInstance: PDFDocumentProxy, scale = 1.5): string {
+    return `${this.getDocumentId(pdfInstance)}:${id}:${this.normalizeScale(scale)}`;
+  }
+
+  getCached(id: string, pdfInstance: PDFDocumentProxy, scale = 1.5): PageBitmap | undefined {
+    const key = this.getCacheKey(id, pdfInstance, scale);
+    const cached = this.cache.get(key);
     if (!cached) return undefined;
-
-    this.cache.delete(id);
-    this.cache.set(id, cached);
+    this.cache.delete(key);
+    this.cache.set(key, cached);
     return cached;
   }
 
   enqueue(
     id: string,
-    pdfInstance: any,
+    pdfInstance: PDFDocumentProxy,
     pageNum: number,
-    priority: number = 1
-  ): Promise<ImageBitmap | HTMLCanvasElement> {
-    const cached = this.getCached(id);
-    if (cached) {
-      return Promise.resolve(cached);
+    priority = 1,
+    {scale = 1.5, signal}: RenderOptions = {},
+  ): Promise<PageBitmap> {
+    if (signal?.aborted) return Promise.reject(this.cancelledError());
+    const cached = this.getCached(id, pdfInstance, scale);
+    if (cached) return Promise.resolve(cached);
+
+    const key = this.getCacheKey(id, pdfInstance, scale);
+    let job = this.pending.get(key);
+    if (!job) {
+      job = {key, pdfInstance, pageNum, scale: this.normalizeScale(scale), priority, generation: this.generation, cancelled: false, subscribers: new Set()};
+      this.pending.set(key, job);
+      this.queue.push(job);
+    } else {
+      job.priority = Math.min(job.priority, priority);
     }
+    const requestedJob = job;
 
-    return new Promise((resolve, reject) => {
-      const existing = this.queue.find((t) => t.id === id);
-      if (existing) {
-        if (priority < existing.priority) {
-          existing.priority = priority;
-          this.queue.sort((a, b) => a.priority - b.priority);
-        }
-
-        const oldResolve = existing.resolve;
-        const oldReject = existing.reject;
-        existing.resolve = (bmp) => {
-          oldResolve(bmp);
-          resolve(bmp);
-        };
-        existing.reject = (err) => {
-          oldReject(err);
-          reject(err);
-        };
-        return;
-      }
-
-      this.queue.push({ id, pdfInstance, pageNum, priority, resolve, reject });
-      this.queue.sort((a, b) => a.priority - b.priority);
-
-      this.processNext();
+    const promise = new Promise<PageBitmap>((resolve, reject) => {
+      const subscriber: Subscriber = {resolve, reject, signal};
+      subscriber.onAbort = () => {
+        this.detachSubscriber(requestedJob, subscriber);
+        reject(this.cancelledError());
+        if (!requestedJob.subscribers.size) this.cancelJob(requestedJob);
+      };
+      requestedJob.subscribers.add(subscriber);
+      signal?.addEventListener('abort', subscriber.onAbort, {once: true});
     });
+    this.queue.sort((a, b) => a.priority - b.priority);
+    this.processNext();
+    return promise;
   }
 
-  private async processNext() {
-    while (this.activeCount < this.maxConcurrency && this.queue.length > 0) {
-      const task = this.queue.shift()!;
-      this.processTask(task);
+  private cancelledError(): DOMException {
+    return new DOMException('PDF render cancelled', 'AbortError');
+  }
+
+  private detachSubscriber(job: RenderJob, subscriber: Subscriber) {
+    if (subscriber.onAbort) subscriber.signal?.removeEventListener('abort', subscriber.onAbort);
+    job.subscribers.delete(subscriber);
+  }
+
+  private settleJob(job: RenderJob, bitmap?: PageBitmap, error?: unknown) {
+    for (const subscriber of [...job.subscribers]) {
+      this.detachSubscriber(job, subscriber);
+      if (bitmap) subscriber.resolve(bitmap);
+      else subscriber.reject(error);
     }
   }
 
-  private async processTask(task: RenderTask) {
-    const cached = this.getCached(task.id);
-    if (cached) {
-      task.resolve(cached);
-      this.processNext();
-      return;
+  private cancelJob(job: RenderJob) {
+    job.cancelled = true;
+    this.queue = this.queue.filter((entry) => entry !== job);
+    if (this.pending.get(job.key) === job) this.pending.delete(job.key);
+    job.renderTask?.cancel();
+    this.settleJob(job, undefined, this.cancelledError());
+  }
+
+  private processNext() {
+    while (this.activeCount < this.maxConcurrency && this.queue.length) {
+      const job = this.queue.shift()!;
+      this.activeCount++;
+      void this.processJob(job);
     }
+  }
 
-    this.activeCount++;
-
+  private async processJob(job: RenderJob) {
+    let canvas: HTMLCanvasElement | OffscreenCanvas | undefined;
+    let bitmap: PageBitmap | undefined;
     try {
-      const page = await task.pdfInstance.getPage(task.pageNum);
-
+      const page = await job.pdfInstance.getPage(job.pageNum);
       try {
-        const viewport = page.getViewport({ scale: this.STANDARD_RENDER_SCALE });
-
-        let canvas: HTMLCanvasElement | OffscreenCanvas;
-        if (typeof OffscreenCanvas !== 'undefined') {
-          canvas = new OffscreenCanvas(viewport.width, viewport.height);
+        if (job.cancelled || job.generation !== this.generation) throw this.cancelledError();
+        let viewport = page.getViewport({scale: job.scale});
+        if (viewport.width * viewport.height > this.maxPagePixels) {
+          viewport = page.getViewport({scale: job.scale * Math.sqrt(this.maxPagePixels / (viewport.width * viewport.height))});
+        }
+        const width = Math.max(1, Math.floor(viewport.width));
+        const height = Math.max(1, Math.floor(viewport.height));
+        if (typeof OffscreenCanvas !== 'undefined' && typeof createImageBitmap !== 'undefined') {
+          canvas = new OffscreenCanvas(width, height);
         } else {
           canvas = document.createElement('canvas');
-          canvas.width = viewport.width;
-          canvas.height = viewport.height;
+          canvas.width = width;
+          canvas.height = height;
         }
-
-        const ctx = canvas.getContext('2d', { alpha: false });
-        if (!ctx) throw new Error('Could not create canvas context');
-
-        await page.render({
-          canvasContext: ctx,
-          viewport: viewport,
-        }).promise;
-
-        let result: ImageBitmap | HTMLCanvasElement;
-        if (typeof createImageBitmap !== 'undefined') {
-          result = await createImageBitmap(canvas);
-        } else {
-          result = canvas as HTMLCanvasElement;
-        }
-
-        this.cache.set(task.id, result);
+        const context = canvas.getContext('2d', {alpha: false});
+        if (!context) throw new Error('Could not create canvas context');
+        job.renderTask = page.render({canvasContext: context as CanvasRenderingContext2D, viewport});
+        await job.renderTask.promise;
+        if (job.cancelled || job.generation !== this.generation) throw this.cancelledError();
+        bitmap = typeof createImageBitmap !== 'undefined' ? await createImageBitmap(canvas) : canvas as HTMLCanvasElement;
+        if (job.cancelled || job.generation !== this.generation) throw this.cancelledError();
+        this.cache.set(job.key, bitmap);
+        this.cacheBytes += bitmap.width * bitmap.height * 4;
         this.trimCache();
-        task.resolve(result);
+        this.settleJob(job, bitmap);
       } finally {
         page.cleanup();
       }
-    } catch (e: any) {
-      if (e?.name !== 'RenderingCancelledException') {
-        console.error(`RenderQueue Error (Page ${ task.pageNum }):`, e);
-      }
-      task.reject(e);
+    } catch (error) {
+      if (bitmap) this.disposeBitmap(bitmap);
+      this.settleJob(job, undefined, error);
     } finally {
+      if (canvas && canvas !== bitmap) {
+        canvas.width = 1;
+        canvas.height = 1;
+      }
+      if (this.pending.get(job.key) === job) this.pending.delete(job.key);
       this.activeCount--;
       this.processNext();
     }
   }
 
-  clear() {
-    this.queue = [];
-    for (const [_, value] of this.cache.entries()) {
-      if ('close' in value) {
-        (value as ImageBitmap).close();
-      }
+  clearDocument(pdfInstance: PDFDocumentProxy) {
+    for (const job of [...this.pending.values()]) {
+      if (job.pdfInstance === pdfInstance) this.cancelJob(job);
     }
-    this.cache.clear();
+    const prefix = `${this.getDocumentId(pdfInstance)}:`;
+    for (const key of [...this.cache.keys()]) {
+      if (key.startsWith(prefix)) this.removeCached(key);
+    }
+    this.processNext();
+  }
+
+  clear() {
+    this.generation++;
+    for (const job of [...this.pending.values()]) this.cancelJob(job);
+    for (const key of [...this.cache.keys()]) this.removeCached(key);
+  }
+
+  private disposeBitmap(bitmap: PageBitmap) {
+    if ('close' in bitmap) bitmap.close();
+    else {
+      bitmap.width = 1;
+      bitmap.height = 1;
+    }
+  }
+
+  private removeCached(key: string, deferRelease = false) {
+    const bitmap = this.cache.get(key);
+    if (!bitmap) return;
+    this.cacheBytes -= bitmap.width * bitmap.height * 4;
+    this.cache.delete(key);
+    // Let subscribers draw a just-resolved bitmap before another job evicts it.
+    if (deferRelease) setTimeout(() => this.disposeBitmap(bitmap), 0);
+    else this.disposeBitmap(bitmap);
   }
 
   private trimCache() {
-    while (this.cache.size > this.maxCacheItems) {
+    while (this.cacheBytes > this.maxCacheBytes && this.cache.size > 1) {
       const oldestKey = this.cache.keys().next().value;
-      if (!oldestKey) return;
-
-      const oldest = this.cache.get(oldestKey);
-      if (oldest && 'close' in oldest) {
-        (oldest as ImageBitmap).close();
-      }
-      this.cache.delete(oldestKey);
+      if (oldestKey === undefined) break;
+      this.removeCached(oldestKey, true);
     }
   }
 }

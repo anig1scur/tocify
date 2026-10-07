@@ -3,12 +3,11 @@
   import {ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCw, ListOrdered, Eraser} from 'lucide-svelte';
   import {t} from 'svelte-i18n';
 
-  import { pdfService, tocConfig } from '../stores';
-  import { type PDFService, type PDFState, type TocItem } from '$lib/pdf/service';
-  import { renderQueue } from '$lib/pdf/render-queue';
+  import { tocConfig } from '../stores';
+  import { type PDFState, type TocItem } from '$lib/pdf/service';
+  import { renderQueue, isRenderCancelled } from '$lib/pdf/render-queue';
   import { formatPageLabel } from '$lib/pdf/page-labels';
   import type {RecognitionIgnoreRegion} from '$lib/pdf/recognition-ignore';
-  import type { RenderTask } from 'pdfjs-dist';
 
   export let pdfState: PDFState;
   export let originalPdfInstance: any = null;
@@ -28,12 +27,18 @@
   const dispatch = createEventDispatcher();
 
   let gridPages: {pageNum: number; canvasId: string}[] = [];
-  let pdfServiceInstance: PDFService | null = null;
   let intersectionObserver: IntersectionObserver | null = null;
   let scrollContainer: HTMLElement;
   let canvasElement: HTMLCanvasElement;
 
   let canvasesToObserve: HTMLCanvasElement[] = [];
+  const visibleGridCanvases = new Set<HTMLCanvasElement>();
+  const gridRenderControllers = new WeakMap<HTMLCanvasElement, AbortController>();
+  let currentRenderController: AbortController | null = null;
+  let currentRenderToken = 0;
+  let currentRenderFrame = 0;
+  let readingRenderScale = 1.5;
+  let hoverPrefetchController: AbortController | null = null;
 
   let isSelecting = false;
   let selectionStartPage = 0;
@@ -57,15 +62,12 @@
     tocVersion++;
   }
 
-  const unsubscribePdfService = pdfService.subscribe((val) => (pdfServiceInstance = val));
-
-  function safeCancel(task: RenderTask | null | undefined) {
-    if (!task) return;
-    try {
-      task.cancel();
-    } catch (e) {
-      // Ignore cancellation errors
-    }
+  function cancelCurrentRender() {
+    currentRenderToken++;
+    currentRenderController?.abort();
+    currentRenderController = null;
+    if (currentRenderFrame) cancelAnimationFrame(currentRenderFrame);
+    currentRenderFrame = 0;
   }
 
   function cleanupObservers() {
@@ -74,6 +76,7 @@
       intersectionObserver = null;
     }
     stopAutoScroll();
+    for (const canvas of visibleGridCanvases) releaseGridCanvas(canvas);
     if (pressTimer) {
       clearTimeout(pressTimer);
       pressTimer = null;
@@ -81,7 +84,8 @@
   }
 
   onDestroy(() => {
-    unsubscribePdfService();
+    cancelCurrentRender();
+    hoverPrefetchController?.abort();
     cleanupObservers();
   });
 
@@ -129,8 +133,13 @@
   function repaintGridCanvasFromCache(canvas: HTMLCanvasElement, pageNum: number) {
     if (pageNum <= 0 || canvas.width === 0 || canvas.height === 0) return;
 
-    const bitmap = renderQueue.getCached(getPageId(pageNum));
-    if (!bitmap) return;
+    const {instance} = getVirtualPageInfo(pageNum);
+    if (!instance) return;
+    const bitmap = renderQueue.getCached(`thumb-${getPageId(pageNum)}`, instance, Number(canvas.dataset.renderScale));
+    if (!bitmap) {
+      void renderGridCanvas(canvas, pageNum, true);
+      return;
+    }
 
     const ctx = canvas.getContext('2d', { alpha: false });
     if (!ctx) return;
@@ -172,64 +181,80 @@
     cleanupObservers();
   }
 
+  function scheduleCurrentRender() {
+    cancelCurrentRender();
+    currentRenderFrame = requestAnimationFrame(() => {
+      currentRenderFrame = 0;
+      void renderCurrentPage();
+    });
+  }
+
   async function renderCurrentPage() {
-    if (!originalPdfInstance || !currentPage || !scale || !canvasElement) return;
-    
-    const pageId = getPageId(currentPage);
-    const { instance, localPageNum } = getVirtualPageInfo(currentPage);
+    if (!originalPdfInstance || !currentPage || !scale || !canvasElement || mode !== 'single') return;
+    const requestedPage = currentPage;
+    const requestedScale = scale;
+    const pageId = getPageId(requestedPage);
+    const {instance, localPageNum} = getVirtualPageInfo(requestedPage);
     if (!instance) return;
+    const canvas = canvasElement;
+    const token = currentRenderToken;
+    const controller = new AbortController();
+    currentRenderController = controller;
 
     try {
       const page = await instance.getPage(localPageNum);
-      const viewportOrig = page.getViewport({ scale: 1.0 });
-
-      // Calculate relative fit scale
-      let baseFitScale = 1.0;
-      if (containerWidth > 0 && containerHeight > 0) {
-        baseFitScale = Math.min((containerWidth - 40) / viewportOrig.width, (containerHeight - 40) / viewportOrig.height);
-      }
-      
-      const displayScale = scale * baseFitScale;
-      const viewport = page.getViewport({ scale: displayScale });
+      if (token !== currentRenderToken || controller.signal.aborted) return;
+      const baseViewport = page.getViewport({scale: 1});
+      const fitScale = Math.min(
+        Math.max(0.05, (containerWidth - 40) / baseViewport.width),
+        Math.max(0.05, (containerHeight - 40) / baseViewport.height),
+      );
+      const displayScale = requestedScale * fitScale;
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      const targetW = Math.floor(viewport.width * dpr);
-      const targetH = Math.floor(viewport.height * dpr);
+      const renderScale = displayScale * dpr;
+      const renderKey = renderQueue.getCacheKey(pageId, instance, renderScale);
+      readingRenderScale = renderScale;
+      canvas.style.width = `${Math.floor(baseViewport.width * displayScale)}px`;
+      canvas.style.height = `${Math.floor(baseViewport.height * displayScale)}px`;
+      if (lastPageId === renderKey) return;
 
-      // Simple Redundancy Check: if page and canvas size haven't changed, skip
-      if (lastPageId === pageId && canvasElement.width === targetW && canvasElement.height === targetH) {
-        page.cleanup();
-        return;
-      }
+      const bitmap = await renderQueue.enqueue(pageId, instance, localPageNum, 0, {
+        scale: renderScale,
+        signal: controller.signal,
+      });
+      if (token !== currentRenderToken || controller.signal.aborted || mode !== 'single' || canvas !== canvasElement || !canvas.isConnected) return;
+      const context = canvas.getContext('2d', {alpha: false});
+      if (!context) return;
+      canvas.width = bitmap.width;
+      canvas.height = bitmap.height;
+      context.drawImage(bitmap, 0, 0);
+      lastPageId = renderKey;
+      canvas.dataset.renderKey = renderKey;
 
-      const isNewPage = lastPageId !== pageId;
-      lastPageId = pageId;
-
-      const ctx = canvasElement.getContext('2d', { alpha: false });
-      if (ctx) {
-        canvasElement.width = targetW;
-        canvasElement.height = targetH;
-        canvasElement.style.width = `${Math.floor(viewport.width)}px`;
-        canvasElement.style.height = `${Math.floor(viewport.height)}px`;
-        if (isNewPage) {
-          ctx.fillStyle = 'white';
-          ctx.fillRect(0, 0, targetW, targetH);
+      if (requestedPage < activeTotalPages) {
+        const next = getVirtualPageInfo(requestedPage + 1);
+        if (next.instance) {
+          void renderQueue.enqueue(getPageId(requestedPage + 1), next.instance, next.localPageNum, 3, {
+            scale: renderScale,
+            signal: controller.signal,
+          }).catch((error) => {
+            if (!isRenderCancelled(error)) console.error('PDF prefetch error:', error);
+          });
         }
       }
-
-      const bitmap = await renderQueue.enqueue(pageId, instance, localPageNum, 0);
-      const ctxFinal = canvasElement.getContext('2d', { alpha: false });
-      if (!ctxFinal) return;
-
-      ctxFinal.clearRect(0, 0, targetW, targetH);
-      ctxFinal.drawImage(bitmap, 0, 0, targetW, targetH);
-      page.cleanup();
-    } catch (e: any) {
-      if (e?.name !== 'RenderingCancelledException') console.error('Rendering error:', e);
+    } catch (error) {
+      if (!isRenderCancelled(error)) console.error('Rendering error:', error);
     }
   }
 
-  $: if (mode === 'single' && originalPdfInstance && currentPage && scale && containerWidth && containerHeight && (tocPdfInstance || true)) {
-    renderCurrentPage();
+  $: if (mode === 'single' && originalPdfInstance && currentPage && scale && containerWidth && containerHeight && canvasElement) {
+    tocPdfInstance;
+    tocPageCount;
+    addPhysicalTocPage;
+    $tocConfig.insertAtPage;
+    scheduleCurrentRender();
+  } else {
+    cancelCurrentRender();
   }
 
   const goToNextPage = () => {
@@ -371,7 +396,14 @@
     const { instance, localPageNum } = getVirtualPageInfo(pageNum);
     if (!instance) return;
     const pageId = getPageId(pageNum);
-    renderQueue.enqueue(pageId, instance, localPageNum, 5);
+    hoverPrefetchController?.abort();
+    hoverPrefetchController = new AbortController();
+    void renderQueue.enqueue(pageId, instance, localPageNum, 5, {
+      scale: readingRenderScale,
+      signal: hoverPrefetchController.signal,
+    }).catch((error) => {
+      if (!isRenderCancelled(error)) console.error('PDF prefetch error:', error);
+    });
   }
 
   function handleMouseDown(pageNum: number) {
@@ -468,107 +500,109 @@
     selectionStartPage = 0;
   }
 
-  async function renderGridCanvas(canvas: HTMLCanvasElement, pageNum: number) {
-    if (pageNum <= 0 || !originalPdfInstance) return;
+  function releaseGridCanvas(canvas: HTMLCanvasElement) {
+    gridRenderControllers.get(canvas)?.abort();
+    gridRenderControllers.delete(canvas);
+    visibleGridCanvases.delete(canvas);
+    canvas.width = 1;
+    canvas.height = 1;
+    delete canvas.dataset.renderKey;
+  }
 
-    const { instance, localPageNum } = getVirtualPageInfo(pageNum);
-    if (!instance) return;
-
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const canvasWidth = canvas.clientWidth;
-    if (!canvasWidth) return;
-
-    const page = await instance.getPage(localPageNum);
+  async function renderGridCanvas(canvas: HTMLCanvasElement, pageNum: number, force = false) {
+    if (mode !== 'grid' || !visibleGridCanvases.has(canvas) || pageNum <= 0 || !originalPdfInstance) return;
+    const {instance, localPageNum} = getVirtualPageInfo(pageNum);
+    if (!instance || !canvas.clientWidth) return;
+    gridRenderControllers.get(canvas)?.abort();
+    const controller = new AbortController();
+    gridRenderControllers.set(canvas, controller);
 
     try {
-      const viewport = page.getViewport({ scale: 1.0 });
-      const scale = canvasWidth / viewport.width;
-      const pageId = getPageId(pageNum);
-      await renderQueue.enqueue(pageId, instance, localPageNum, 1);
-
-      canvas.width = Math.floor(viewport.width * scale * dpr);
-      canvas.height = Math.floor(viewport.height * scale * dpr);
-      canvas.style.width = `${canvasWidth}px`;
-      canvas.style.height = 'auto';
-
-      repaintGridCanvasFromCache(canvas, pageNum);
-    } finally {
-      page.cleanup();
+      const page = await instance.getPage(localPageNum);
+      if (controller.signal.aborted) return;
+      const viewport = page.getViewport({scale: 1});
+      canvas.style.aspectRatio = `${viewport.width} / ${viewport.height}`;
+      const renderScale = canvas.clientWidth * Math.min(window.devicePixelRatio || 1, 2) / viewport.width;
+      const id = `thumb-${getPageId(pageNum)}`;
+      const renderKey = renderQueue.getCacheKey(id, instance, renderScale);
+      if (!force && canvas.dataset.renderKey === renderKey) return;
+      const bitmap = await renderQueue.enqueue(id, instance, localPageNum, 1, {scale: renderScale, signal: controller.signal});
+      if (controller.signal.aborted || mode !== 'grid' || !visibleGridCanvases.has(canvas) || !canvas.isConnected) return;
+      const context = canvas.getContext('2d', {alpha: false});
+      if (!context) return;
+      canvas.width = bitmap.width;
+      canvas.height = bitmap.height;
+      canvas.dataset.renderKey = renderKey;
+      canvas.dataset.renderScale = String(renderScale);
+      context.drawImage(bitmap, 0, 0);
+      drawIgnoreRegions(context, canvas, pageNum);
+    } catch (error) {
+      if (!isRenderCancelled(error)) console.error('PDF thumbnail error:', error);
     }
   }
 
   $: if (mode === 'grid' && scrollContainer && originalPdfInstance) {
     recognitionIgnoreRegions;
-    const canvases = Array.from(scrollContainer.querySelectorAll<HTMLCanvasElement>('canvas[data-page-num]'));
-    for (const canvas of canvases) {
-      if (canvas.width > 0) {
-        repaintGridCanvasFromCache(canvas, parseInt(canvas.dataset.pageNum || '0', 10));
-      }
+    for (const canvas of visibleGridCanvases) {
+      repaintGridCanvasFromCache(canvas, Number(canvas.dataset.pageNum));
     }
   }
 
-
   function observeViewport(node: HTMLElement) {
     scrollContainer = node;
-
-    if (intersectionObserver) intersectionObserver.disconnect();
-
-    intersectionObserver = new IntersectionObserver(
-      async (entries) => {
-        entries.forEach(async (entry) => {
-          if (entry.isIntersecting) {
-            const canvas = entry.target as HTMLCanvasElement;
-            const pageNum = parseInt(canvas.dataset.pageNum || '0', 10);
-
-            if (pageNum > 0 && originalPdfInstance) {
-              await renderGridCanvas(canvas, pageNum);
-
-              if (intersectionObserver) {
-                intersectionObserver.unobserve(canvas);
-              }
-            }
-          }
-        });
-      },
-      {
-        root: node,
-        rootMargin: '300px',
-      },
-    );
-
-    canvasesToObserve.forEach((canvas) => {
-      if (intersectionObserver) {
-        intersectionObserver.observe(canvas);
+    intersectionObserver?.disconnect();
+    const observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        const canvas = entry.target as HTMLCanvasElement;
+        if (entry.isIntersecting && mode === 'grid') {
+          visibleGridCanvases.add(canvas);
+          void renderGridCanvas(canvas, Number(canvas.dataset.pageNum));
+        } else {
+          releaseGridCanvas(canvas);
+        }
       }
-    });
+    }, {root: node, rootMargin: '160px'});
+    intersectionObserver = observer;
+    for (const canvas of canvasesToObserve) observer.observe(canvas);
     canvasesToObserve = [];
+
+    let lastWidth = node.clientWidth;
+    let resizeTimer: ReturnType<typeof setTimeout>;
+    const resizeObserver = new ResizeObserver(() => {
+      if (node.clientWidth === lastWidth) return;
+      lastWidth = node.clientWidth;
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        for (const canvas of visibleGridCanvases) void renderGridCanvas(canvas, Number(canvas.dataset.pageNum));
+      }, 80);
+    });
+    resizeObserver.observe(node);
 
     return {
       destroy() {
-        if (intersectionObserver) {
-          intersectionObserver.disconnect();
-          intersectionObserver = null;
-        }
+        clearTimeout(resizeTimer);
+        resizeObserver.disconnect();
+        observer.disconnect();
+        if (intersectionObserver === observer) intersectionObserver = null;
+        for (const canvas of visibleGridCanvases) releaseGridCanvas(canvas);
       },
     };
   }
 
   function lazyRender(canvas: HTMLCanvasElement, {pageNum}: {pageNum: number}) {
-    canvas.dataset.pageNum = pageNum.toString();
-
-    if (intersectionObserver) {
-      intersectionObserver.observe(canvas);
-    } else {
-      canvasesToObserve.push(canvas);
-    }
-
+    canvas.dataset.pageNum = String(pageNum);
+    canvas.width = 1;
+    canvas.height = 1;
+    canvas.style.aspectRatio = '595 / 842';
+    canvas.style.width = '100%';
+    canvas.style.height = 'auto';
+    if (intersectionObserver) intersectionObserver.observe(canvas);
+    else canvasesToObserve.push(canvas);
     return {
       destroy() {
-        if (intersectionObserver) {
-          intersectionObserver.unobserve(canvas);
-        } else {
-          canvasesToObserve = canvasesToObserve.filter((c) => c !== canvas);
-        }
+        intersectionObserver?.unobserve(canvas);
+        canvasesToObserve = canvasesToObserve.filter((entry) => entry !== canvas);
+        releaseGridCanvas(canvas);
       },
     };
   }
@@ -697,9 +731,9 @@
       </button>
 
       <div class="w-full h-full overflow-auto flex">
-        <div class="m-auto p-4 max-w-full">
+        <div class="m-auto p-4 min-w-max min-h-max">
           <canvas
-            class="max-w-full block"
+            class="block"
             bind:this={canvasElement}
           ></canvas>
         </div>

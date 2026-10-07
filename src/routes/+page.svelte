@@ -1,6 +1,12 @@
 <script context="module" lang="ts">
   let tocViewCache: any = null;
   let defaultPdfLoad: Promise<void> | null = null;
+  type TocPreparation = {
+    instance: import('pdfjs-dist').PDFDocumentProxy;
+    ready: Promise<void>;
+    pages: Promise<number[]>;
+  };
+  let tocPreparation: TocPreparation | null = null;
 </script>
 
 <script lang="ts">
@@ -28,7 +34,7 @@
     getMergedChapterFilename,
     mergeChapterRanges,
   } from '$lib/pdf/chapter-export';
-  import {renderQueue} from '../lib/pdf/render-queue';
+  import {renderQueue, isRenderCancelled} from '../lib/pdf/render-queue';
   import {setOutline} from '../lib/pdf/outliner';
   import {debounce} from '$lib';
   import {buildTree, convertPdfJsOutlineToTocItems, setNestedValue, findActiveTocPath, cleanTocItems} from '$lib/utils';
@@ -134,6 +140,7 @@
   let customApiConfig = createEmptyApiConfig();
   let tocEditor: any;
   let recognitionIgnoreEditor: any;
+  let offsetRenderController: AbortController | null = null;
 
   restoreTocViewCache();
 
@@ -216,14 +223,42 @@
 
   onDestroy(() => {
     isViewActive = false;
+    offsetRenderController?.abort();
     saveTocViewCache();
     unsubscribeTocItems();
   });
 
   onMount(() => {
     isViewActive = true;
-    void loadDefaultPdf();
+    void loadDefaultPdf().then(() => {
+      if (tocPreparation) void applyDetectedTocPages(tocPreparation);
+    });
   });
+
+  async function applyDetectedTocPages(preparation: TocPreparation) {
+    if (tocRanges.length !== 1 || tocRanges[0].id !== 'default') return;
+    const initialRanges = tocRanges;
+    const detected = await preparation.pages;
+    if (!isViewActive || tocPreparation !== preparation || originalPdfInstance !== preparation.instance || tocRanges !== initialRanges || !detected.length) return;
+    tocRanges = [{start: Math.min(...detected), end: Math.max(...detected), id: 'detected'}];
+    activeRangeIndex = 0;
+  }
+
+  function prepareTocInBackground() {
+    if (!$pdfService || !pdfState.doc || !originalPdfInstance) return;
+    const preparation: TocPreparation = {instance: originalPdfInstance, ready: Promise.resolve(), pages: Promise.resolve([])};
+    tocPreparation = preparation;
+    const service = $pdfService;
+    const doc = pdfState.doc;
+    preparation.ready = new Promise<void>((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0))).then(() => {
+      if (tocPreparation === preparation) return service.initPreview(doc, () => tocPreparation === preparation);
+    });
+    preparation.pages = preparation.ready.then(() => tocPreparation === preparation ? service.detectTocPages() : []).catch((error) => {
+      console.warn('PDF background preparation failed:', error);
+      return [];
+    });
+    void applyDetectedTocPages(preparation);
+  }
 
   async function loadDefaultPdf() {
     if (defaultPdfLoad) {
@@ -534,6 +569,7 @@
     }
 
     try {
+      if (addPhysicalTocPage && tocPreparation?.instance === originalPdfInstance) await tocPreparation.ready;
       const settings = config.prefixSettings;
       const tocItems_ = settings.enabled ? applyCustomPrefix($tocItems, settings.configs) : $tocItems;
 
@@ -613,6 +649,7 @@
 
         if (tocPdfInstance) {
           try {
+            renderQueue.clearDocument(tocPdfInstance);
             await tocPdfInstance.destroy();
           } catch (e) {
             console.warn('Error destroying old TOC instance:', e);
@@ -623,6 +660,7 @@
       } else {
         if (tocPdfInstance) {
           try {
+            renderQueue.clearDocument(tocPdfInstance);
             await tocPdfInstance.destroy();
           } catch (e) {}
         }
@@ -688,42 +726,44 @@
 
   const renderOffsetPreviewPage = async (pageNum: number) => {
     if (!originalPdfInstance || !showOffsetModal) return;
+    const canvas = document.getElementById('offset-preview-canvas') as HTMLCanvasElement | null;
+    if (!canvas) return;
+    offsetRenderController?.abort();
+    const controller = new AbortController();
+    offsetRenderController = controller;
+    const instance = originalPdfInstance;
 
-    const canvas = document.getElementById('offset-preview-canvas') as HTMLCanvasElement;
-    if (canvas) {
-      const pageId = `orig-${pageNum}`;
-      // Use premium priority (0) for modal preview
-      const bitmap = await renderQueue.enqueue(pageId, originalPdfInstance, pageNum, 0);
-
-      const ctx = canvas.getContext('2d', {alpha: false});
-      if (!ctx || !showOffsetModal) return;
-
+    try {
       const containerHeight = canvas.parentElement?.clientHeight || 0;
       const containerWidth = canvas.parentElement?.clientWidth || 0;
-
-      if (containerHeight === 0) {
+      if (!containerHeight) {
         setTimeout(() => renderOffsetPreviewPage(pageNum), 50);
         return;
       }
-
-      const aspectRatio = bitmap.width / bitmap.height;
-      const displayHeight = containerHeight;
-      const displayWidth = displayHeight * aspectRatio;
-
+      const page = await instance.getPage(pageNum);
+      if (controller.signal.aborted) return;
+      const viewport = page.getViewport({scale: 1});
+      const displayScale = Math.min(containerHeight / viewport.height, containerWidth > 0 ? containerWidth / viewport.width : Infinity);
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      canvas.width = Math.floor(displayWidth * dpr);
-      canvas.height = Math.floor(displayHeight * dpr);
-      canvas.style.width = `${Math.floor(displayWidth)}px`;
-      canvas.style.height = `${Math.floor(displayHeight)}px`;
-
-      ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      const bitmap = await renderQueue.enqueue(`orig-${pageNum}`, instance, pageNum, 0, {scale: displayScale * dpr, signal: controller.signal});
+      if (controller.signal.aborted || !showOffsetModal || instance !== originalPdfInstance || pageNum !== offsetPreviewPageNum || !canvas.isConnected) return;
+      const context = canvas.getContext('2d', {alpha: false});
+      if (!context) return;
+      canvas.width = bitmap.width;
+      canvas.height = bitmap.height;
+      canvas.style.width = `${Math.floor(viewport.width * displayScale)}px`;
+      canvas.style.height = `${Math.floor(viewport.height * displayScale)}px`;
+      context.drawImage(bitmap, 0, 0);
+    } catch (error) {
+      if (!isRenderCancelled(error)) console.error('Offset preview render error:', error);
     }
   };
 
   const loadPdfFile = async (file: File, {showLoadHint = true} = {}) => {
     if (!file) return;
 
-    renderQueue.clear();
+    tocPreparation = null;
+    offsetRenderController?.abort();
 
     const fingerprint = `${file.name}_${file.size}`;
     curFileFingerprint.set(fingerprint);
@@ -743,6 +783,7 @@
     await tick();
 
     if (originalPdfInstance) {
+      renderQueue.clearDocument(originalPdfInstance);
       try {
         await originalPdfInstance.destroy();
       } catch (e: any) {
@@ -750,6 +791,7 @@
       }
     }
     if (tocPdfInstance) {
+      renderQueue.clearDocument(tocPdfInstance);
       try {
         await tocPdfInstance.destroy();
       } catch (e: any) {
@@ -784,7 +826,6 @@
       if ($pdfService) {
         const initPage = config.insertAtPage || 2;
         lastInsertAtPage = initPage;
-        await $pdfService.initPreview(pdfState.doc);
 
         const firstPage = pdfState.doc.getPage(pdfState.doc.getPageCount() > 1 ? 1 : 0);
         const {width} = firstPage.getSize();
@@ -842,16 +883,7 @@
 
       lastPdfContentJson = JSON.stringify(getPdfEffectiveData($tocItems));
 
-      // auto detect TOC pages
-      if ($pdfService && originalPdfInstance) {
-        const detected = await $pdfService.detectTocPages();
-        if (detected.length > 0) {
-          const start = Math.min(...detected);
-          const end = Math.max(...detected);
-          tocRanges = [{start, end, id: 'detected'}];
-          activeRangeIndex = 0;
-        }
-      }
+      prepareTocInBackground();
       workspacePdfFiles.update((files) => ({...files, toc: file}));
       if (showLoadHint) {
         toastProps = {show: true, message: $t('msg.pdf_loaded'), type: 'success'};
