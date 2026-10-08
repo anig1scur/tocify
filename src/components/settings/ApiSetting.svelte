@@ -658,7 +658,7 @@
           </div>
         {/if}
 
-        <div class="api-settings-option">
+        <div class="api-settings-option api-settings-prompt">
           <div class="mb-1 flex items-center justify-between gap-2">
             <label
               class="block font-bold text-sm"
@@ -760,8 +760,12 @@
     padding: 14px 0;
   }
 
-  .api-settings-option + .api-settings-option {
+  .api-settings-option + .api-settings-option:not(.api-settings-prompt) {
     border-top: 1px solid #e5e7eb;
+  }
+
+  .api-settings-prompt {
+    padding-top: 8px;
   }
 
   .api-settings-input {

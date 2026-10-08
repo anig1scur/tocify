@@ -1019,7 +1019,7 @@
 
             {#if showTocSearch}
               <div class={selectedCount >= 1 ? 'px-2 pt-2 pb-2' : 'pt-2'}>
-                <div class="relative">
+                <div class="relative rounded {selectedCount >= 1 ? '' : 'bg-white/70 backdrop-blur-sm'}">
                   <Search size={15} aria-hidden="true" class="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
                   <input
                     type="text"
