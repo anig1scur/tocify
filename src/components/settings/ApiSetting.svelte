@@ -812,11 +812,7 @@
 <style>
   .api-settings-option {
     width: 100%;
-    padding: 14px 0;
-  }
-
-  .api-settings-option + .api-settings-option:not(.api-settings-prompt) {
-    border-top: 1px solid #e5e7eb;
+    padding: 6px 0;
   }
 
   .api-settings-prompt {
