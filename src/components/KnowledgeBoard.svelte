@@ -3,7 +3,7 @@
   import {t} from 'svelte-i18n';
   import rough from 'roughjs';
   import {generateBoardDirect} from '$lib/llm/client';
-  import {createEmptyApiConfig, requiresUserApiKeyForModel} from '$lib/llm/core';
+  import {createEmptyApiConfig, requiresUserApiKey} from '$lib/llm/core';
   import GraphNode from './GraphNode.svelte';
   import {
     Sparkles,
@@ -25,6 +25,7 @@
   export let onJumpToPage = (pageNumber) => {};
   export let onHide = () => {};
 
+  /** @type {{ nodes: Array<import('$lib/llm/core').GraphResponse['nodes'][number] & { x: number, y: number, bgColor: string }>, edges: import('$lib/llm/core').GraphResponse['edges'] }} */
   let graphData = {nodes: [], edges: []};
 
   $: {
@@ -71,8 +72,8 @@
   async function handleGenerateGraph() {
     if (items.length === 0) return;
 
-    if (requiresUserApiKeyForModel(apiConfig.provider, apiConfig.apiKey, apiConfig.modelOverrides)) {
-      alert($t('error.custom_model_needs_api_key'));
+    if (requiresUserApiKey(apiConfig.apiKey)) {
+      alert($t('error.needs_api_key'));
       return;
     }
 
@@ -86,31 +87,13 @@
     }));
 
     try {
-      const data = apiConfig.apiKey
-        ? await generateBoardDirect(simplifiedItems, {
-          apiKey: apiConfig.apiKey,
-          provider: apiConfig.provider,
-          customBaseUrl: apiConfig.customBaseUrl,
-          doubaoEndpointIdText: apiConfig.doubaoEndpointIdText,
-          modelOverrides: apiConfig.modelOverrides,
-        })
-        : await (async () => {
-          const response = await fetch('/api/generate-board', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-              tocItems: simplifiedItems,
-              apiKey: apiConfig.apiKey,
-              provider: apiConfig.provider,
-              customBaseUrl: apiConfig.customBaseUrl,
-              doubaoEndpointIdText: apiConfig.doubaoEndpointIdText,
-              modelOverrides: apiConfig.modelOverrides,
-            }),
-          });
-
-          if (!response.ok) throw new Error('API Failed');
-          return response.json();
-        })();
+      const data = await generateBoardDirect(simplifiedItems, {
+        apiKey: apiConfig.apiKey,
+        provider: apiConfig.provider,
+        customBaseUrl: apiConfig.customBaseUrl,
+        doubaoEndpointIdText: apiConfig.doubaoEndpointIdText,
+        modelOverrides: apiConfig.modelOverrides,
+      });
 
       let nodes = data.nodes.map((n) => ({
         ...n,
@@ -308,7 +291,7 @@
         const isActive = activeNodeId && (edge.source === activeNodeId || edge.target === activeNodeId);
         return {edge, src, tgt, idx, isActive};
       })
-      .filter(Boolean);
+      .filter((entry) => entry !== null);
 
     edgesToDraw.forEach(({edge, src, tgt, idx, isActive}) => {
       const parentGroup = isActive ? activeGroup : inactiveGroup;
@@ -555,8 +538,8 @@
       );
 
       const fo = document.createElementNS('http://www.w3.org/2000/svg', 'foreignObject');
-      fo.setAttribute('x', node.x);
-      fo.setAttribute('y', node.y);
+      fo.setAttribute('x', String(node.x));
+      fo.setAttribute('y', String(node.y));
       fo.setAttribute('width', CARD_W);
       fo.setAttribute('height', CARD_H);
 

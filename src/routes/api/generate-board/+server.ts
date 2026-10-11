@@ -1,8 +1,8 @@
-import { withRateLimit } from '$lib/server/ratelimit';
 import { generateBoardOnServer } from '$lib/llm/server';
 import { json } from '@sveltejs/kit';
+import type { RequestHandler } from './$types';
 
-export const POST = withRateLimit(async ({ request }) => {
+export const POST: RequestHandler = async ({ request }) => {
   try {
     const { tocItems, apiKey, provider, customBaseUrl, doubaoEndpointIdText, modelOverrides } = await request.json();
 
@@ -11,7 +11,6 @@ export const POST = withRateLimit(async ({ request }) => {
     }
 
     const graph = await generateBoardOnServer({
-      request,
       tocItems,
       apiKey,
       provider,
@@ -25,4 +24,4 @@ export const POST = withRateLimit(async ({ request }) => {
     console.error(error);
     return json({ error: error.message }, { status: error.status || 500 });
   }
-});
+};

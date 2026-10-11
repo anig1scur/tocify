@@ -1,7 +1,7 @@
 <script lang="ts">
   import {onDestroy, tick, createEventDispatcher} from 'svelte';
   import ShortUniqueId from 'short-unique-id';
-  import {createEmptyApiConfig, requiresUserApiKeyForModel} from '$lib/llm/core';
+  import {createEmptyApiConfig, requiresUserApiKey} from '$lib/llm/core';
   import {
     Sparkles,
     Loader2,
@@ -44,6 +44,7 @@
   let text = ``;
   let isUpdatingFromEditor = false;
   let isProcessing = false;
+  let aiFormatError = '';
   let debounceTimer: ReturnType<typeof setTimeout> | undefined = undefined;
   let batchOffsetInput = '';
   let showBatchOffsetEditor = false;
@@ -528,65 +529,37 @@
 
   async function handleAiFormat() {
     if (!text.trim()) return;
-
-    if (requiresUserApiKeyForModel(apiConfig.provider, apiConfig.apiKey, apiConfig.modelOverrides)) {
-      throw new Error($t('error.custom_model_needs_api_key'));
-    }
-
-    const MAX_TEXT_SIZE = 128 * 1024;
-    const byteSize = new TextEncoder().encode(text).length;
-
-    if (byteSize > MAX_TEXT_SIZE) {
-      throw new Error(`Text content is too large. Limit is 128KB.`);
-    }
-
-    isProcessing = true;
-    let aiResult;
+    aiFormatError = '';
 
     try {
-      if (apiConfig.apiKey) {
-        aiResult = await processTocDirect({
-          text,
-          apiKey: apiConfig.apiKey,
-          provider: apiConfig.provider,
-          customBaseUrl: apiConfig.customBaseUrl,
-          doubaoEndpointIdText: apiConfig.doubaoEndpointIdText,
-          doubaoEndpointIdVision: apiConfig.doubaoEndpointIdVision,
-          modelOverrides: apiConfig.modelOverrides,
-        });
-      } else {
-        const response = await fetch('/api/process-toc', {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({
-            text: text,
-            apiKey: apiConfig.apiKey,
-            provider: apiConfig.provider,
-            customBaseUrl: apiConfig.customBaseUrl,
-            doubaoEndpointIdText: apiConfig.doubaoEndpointIdText,
-            doubaoEndpointIdVision: apiConfig.doubaoEndpointIdVision,
-            modelOverrides: apiConfig.modelOverrides,
-          }),
-        });
-
-        if (!response.ok) {
-          const errData = await response.json().catch(() => ({}));
-          throw new Error(errData.message || 'AI processing failed');
-        }
-
-        aiResult = await response.json();
+      if (requiresUserApiKey(apiConfig.apiKey)) {
+        throw new Error($t('error.needs_api_key'));
       }
+
+      const MAX_TEXT_SIZE = 128 * 1024;
+      if (new TextEncoder().encode(text).length > MAX_TEXT_SIZE) {
+        throw new Error('Text content is too large. Limit is 128KB.');
+      }
+
+      isProcessing = true;
+      const aiResult = await processTocDirect({
+        text,
+        apiKey: apiConfig.apiKey,
+        provider: apiConfig.provider,
+        customBaseUrl: apiConfig.customBaseUrl,
+        doubaoEndpointIdText: apiConfig.doubaoEndpointIdText,
+        doubaoEndpointIdVision: apiConfig.doubaoEndpointIdVision,
+        modelOverrides: apiConfig.modelOverrides,
+      });
+
+      if (!Array.isArray(aiResult) || aiResult.length === 0) {
+        throw new Error('AI could not parse any ToC structure.');
+      }
+      dispatch('aiFormatResponse', { items: buildTree(aiResult) });
+    } catch (error) {
+      aiFormatError = error instanceof Error ? error.message : $t('error.ai_failed');
     } finally {
       isProcessing = false;
-    }
-
-    if (Array.isArray(aiResult) && aiResult.length > 0) {
-      const nestedItems = buildTree(aiResult);
-      dispatch('aiFormatResponse', {
-        items: nestedItems,
-      });
-    } else {
-      throw new Error('AI could not parse any ToC structure.');
     }
   }
 
@@ -914,6 +887,10 @@
       </div>
     {/if}
   </div>
+
+  {#if aiFormatError}
+    <p role="alert" class="text-xs text-red-700 break-words">{aiFormatError}</p>
+  {/if}
 
   <div class="md:-ml-12 -ml-6 group/toc-list pt-2 relative">
     {#if $tocItems.length > 0}

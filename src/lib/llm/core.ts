@@ -7,10 +7,11 @@ import {
   normalizeToc,
 } from '$lib/utils/toc';
 
-export type Provider = 'gemini' | 'qwen' | 'doubao' | 'zhipu' | 'custom';
+export type Provider = 'gemini' | 'qwen' | 'doubao' | 'zhipu' | 'deepseek' | 'custom';
 
 export interface ModelOverrides {
   geminiModel?: string;
+  deepseekModel?: string;
   qwenTextModel?: string;
   qwenVisionModel?: string;
   zhipuTextModel?: string;
@@ -20,19 +21,39 @@ export interface ModelOverrides {
   customModel?: string;
 }
 
-export const KNOWN_PROVIDER_MODELS: Record<'gemini' | 'qwen' | 'zhipu', { text: readonly string[]; vision: readonly string[] }> = {
+export const SUGGESTED_PROVIDER_MODELS: Record<'gemini' | 'qwen' | 'zhipu' | 'deepseek' | 'doubao', { text: readonly string[]; vision: readonly string[] }> = {
   gemini: {
-    text: ['gemini-2.5-flash'],
-    vision: ['gemini-2.5-flash'],
+    text: ['gemini-3.5-flash-lite', 'gemini-3.8-flash'],
+    vision: ['gemini-3.5-flash-lite', 'gemini-3.8-flash'],
   },
   qwen: {
-    text: ['qwen-plus'],
-    vision: ['qwen-vl-plus'],
+    text: ['qwen3.8-flash', 'qwen3.7-plus', 'qwen3.8-max'],
+    vision: ['qwen3.8-flash', 'qwen3.7-plus', 'qwen3.8-max'],
   },
   zhipu: {
-    text: ['glm-4-flash'],
-    vision: ['glm-4v-flash'],
+    text: ['glm-4.7-flash', 'glm-5.3-flash', 'glm-5.3-flashx', 'glm-5.3'],
+    vision: ['glm-4.6v-flash', 'glm-5.3-flash', 'glm-5.3-flashx'],
   },
+  deepseek: {
+    text: ['deepseek-flash'],
+    vision: ['deepseek-flash'],
+  },
+  doubao: {
+    text: ['doubao-seed-2-1-lite-260915'],
+    vision: ['doubao-seed-2-1-lite-260915'],
+  },
+} as const;
+
+export const DEFAULT_PROVIDER: Provider = 'gemini';
+export const DEFAULT_MODELS = {
+  geminiModel: SUGGESTED_PROVIDER_MODELS.gemini.text[0],
+  deepseekModel: SUGGESTED_PROVIDER_MODELS.deepseek.text[0],
+  doubaoTextModel: SUGGESTED_PROVIDER_MODELS.doubao.text[0],
+  doubaoVisionModel: SUGGESTED_PROVIDER_MODELS.doubao.vision[0],
+  qwenTextModel: SUGGESTED_PROVIDER_MODELS.qwen.text[0],
+  qwenVisionModel: SUGGESTED_PROVIDER_MODELS.qwen.vision[0],
+  zhipuTextModel: SUGGESTED_PROVIDER_MODELS.zhipu.text[0],
+  zhipuVisionModel: SUGGESTED_PROVIDER_MODELS.zhipu.vision[0],
 } as const;
 
 export const DEFAULT_VISION_PROMPT_TEMPLATE = SYSTEM_PROMPT_VISION.trim();
@@ -111,12 +132,13 @@ const MAX_CUSTOM_MODEL_LENGTH = 200;
 const MAX_API_KEY_LENGTH = 4096;
 
 export const DEFAULT_CUSTOM_BASE_URL = 'https://api.openai.com/v1';
-export const DEFAULT_CUSTOM_MODEL = 'gpt-5.4-mini';
+export const DEFAULT_CUSTOM_MODEL = 'gpt-6-luna';
 
 const OPENAI_COMPAT_BASE_URL: Record<BuiltInOpenAiCompatProvider, string> = {
   qwen: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
   zhipu: 'https://open.bigmodel.cn/api/paas/v4',
   doubao: 'https://ark.cn-beijing.volces.com/api/v3',
+  deepseek: 'https://api.deepseek.com',
 };
 
 function providerLabel(provider: Provider): string {
@@ -135,6 +157,7 @@ export function normalizeProvider(provider?: string): Provider | undefined {
     normalized === 'qwen' ||
     normalized === 'doubao' ||
     normalized === 'zhipu' ||
+    normalized === 'deepseek' ||
     normalized === 'custom'
   ) {
     return normalized;
@@ -267,11 +290,11 @@ export function normalizeCustomBaseUrl(baseUrl?: string): string {
   return url.toString().replace(/\/$/, '');
 }
 
-function normalizeApiKeyForRequest(apiKey: string): string {
-  const normalized = apiKey?.trim();
+export function normalizeApiKeyForRequest(apiKey: string): string {
+  const normalized = typeof apiKey === 'string' ? apiKey.trim() : '';
 
   if (!normalized) {
-    throw new Error('API Key is missing.');
+    throw new Error('Please add your own API key in API Settings to continue.');
   }
 
   if (normalized.length > MAX_API_KEY_LENGTH) {
@@ -329,71 +352,20 @@ export function validateCustomProviderConfig(config: {
   };
 }
 
-export function hasUnknownCustomModel(provider?: string, modelOverrides?: ModelOverrides): boolean {
-  const normalizedProvider = normalizeProvider(provider);
-  const sanitizedOverrides = normalizeModelOverrides(modelOverrides);
-
-  if (!normalizedProvider || normalizedProvider === 'doubao') {
-    return false;
-  }
-
-  if (normalizedProvider === 'custom') {
-    return true;
-  }
-
-  if (!sanitizedOverrides) {
-    return false;
-  }
-
-  switch (normalizedProvider) {
-    case 'gemini': {
-      const model = sanitizedOverrides.geminiModel;
-      return Boolean(model && !KNOWN_PROVIDER_MODELS.gemini.text.includes(model));
-    }
-    case 'qwen': {
-      const textModel = sanitizedOverrides.qwenTextModel;
-      const visionModel = sanitizedOverrides.qwenVisionModel;
-
-      if (textModel && visionModel && textModel === visionModel) {
-        return !KNOWN_PROVIDER_MODELS.qwen.text.includes(textModel)
-          && !KNOWN_PROVIDER_MODELS.qwen.vision.includes(textModel);
-      }
-
-      return Boolean(
-        (textModel && !KNOWN_PROVIDER_MODELS.qwen.text.includes(textModel)) ||
-        (visionModel && !KNOWN_PROVIDER_MODELS.qwen.vision.includes(visionModel))
-      );
-    }
-    case 'zhipu': {
-      const textModel = sanitizedOverrides.zhipuTextModel;
-      const visionModel = sanitizedOverrides.zhipuVisionModel;
-
-      if (textModel && visionModel && textModel === visionModel) {
-        return !KNOWN_PROVIDER_MODELS.zhipu.text.includes(textModel)
-          && !KNOWN_PROVIDER_MODELS.zhipu.vision.includes(textModel);
-      }
-
-      return Boolean(
-        (textModel && !KNOWN_PROVIDER_MODELS.zhipu.text.includes(textModel)) ||
-        (visionModel && !KNOWN_PROVIDER_MODELS.zhipu.vision.includes(visionModel))
-      );
-    }
-  }
-}
-
-export function requiresUserApiKeyForModel(provider?: string, apiKey?: string, modelOverrides?: ModelOverrides): boolean {
-  return !apiKey?.trim() && hasUnknownCustomModel(provider, modelOverrides);
+export function requiresUserApiKey(apiKey?: string): boolean {
+  return typeof apiKey !== 'string' || !apiKey.trim();
 }
 
 export function createEmptyApiConfig(): UiApiConfig {
   return {
-    provider: '',
+    provider: DEFAULT_PROVIDER,
     apiKey: '',
     customBaseUrl: DEFAULT_CUSTOM_BASE_URL,
     doubaoEndpointIdText: '',
     doubaoEndpointIdVision: '',
     modelOverrides: {
       geminiModel: '',
+      deepseekModel: '',
       qwenTextModel: '',
       qwenVisionModel: '',
       zhipuTextModel: '',
@@ -451,7 +423,7 @@ function normalizeImageUrl(image: string): string {
 }
 
 function getGeminiModel(config: DirectApiConfig): string {
-  return config.modelOverrides?.geminiModel || 'gemini-2.5-flash';
+  return config.modelOverrides?.geminiModel || DEFAULT_MODELS.geminiModel;
 }
 
 function getOpenAiCompatBaseUrl(provider: OpenAiCompatProvider, config: DirectApiConfig): string {
@@ -464,14 +436,14 @@ function getOpenAiCompatBaseUrl(provider: OpenAiCompatProvider, config: DirectAp
 
 function getOpenAiCompatTextModel(provider: OpenAiCompatProvider, config: DirectApiConfig): string {
   switch (provider) {
+    case 'deepseek':
+      return config.modelOverrides?.deepseekModel || DEFAULT_MODELS.deepseekModel;
     case 'qwen':
-      return config.modelOverrides?.qwenTextModel || 'qwen-plus';
+      return config.modelOverrides?.qwenTextModel || DEFAULT_MODELS.qwenTextModel;
     case 'zhipu':
-      return config.modelOverrides?.zhipuTextModel || 'glm-4-flash';
+      return config.modelOverrides?.zhipuTextModel || DEFAULT_MODELS.zhipuTextModel;
     case 'doubao':
-      return config.doubaoEndpointIdText || config.modelOverrides?.doubaoTextModel || (() => {
-        throw new Error('Doubao text Endpoint ID is required.');
-      })();
+      return config.doubaoEndpointIdText || config.modelOverrides?.doubaoTextModel || DEFAULT_MODELS.doubaoTextModel;
     case 'custom':
       return getCustomModel(config);
   }
@@ -479,14 +451,14 @@ function getOpenAiCompatTextModel(provider: OpenAiCompatProvider, config: Direct
 
 function getOpenAiCompatVisionModel(provider: OpenAiCompatProvider, config: DirectApiConfig): string {
   switch (provider) {
+    case 'deepseek':
+      return config.modelOverrides?.deepseekModel || DEFAULT_MODELS.deepseekModel;
     case 'qwen':
-      return config.modelOverrides?.qwenVisionModel || 'qwen-vl-plus';
+      return config.modelOverrides?.qwenVisionModel || DEFAULT_MODELS.qwenVisionModel;
     case 'zhipu':
-      return config.modelOverrides?.zhipuVisionModel || 'glm-4v-flash';
+      return config.modelOverrides?.zhipuVisionModel || DEFAULT_MODELS.zhipuVisionModel;
     case 'doubao':
-      return config.doubaoEndpointIdVision || config.modelOverrides?.doubaoVisionModel || (() => {
-        throw new Error('Doubao vision Endpoint ID is required.');
-      })();
+      return config.doubaoEndpointIdVision || config.modelOverrides?.doubaoVisionModel || DEFAULT_MODELS.doubaoVisionModel;
     case 'custom':
       return getCustomModel(config);
   }
@@ -536,11 +508,56 @@ async function fetchOpenAiCompatJson(
   });
 
   if (!response.ok) {
-    throw new Error(await parseErrorMessage(response, fallbackMessage));
+    const message = await parseErrorMessage(response, fallbackMessage);
+    if (baseUrl === OPENAI_COMPAT_BASE_URL.qwen) {
+      if (response.status === 403 && /API[- ]?Key restrictions/i.test(message)) {
+        throw new Error(`${message} Check this API key's model permissions and IP allowlist in Model Studio. Allow the selected model (${body.model}) and use a Beijing-region key for the built-in Qwen provider.`);
+      }
+      if (response.status === 404) {
+        throw new Error(`${message} Model ${body.model} is unavailable at the Beijing endpoint. Check the exact model ID, retirement status and key permissions; use a supported model such as ${DEFAULT_MODELS.qwenVisionModel}.`);
+      }
+    }
+    throw new Error(message);
   }
 
   const data = await response.json();
   return data?.choices?.[0]?.message?.content || '[]';
+}
+
+function getOpenAiCompatOptions(provider: OpenAiCompatProvider, model: string): Record<string, unknown> {
+  if (provider === 'deepseek') {
+    return { max_tokens: 4096, thinking: { type: 'disabled' } };
+  }
+
+  if (provider === 'doubao' && model.startsWith('doubao-seed-2-1-lite')) {
+    return { max_tokens: 4096, thinking: { type: 'disabled' } };
+  }
+
+  if (provider === 'custom') {
+    return {
+      max_completion_tokens: 4096,
+      ...(model === 'gpt-6-luna' && { reasoning_effort: 'none' }),
+    };
+  }
+
+  if (provider === 'qwen') {
+    return {
+      max_tokens: 4096,
+      ...(model.startsWith('qwen3') && { enable_thinking: false }),
+    };
+  }
+
+  if (provider === 'zhipu') {
+    if (model.startsWith('glm-5.3')) {
+      return { max_tokens: 16384, thinking: { type: 'enabled' }, reasoning_effort: 'low' };
+    }
+    if (model === DEFAULT_MODELS.zhipuTextModel || model === DEFAULT_MODELS.zhipuVisionModel) {
+      return { max_tokens: 4096, thinking: { type: 'disabled' } };
+    }
+    return {};
+  }
+
+  return { max_tokens: 4096 };
 }
 
 async function requestTextJson(config: DirectApiConfig, systemPrompt: string, userText: string): Promise<string> {
@@ -563,17 +580,15 @@ async function requestTextJson(config: DirectApiConfig, systemPrompt: string, us
     );
   }
 
+  const model = getOpenAiCompatTextModel(provider, config);
   const textBody: Record<string, unknown> = {
-    model: getOpenAiCompatTextModel(provider, config),
+    model,
+    ...getOpenAiCompatOptions(provider, model),
     messages: [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userText },
     ],
   };
-
-  if (provider !== 'zhipu') {
-    textBody.max_completion_tokens = 4096;
-  }
 
   return fetchOpenAiCompatJson(
     getOpenAiCompatBaseUrl(provider, config),
@@ -619,8 +634,10 @@ async function requestVisionJson(config: DirectApiConfig, systemPrompt: string, 
     );
   }
 
+  const model = getOpenAiCompatVisionModel(provider, config);
   const visionBody: Record<string, unknown> = {
-    model: getOpenAiCompatVisionModel(provider, config),
+    model,
+    ...getOpenAiCompatOptions(provider, model),
     messages: [
       { role: 'system', content: systemPrompt },
       {
@@ -635,10 +652,6 @@ async function requestVisionJson(config: DirectApiConfig, systemPrompt: string, 
       },
     ],
   };
-
-  if (provider !== 'zhipu') {
-    visionBody.max_completion_tokens = 4096;
-  }
 
   return fetchOpenAiCompatJson(
     getOpenAiCompatBaseUrl(provider, config),
@@ -672,7 +685,7 @@ export async function processToc(config: TocInputConfig) {
     return normalizeToc(parseJsonPayload<any[]>(jsonText, 'array'));
   } catch (err: any) {
     if (provider === 'zhipu' && typeof err?.message === 'string' && err.message.includes('context_length_exceeded')) {
-      throw new Error('图片总大小超出了智谱 Flash 模型的限制，请尝试减少图片数量或切换到付费模型 glm-4v');
+      throw new Error('图片总大小超出了智谱 Flash 模型的限制，请尝试减少图片数量或切换到其他视觉模型');
     }
     throw err;
   }
@@ -704,7 +717,7 @@ export async function generateBoard(tocItems: GraphNodeInput[], config: DirectAp
       config.apiKey,
       {
         model: getOpenAiCompatTextModel(provider, config),
-        ...(provider !== 'zhipu' && { max_completion_tokens: 4096 }),
+        ...getOpenAiCompatOptions(provider, getOpenAiCompatTextModel(provider, config)),
         messages: [
           { role: 'system', content: SYSTEM_PROMPT_GRAPH },
           { role: 'user', content: `ToC Data:\n${ tocText }` },

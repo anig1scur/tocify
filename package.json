@@ -9,7 +9,9 @@
 		"preview": "vite preview --host",
 		"prepare": "svelte-kit sync || echo ''",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch"
+		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+		"test:llm": "node scripts/test-llm.mjs",
+		"test:llm:live": "node scripts/test-llm-live.mjs"
 	},
 	"devDependencies": {
 		"@sveltejs/adapter-static": "^3.0.8",
@@ -32,8 +34,6 @@
 		"@google/generative-ai": "^0.24.1",
 		"@paddleocr/paddleocr-js": "^0.4.2",
 		"@sveltejs/adapter-vercel": "^6.1.1",
-		"@upstash/ratelimit": "^2.0.7",
-		"@upstash/redis": "^1.36.0",
 		"@vercel/analytics": "^1.5.0",
 		"jsonrepair": "^3.13.1",
 		"lucide-svelte": "^0.474.0",

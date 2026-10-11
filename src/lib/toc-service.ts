@@ -3,12 +3,11 @@ import {get} from 'svelte/store';
 import {_} from 'svelte-i18n';
 
 import { processTocDirect } from '$lib/llm/client';
-import {requiresUserApiKeyForModel, type ModelOverrides} from '$lib/llm/core';
+import {requiresUserApiKey, type ModelOverrides} from '$lib/llm/core';
 import type {RecognitionIgnoreRegion} from '$lib/pdf/recognition-ignore';
 
 import {pdfService} from '../stores';
 
-export const LARGE_PAGE_THRESHOLD = 8;
 export const CHUNK_SIZE = 8;
 
 export const ERROR_NEEDS_API_KEY = 'NEEDS_API_KEY';
@@ -54,60 +53,31 @@ async function fetchChunk(
   modelOverrides: ModelOverrides | undefined,
   visionPrompt: string | undefined,
 ): Promise<any[]> {
-  if (requiresUserApiKeyForModel(provider, apiKey, modelOverrides)) {
-    throw new Error(t('error.custom_model_needs_api_key'));
+  if (requiresUserApiKey(apiKey)) {
+    throw new Error(t('error.needs_api_key'));
   }
 
-  if (apiKey) {
-    return processTocDirect({
-      images,
-      apiKey,
-      provider,
-      customBaseUrl,
-      doubaoEndpointIdText,
-      doubaoEndpointIdVision,
-      modelOverrides,
-      visionPrompt,
-    });
-  }
-
-  const response = await fetch('/api/process-toc', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({
-      images,
-      apiKey,
-      provider,
-      customBaseUrl,
-      doubaoEndpointIdText,
-      doubaoEndpointIdVision,
-      modelOverrides,
-      visionPrompt,
-    }),
+  return processTocDirect({
+    images,
+    apiKey: apiKey!,
+    provider,
+    customBaseUrl,
+    doubaoEndpointIdText,
+    doubaoEndpointIdVision,
+    modelOverrides,
+    visionPrompt,
   });
-
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    let friendlyMessage = err.message || t('error.ai_failed');
-
-    if (response.status >= 500 && response.status < 600) {
-      const p = provider || 'Unknown Provider';
-      const providerName = p.charAt(0).toUpperCase() + p.slice(1);
-      friendlyMessage = t('error.try_other_model', { provider: providerName, message: friendlyMessage });
-    } else if (response.status === 413) {
-      friendlyMessage = t('error.request_too_large');
-    } else if (response.status === 429 && !apiKey) {
-      friendlyMessage = t('error.daily_limit_exceeded');
-    }
-    throw new Error(friendlyMessage);
-  }
-
-  return response.json();
 }
 
 export async function generateToc(
   { pdfInstance, ranges, startPage, endPage, apiKey, provider, customBaseUrl, doubaoEndpointIdText, doubaoEndpointIdVision, modelOverrides, visionPrompt, recognitionIgnoreRegions = [], onProgress }: AiTocOptions
 ): Promise<GenerateTocResult> {
+
+  if (requiresUserApiKey(apiKey)) {
+    const err = new Error(t('error.needs_api_key')) as Error & { code?: string };
+    err.code = ERROR_NEEDS_API_KEY;
+    throw err;
+  }
 
   // Normalize ranges
   let finalRanges: { start: number; end: number }[] = [];
@@ -147,12 +117,6 @@ export async function generateToc(
   }
 
   const totalPages = pageEntries.length;
-
-  if (totalPages > LARGE_PAGE_THRESHOLD && !apiKey) {
-    const err = new Error(t('error.needs_api_key')) as any;
-    err.code = ERROR_NEEDS_API_KEY;
-    throw err;
-  }
 
   if (totalPages <= CHUNK_SIZE) {
     onProgress?.(1, 1);

@@ -1,8 +1,9 @@
-import { withRateLimit, LIMIT_CONFIG } from '$lib/server/ratelimit';
+import { LIMIT_CONFIG } from '$lib/server/request-limits';
 import { processTocOnServer } from '$lib/llm/server';
 import { error, json } from '@sveltejs/kit';
+import type { RequestHandler } from './$types';
 
-export const POST = withRateLimit(async ({ request }) => {
+export const POST: RequestHandler = async ({ request }) => {
   const origin = request.headers.get('origin');
   const allowedOrigins = [
     'https://pdf.aeriszhu.com', 'https://tocify.aeriszhu.com', 'https://tocify.vercel.app',
@@ -45,7 +46,6 @@ export const POST = withRateLimit(async ({ request }) => {
     }
 
     const tocData = await processTocOnServer({
-      request,
       images,
       text,
       apiKey,
@@ -65,4 +65,4 @@ export const POST = withRateLimit(async ({ request }) => {
       err.message || err.body?.message || 'Failed to process ToC, please contact support.',
     );
   }
-});
+};

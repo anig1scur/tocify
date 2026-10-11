@@ -1,13 +1,12 @@
-import { env } from '$env/dynamic/private';
 import { lookup } from 'node:dns/promises';
 
 import {
   generateBoard,
   isBlockedIpAddress,
   normalizeCustomBaseUrl,
-  requiresUserApiKeyForModel,
+  normalizeApiKeyForRequest,
   normalizeModelOverrides,
-  normalizeProvider,
+  requireProvider,
   processToc,
   validateCustomProviderConfig,
   type GraphNodeInput,
@@ -15,45 +14,15 @@ import {
   type Provider,
 } from '$lib/llm/core';
 
-function randomChoice<T>(arr: T[]): T {
-  return arr[Math.floor(Math.random() * arr.length)];
-}
-
-export function determineProvider(request: Request, userProvider?: string): Provider {
-  const normalizedUserProvider = normalizeProvider(userProvider);
-  if (normalizedUserProvider) {
-    return normalizedUserProvider;
+function validateUserConfig(provider?: string, apiKey?: string) {
+  try {
+    return {
+      provider: requireProvider(provider),
+      apiKey: normalizeApiKeyForRequest(apiKey || ''),
+    };
+  } catch (err: any) {
+    throw createBadRequest(err.message);
   }
-
-  const envProvider = normalizeProvider(env.AI_PROVIDER);
-  if (envProvider) {
-    return envProvider;
-  }
-
-  return randomChoice(['gemini', 'qwen', 'doubao', 'zhipu']);
-}
-
-function resolveApiKey(provider: Provider, userKey?: string): string {
-  if (userKey) {
-    return userKey;
-  }
-
-  switch (provider) {
-    case 'gemini':
-      return env.GOOGLE_API_KEY || '';
-    case 'qwen':
-      return env.DASHSCOPE_API_KEY || '';
-    case 'zhipu':
-      return env.ZHIPU_API_KEY || '';
-    case 'doubao':
-      return env.DOUBAO_API_KEY || '';
-    case 'custom':
-      return '';
-  }
-}
-
-function providerLabel(provider: Provider): string {
-  return provider.charAt(0).toUpperCase() + provider.slice(1);
 }
 
 function createBadRequest(message: string) {
@@ -105,7 +74,6 @@ async function validateCustomProviderOnServer(
 }
 
 export async function processTocOnServer({
-  request,
   images,
   text,
   apiKey,
@@ -116,7 +84,6 @@ export async function processTocOnServer({
   modelOverrides,
   visionPrompt,
 }: {
-  request: Request;
   images?: string[];
   text?: string;
   apiKey?: string;
@@ -127,20 +94,10 @@ export async function processTocOnServer({
   modelOverrides?: ModelOverrides;
   visionPrompt?: string;
 }) {
-  const resolvedProvider = determineProvider(request, provider);
+  const { provider: resolvedProvider, apiKey: resolvedApiKey } = validateUserConfig(provider, apiKey);
   const normalizedModelOverrides = normalizeModelOverrides(modelOverrides);
 
-  if (requiresUserApiKeyForModel(resolvedProvider, apiKey, normalizedModelOverrides)) {
-    throw createBadRequest('Custom models outside the built-in list require your own API key.');
-  }
-
   await validateCustomProviderOnServer(resolvedProvider, apiKey, customBaseUrl, normalizedModelOverrides);
-
-  const resolvedApiKey = resolveApiKey(resolvedProvider, apiKey);
-
-  if (!resolvedApiKey) {
-    throw new Error(`[${ providerLabel(resolvedProvider) }] API Key is missing.`);
-  }
 
   return processToc({
     provider: resolvedProvider,
@@ -148,25 +105,14 @@ export async function processTocOnServer({
     customBaseUrl,
     images,
     text,
-    doubaoEndpointIdText: doubaoEndpointIdText || env.DOUBAO_ENDPOINT_ID_TEXT,
-    doubaoEndpointIdVision: doubaoEndpointIdVision || env.DOUBAO_ENDPOINT_ID_VISION,
+    doubaoEndpointIdText,
+    doubaoEndpointIdVision,
     visionPrompt,
-    modelOverrides: {
-      geminiModel: 'gemini-2.5-flash',
-      qwenVisionModel: env.QWEN_VL_MODEL || 'qwen-vl-plus',
-      qwenTextModel: 'qwen-plus',
-      zhipuTextModel: 'glm-4-flash',
-      zhipuVisionModel: 'glm-4v-flash',
-      doubaoTextModel: env.DOUBAO_ENDPOINT_ID_TEXT,
-      doubaoVisionModel: env.DOUBAO_ENDPOINT_ID_VISION,
-      customModel: normalizedModelOverrides?.customModel,
-      ...normalizedModelOverrides,
-    },
+    modelOverrides: normalizedModelOverrides,
   });
 }
 
 export async function generateBoardOnServer({
-  request,
   tocItems,
   apiKey,
   provider,
@@ -174,7 +120,6 @@ export async function generateBoardOnServer({
   doubaoEndpointIdText,
   modelOverrides,
 }: {
-  request: Request;
   tocItems: GraphNodeInput[];
   apiKey?: string;
   provider?: string;
@@ -182,33 +127,16 @@ export async function generateBoardOnServer({
   doubaoEndpointIdText?: string;
   modelOverrides?: ModelOverrides;
 }) {
-  const resolvedProvider = determineProvider(request, provider);
+  const { provider: resolvedProvider, apiKey: resolvedApiKey } = validateUserConfig(provider, apiKey);
   const normalizedModelOverrides = normalizeModelOverrides(modelOverrides);
 
-  if (requiresUserApiKeyForModel(resolvedProvider, apiKey, normalizedModelOverrides)) {
-    throw createBadRequest('Custom models outside the built-in list require your own API key.');
-  }
-
   await validateCustomProviderOnServer(resolvedProvider, apiKey, customBaseUrl, normalizedModelOverrides);
-
-  const resolvedApiKey = resolveApiKey(resolvedProvider, apiKey);
-
-  if (!resolvedApiKey) {
-    throw new Error(`[${ providerLabel(resolvedProvider) }] API Key is missing.`);
-  }
 
   return generateBoard(tocItems, {
     provider: resolvedProvider,
     apiKey: resolvedApiKey,
     customBaseUrl,
-    doubaoEndpointIdText: doubaoEndpointIdText || env.DOUBAO_ENDPOINT_ID_TEXT,
-    modelOverrides: {
-      geminiModel: 'gemini-2.5-flash',
-      qwenTextModel: 'qwen-plus',
-      zhipuTextModel: 'glm-4-flash',
-      doubaoTextModel: env.DOUBAO_ENDPOINT_ID_TEXT,
-      customModel: normalizedModelOverrides?.customModel,
-      ...normalizedModelOverrides,
-    },
+    doubaoEndpointIdText,
+    modelOverrides: normalizedModelOverrides,
   });
 }

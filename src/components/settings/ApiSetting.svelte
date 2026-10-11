@@ -2,16 +2,17 @@
   import {createEventDispatcher, onMount} from 'svelte';
   import {slide} from 'svelte/transition';
   import {t} from 'svelte-i18n';
-  import {ChevronDown, ExternalLink, Eye, EyeOff, KeyRound, Plus, RotateCcw, Trash2, Sparkles} from 'lucide-svelte';
+  import {ChevronDown, ExternalLink, Eye, EyeOff, Info, KeyRound, Plus, RotateCcw, Trash2, Sparkles} from 'lucide-svelte';
   import {
     DEFAULT_VISION_PROMPT_TEMPLATE_ID,
     DEFAULT_VISION_PROMPT_TEMPLATE,
     DEFAULT_CUSTOM_BASE_URL,
     DEFAULT_CUSTOM_MODEL,
-    KNOWN_PROVIDER_MODELS,
+    DEFAULT_PROVIDER,
+    SUGGESTED_PROVIDER_MODELS,
     createEmptyApiConfig,
     createDefaultVisionPromptTemplate,
-    requiresUserApiKeyForModel,
+    requiresUserApiKey,
     normalizeModelOverrides,
     type VisionPromptTemplate,
   } from '$lib/llm/core';
@@ -24,8 +25,8 @@
 
   let isSaved = false;
   let showApiKey = false;
-  let showCustomModelNotice = false;
-  let customModelNoticeVersion = 0;
+  let showApiKeyNotice = false;
+  let apiKeyNoticeVersion = 0;
   let visionTemplateName = '';
   let showVisionTemplateMenu = false;
   const providerLinks = {
@@ -43,7 +44,11 @@
     },
     zhipu: {
       label: 'Zhipu',
-      href: 'https://open.bigmodel.cn/usercenter/apikeys',
+      href: 'https://open.bigmodel.cn/apikey/platform',
+    },
+    deepseek: {
+      label: 'DeepSeek',
+      href: 'https://platform.deepseek.com/api_keys',
     },
   };
 
@@ -102,13 +107,6 @@
       visionPrompt: config.visionPrompt,
     };
 
-    if (!config.provider) {
-      return {
-        ...effectiveConfig,
-        modelOverrides: undefined,
-      };
-    }
-
     return effectiveConfig;
   }
 
@@ -116,10 +114,10 @@
     switch (provider) {
       case 'gemini':
         return config.modelOverrides.geminiModel;
+      case 'deepseek':
+        return config.modelOverrides.deepseekModel;
       case 'qwen':
         return config.modelOverrides.qwenVisionModel || config.modelOverrides.qwenTextModel;
-      case 'zhipu':
-        return config.modelOverrides.zhipuVisionModel || config.modelOverrides.zhipuTextModel;
       case 'custom':
         return config.modelOverrides.customModel;
       default:
@@ -128,6 +126,11 @@
   }
 
   function setSingleModelValue(provider: string, value: string) {
+    if (provider === 'deepseek') {
+      config.modelOverrides.deepseekModel = value;
+      return;
+    }
+
     if (provider === 'gemini') {
       config.modelOverrides.geminiModel = value;
       return;
@@ -136,12 +139,6 @@
     if (provider === 'qwen') {
       config.modelOverrides.qwenTextModel = value;
       config.modelOverrides.qwenVisionModel = value;
-      return;
-    }
-
-    if (provider === 'zhipu') {
-      config.modelOverrides.zhipuTextModel = value;
-      config.modelOverrides.zhipuVisionModel = value;
       return;
     }
 
@@ -168,6 +165,7 @@
         config = {
           ...defaultConfig,
           ...parsed,
+          provider: parsed.provider || DEFAULT_PROVIDER,
           customBaseUrl: parsed.customBaseUrl?.trim() || defaultConfig.customBaseUrl,
           modelOverrides: {
             ...defaultConfig.modelOverrides,
@@ -188,21 +186,17 @@
     }
   });
 
-  $: customModelNeedsUserApiKey = requiresUserApiKeyForModel(
-    config.provider,
-    config.apiKey,
-    config.modelOverrides,
-  );
+  $: apiKeyMissing = requiresUserApiKey(config.apiKey);
 
   function markDirty() {
     isSaved = false;
-    showCustomModelNotice = false;
+    showApiKeyNotice = false;
   }
 
   function save() {
-    showCustomModelNotice = customModelNeedsUserApiKey;
-    if (customModelNeedsUserApiKey) {
-      customModelNoticeVersion += 1;
+    showApiKeyNotice = apiKeyMissing;
+    if (apiKeyMissing) {
+      apiKeyNoticeVersion += 1;
     }
     localStorage.setItem('tocify_api_config', JSON.stringify(config));
     isSaved = true;
@@ -215,7 +209,7 @@
     }, 1000);
 
     setTimeout(() => {
-      if (!showCustomModelNotice) {
+      if (!showApiKeyNotice) {
         isExpanded = false;
       }
     }, 400);
@@ -388,11 +382,31 @@
     >
       <div class="flex flex-col">
         <div class="api-settings-option">
-          <label
-            class="font-bold mb-1 text-sm flex items-center"
-            for="llm_provider">
-            <Sparkles size={14} strokeWidth={3} class="inline-block mr-1"/>{$t('settings.llm_provider')}</label
-          >
+          <div class="relative flex items-center gap-1.5 mb-1">
+            <label
+              class="font-bold text-sm flex items-center"
+              for="llm_provider">
+              <Sparkles size={14} strokeWidth={3} class="inline-block mr-1"/>{$t('settings.llm_provider')}</label
+            >
+            <button
+              type="button"
+              class="peer inline-flex items-center text-stone-400 hover:text-stone-700 focus-visible:text-stone-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded-full"
+              aria-label={$t('settings.api_info_label')}
+              aria-describedby="provider-api-info"
+            >
+              <Info size={14} />
+            </button>
+            <div
+              id="provider-api-info"
+              role="tooltip"
+              class="pointer-events-none invisible absolute left-0 top-full z-50 mt-2 w-72 max-w-full rounded-md border border-stone-300 bg-white p-3 text-xs font-normal leading-relaxed text-stone-600 shadow-md opacity-0 transition-opacity peer-hover:visible peer-hover:opacity-100 peer-focus-visible:visible peer-focus-visible:opacity-100"
+            >
+              <p>{$t('settings.byok_hint')}</p>
+              {#if config.provider === 'qwen'}
+                <p class="mt-2">{$t('settings.qwen_region_hint')}</p>
+              {/if}
+            </div>
+          </div>
           <div class="flex items-center gap-3">
             <select
               id="llm_provider"
@@ -400,11 +414,11 @@
               bind:value={config.provider}
               on:change={markDirty}
             >
-              <option value="">{$t('settings.provider_auto')}</option>
               <option value="gemini">{$t('settings.provider_gemini')}</option>
               <option value="qwen">{$t('settings.provider_qwen')}</option>
               <option value="doubao">{$t('settings.provider_doubao')}</option>
               <option value="zhipu">{$t('settings.provider_zhipu')}</option>
+              <option value="deepseek">{$t('settings.provider_deepseek')}</option>
               <option value="custom">{$t('settings.provider_custom')}</option>
             </select>
 
@@ -442,29 +456,35 @@
               data-1p-ignore="true"
               data-lpignore="true"
               class="api-settings-input text-sm placeholder-gray-400"
-              placeholder={KNOWN_PROVIDER_MODELS.gemini.text[0]}
+              placeholder={SUGGESTED_PROVIDER_MODELS.gemini.text[0]}
+              list="gemini-models"
               value={getSingleModelValue('gemini')}
               on:input={(e) => {
                 setSingleModelValue('gemini', (e.currentTarget as HTMLInputElement).value);
                 markDirty();
               }}
             />
+            <datalist id="gemini-models">
+              {#each SUGGESTED_PROVIDER_MODELS.gemini.text as model}
+                <option value={model}></option>
+              {/each}
+            </datalist>
           </div>
         {/if}
 
-        {#if config.provider === 'qwen'}
+        {#if config.provider === 'qwen' || config.provider === 'deepseek'}
           <div
             class="api-settings-option"
             transition:slide={{duration: 200}}
           >
             <label
               class="block font-bold mb-1 text-sm"
-              for="qwen_model">{$t('settings.custom_model_label') || 'Custom Model'}</label
+              for={`${config.provider}_model`}>{$t('settings.custom_model_label') || 'Custom Model'}</label
             >
             <input
-              id="qwen_model"
+              id={`${config.provider}_model`}
               type="text"
-              name="qwen-model-input"
+              name={`${config.provider}-model-input`}
               autocomplete="new-password"
               autocapitalize="off"
               autocorrect="off"
@@ -472,13 +492,19 @@
               data-1p-ignore="true"
               data-lpignore="true"
               class="api-settings-input text-sm placeholder-gray-400"
-              placeholder={KNOWN_PROVIDER_MODELS.qwen.vision[0]}
-              value={getSingleModelValue('qwen')}
+              placeholder={SUGGESTED_PROVIDER_MODELS[config.provider].vision[0]}
+              list={`${config.provider}-models`}
+              value={getSingleModelValue(config.provider)}
               on:input={(e) => {
-                setSingleModelValue('qwen', (e.currentTarget as HTMLInputElement).value);
+                setSingleModelValue(config.provider, (e.currentTarget as HTMLInputElement).value);
                 markDirty();
               }}
             />
+            <datalist id={`${config.provider}-models`}>
+              {#each SUGGESTED_PROVIDER_MODELS[config.provider].vision as model}
+                <option value={model}></option>
+              {/each}
+            </datalist>
           </div>
         {/if}
 
@@ -489,12 +515,12 @@
           >
             <label
               class="block font-bold mb-1 text-sm"
-              for="zhipu_model">{$t('settings.custom_model_label') || 'Custom Model'}</label
+              for="zhipu_text_model">{$t('settings.custom_text_model_label')}</label
             >
             <input
-              id="zhipu_model"
+              id="zhipu_text_model"
               type="text"
-              name="zhipu-model-input"
+              name="zhipu-text-model-input"
               autocomplete="new-password"
               autocapitalize="off"
               autocorrect="off"
@@ -502,13 +528,42 @@
               data-1p-ignore="true"
               data-lpignore="true"
               class="api-settings-input text-sm placeholder-gray-400"
-              placeholder={KNOWN_PROVIDER_MODELS.zhipu.vision[0]}
-              value={getSingleModelValue('zhipu')}
-              on:input={(e) => {
-                setSingleModelValue('zhipu', (e.currentTarget as HTMLInputElement).value);
-                markDirty();
-              }}
+              placeholder={SUGGESTED_PROVIDER_MODELS.zhipu.text[0]}
+              list="zhipu-text-models"
+              bind:value={config.modelOverrides.zhipuTextModel}
+              on:input={markDirty}
             />
+            <datalist id="zhipu-text-models">
+              {#each SUGGESTED_PROVIDER_MODELS.zhipu.text as model}
+                <option value={model}>{$t(model.startsWith('glm-5') ? 'settings.model_paid' : 'settings.model_free')}</option>
+              {/each}
+            </datalist>
+          </div>
+          <div class="api-settings-option" transition:slide={{duration: 200}}>
+            <label class="block font-bold mb-1 text-sm" for="zhipu_vision_model">
+              {$t('settings.custom_vision_model_label')}
+            </label>
+            <input
+              id="zhipu_vision_model"
+              type="text"
+              name="zhipu-vision-model-input"
+              autocomplete="new-password"
+              autocapitalize="off"
+              autocorrect="off"
+              spellcheck="false"
+              data-1p-ignore="true"
+              data-lpignore="true"
+              class="api-settings-input text-sm placeholder-gray-400"
+              placeholder={SUGGESTED_PROVIDER_MODELS.zhipu.vision[0]}
+              list="zhipu-vision-models"
+              bind:value={config.modelOverrides.zhipuVisionModel}
+              on:input={markDirty}
+            />
+            <datalist id="zhipu-vision-models">
+              {#each SUGGESTED_PROVIDER_MODELS.zhipu.vision as model}
+                <option value={model}>{$t(model.startsWith('glm-5') ? 'settings.model_paid' : 'settings.model_free')}</option>
+              {/each}
+            </datalist>
           </div>
         {/if}
 
@@ -574,13 +629,13 @@
           >
             <label
               class="block font-bold mb-1 text-sm"
-              for="doubao_ep_text">Endpoint ID (Text/Lite)</label
+              for="doubao_ep_text">Model / Endpoint ID (Text)</label
             >
             <input
               id="doubao_ep_text"
               type="text"
               class="api-settings-input text-sm placeholder-gray-400"
-              placeholder="ep-..."
+              placeholder={SUGGESTED_PROVIDER_MODELS.doubao.text[0]}
               bind:value={config.doubaoEndpointIdText}
               on:input={markDirty}
             />
@@ -592,13 +647,13 @@
           >
             <label
               class="block font-bold mb-1 text-sm"
-              for="doubao_ep_vision">Endpoint ID (Vision/Pro)</label
+              for="doubao_ep_vision">Model / Endpoint ID (Vision)</label
             >
             <input
               id="doubao_ep_vision"
               type="text"
               class="api-settings-input text-sm placeholder-gray-400"
-              placeholder="ep-..."
+              placeholder={SUGGESTED_PROVIDER_MODELS.doubao.vision[0]}
               bind:value={config.doubaoEndpointIdVision}
               on:input={markDirty}
             />
@@ -648,10 +703,10 @@
                 {/if}
               </button>
             </div>
-            {#if showCustomModelNotice}
-              {#key customModelNoticeVersion}
+            {#if showApiKeyNotice}
+              {#key apiKeyNoticeVersion}
                 <p class="mt-2 rounded-md py-1.5 text-xs text-stone-600 animate-notice-shake">
-                  {$t('error.custom_model_needs_api_key')}
+                  {$t('error.needs_api_key')}
                 </p>
               {/key}
             {/if}

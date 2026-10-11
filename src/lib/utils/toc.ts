@@ -105,8 +105,15 @@ export function normalizeToc(rawData: any[]): AiTocItem[] {
         cleanPage = item.page;
       }
 
+      const title = String(item.title || '').trim();
+      const pageLeader = title.match(/\s*[.·…‥\-—_]{2,}\s*(\d+)\s*$/u);
+      const titleWithoutPage = pageLeader && Number(pageLeader[1]) === cleanPage
+        ? title.slice(0, pageLeader.index).trimEnd()
+        : title;
+      const cleanTitle = titleWithoutPage.replace(/\s+[.·…‥\-—_]{2,}\s*$/u, '');
+
       return {
-        title: String(item.title || '').trim(),
+        title: cleanTitle,
         level: typeof item.level === 'number' ? item.level : 1,
         page: cleanPage
       };
