@@ -7,6 +7,8 @@ Tocify is a free, online and open-source web application to add, edit, or genera
 
 AI features require your own provider API key. Enter it in **API Settings**; it is stored in your browser and requests go directly to your selected provider. PDF editing and local OCR remain free.
 
+**Pages per request** in API Settings defaults to 8 and accepts 1–16. Try 2–4 for dense directories, incomplete results, or failed requests. At most two batches run at once. If a response is truncated or its JSON array is unfinished, complete entries are kept and a warning names the affected PDF pages. A syntactically complete response can still omit content; verify it against the source pages. Qwen image requests use the provider's default output limit.
+
 ## Local development and model testing
 
 Run `pnpm install` and `pnpm dev`, then open `http://localhost:5173`. Load a PDF, choose a provider in API Settings, and enter your new key. There is no Auto provider or shared server key.

@@ -45,6 +45,10 @@
     "custom_text_model_label": "自定义文本模型",
     "custom_vision_model_label": "自定义视觉模型",
     "vision_prompt_label": "目录结构提示词",
+    "pages_per_request": "每批识别页数",
+    "pages_per_request_value": "{pages} 页",
+    "pages_per_request_info": "每批识别页数使用说明",
+    "pages_per_request_hint": "每次请求最多处理的目录页数，默认 8 页。目录文字密集、识别不全或请求失败时，建议调为 2–4 页。调小会增加请求次数。",
     "vision_prompt_placeholder": "编辑完整的目录图片识别模板。留空时使用内置模板。",
     "vision_prompt_reset": "恢复默认模板",
     "vision_prompt_template_select": "选择目录识别模板",
@@ -312,7 +316,9 @@
     "not_a_toc": "所选页面看起来不像是目录，请尝试调整页面范围",
     "request_too_large": "请求体过大，请减少页面范围或降低分辨率",
     "needs_api_key": "请在 API 设置中填写您自己的 API Key 以继续。",
-    "chunk_failed": "第 {start}–{end} 页处理失败，原因：{reason}"
+    "chunk_failed": "PDF 页 {pages} 请求失败，原因：{reason}",
+    "chunk_incomplete": "PDF 页 {pages} 的目录输出不完整，已保留 {count} 条有效目录。请核对这些页面，再次识别时可将每批页数调为 1–2 页。",
+    "text_incomplete": "目录文本输出不完整，已保留有效目录，请核对剩余内容。"
   },
   "toast": {
     "load_failed": "核心组件加载失败，请刷新页面后重试",

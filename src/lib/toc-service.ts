@@ -2,20 +2,24 @@ import type * as PdfjsLibTypes from 'pdfjs-dist';
 import {get} from 'svelte/store';
 import {_} from 'svelte-i18n';
 
-import { processTocDirect } from '$lib/llm/client';
-import {requiresUserApiKey, type ModelOverrides} from '$lib/llm/core';
+import { processTocWithDiagnosticsDirect } from '$lib/llm/client';
+import {requiresUserApiKey, type ModelOverrides, type TocRecognitionResult} from '$lib/llm/core';
+import { MAX_CONCURRENT_TOC_REQUESTS, normalizePagesPerRequest } from '$lib/llm/batching';
 import type {RecognitionIgnoreRegion} from '$lib/pdf/recognition-ignore';
+import type {AiTocItem} from '$lib/utils/toc';
 
 import {pdfService} from '../stores';
-
-export const CHUNK_SIZE = 8;
 
 export const ERROR_NEEDS_API_KEY = 'NEEDS_API_KEY';
 
 export interface ChunkFailure {
-  start: number;
-  end: number;
+  pages: number[];
   error: string;
+}
+
+export interface ChunkWarning {
+  pages: number[];
+  itemCount: number;
 }
 
 interface AiTocOptions {
@@ -30,47 +34,23 @@ interface AiTocOptions {
   doubaoEndpointIdVision?: string;
   modelOverrides?: ModelOverrides;
   visionPrompt?: string;
+  pagesPerRequest?: number;
   recognitionIgnoreRegions?: RecognitionIgnoreRegion[];
   onProgress?: (current: number, total: number) => void;
 }
 
 export interface GenerateTocResult {
-  items: any[];
+  items: AiTocItem[];
   chunkFailures: ChunkFailure[];
+  chunkWarnings: ChunkWarning[];
 }
 
 function t(key: string, values?: Record<string, string | number>): string {
   return get(_)(key, { values }) as string;
 }
 
-async function fetchChunk(
-  images: string[],
-  apiKey: string | undefined,
-  provider: string | undefined,
-  customBaseUrl: string | undefined,
-  doubaoEndpointIdText: string | undefined,
-  doubaoEndpointIdVision: string | undefined,
-  modelOverrides: ModelOverrides | undefined,
-  visionPrompt: string | undefined,
-): Promise<any[]> {
-  if (requiresUserApiKey(apiKey)) {
-    throw new Error(t('error.needs_api_key'));
-  }
-
-  return processTocDirect({
-    images,
-    apiKey: apiKey!,
-    provider,
-    customBaseUrl,
-    doubaoEndpointIdText,
-    doubaoEndpointIdVision,
-    modelOverrides,
-    visionPrompt,
-  });
-}
-
 export async function generateToc(
-  { pdfInstance, ranges, startPage, endPage, apiKey, provider, customBaseUrl, doubaoEndpointIdText, doubaoEndpointIdVision, modelOverrides, visionPrompt, recognitionIgnoreRegions = [], onProgress }: AiTocOptions
+  { pdfInstance, ranges, startPage, endPage, apiKey, provider, customBaseUrl, doubaoEndpointIdText, doubaoEndpointIdVision, modelOverrides, visionPrompt, pagesPerRequest, recognitionIgnoreRegions = [], onProgress }: AiTocOptions
 ): Promise<GenerateTocResult> {
 
   if (requiresUserApiKey(apiKey)) {
@@ -78,6 +58,11 @@ export async function generateToc(
     err.code = ERROR_NEEDS_API_KEY;
     throw err;
   }
+
+  const fetchChunk = (images: string[]) => processTocWithDiagnosticsDirect({
+    images, apiKey: apiKey!, provider, customBaseUrl, doubaoEndpointIdText,
+    doubaoEndpointIdVision, modelOverrides, visionPrompt,
+  });
 
   // Normalize ranges
   let finalRanges: { start: number; end: number }[] = [];
@@ -98,14 +83,14 @@ export async function generateToc(
   interface PageEntry { pageNum: number; image: string }
   const pageEntries: PageEntry[] = [];
   let currentTotalSize = 0;
-  const MAX_PAYLOAD_SIZE = 5 * 1024 * 1024;
+  const MAX_TOTAL_IMAGE_SIZE = 40 * 1024 * 1024;
 
   for (const range of finalRanges) {
     if (range.end < range.start) continue;
     for (let pageNum = range.start; pageNum <= range.end; pageNum++) {
       const image = await service.getPageAsImage(pdfInstance, pageNum, 1.5, 2048, recognitionIgnoreRegions);
       currentTotalSize += image.length;
-      if (currentTotalSize > MAX_PAYLOAD_SIZE * CHUNK_SIZE) {
+      if (currentTotalSize > MAX_TOTAL_IMAGE_SIZE) {
         throw new Error(t('error.payload_too_large'));
       }
       pageEntries.push({ pageNum, image });
@@ -116,61 +101,62 @@ export async function generateToc(
     throw new Error(t('error.no_valid_pages'));
   }
 
-  const totalPages = pageEntries.length;
-
-  if (totalPages <= CHUNK_SIZE) {
-    onProgress?.(1, 1);
-    const items = await fetchChunk(
-      pageEntries.map(e => e.image),
-      apiKey, provider, customBaseUrl, doubaoEndpointIdText, doubaoEndpointIdVision, modelOverrides, visionPrompt
-    );
-    return { items: Array.isArray(items) ? items : [], chunkFailures: [] };
-  }
-
+  const chunkSize = normalizePagesPerRequest(pagesPerRequest);
   const chunks: PageEntry[][] = [];
-  for (let i = 0; i < pageEntries.length; i += CHUNK_SIZE) {
-    chunks.push(pageEntries.slice(i, i + CHUNK_SIZE));
+  for (let i = 0; i < pageEntries.length; i += chunkSize) {
+    chunks.push(pageEntries.slice(i, i + chunkSize));
   }
 
   const totalChunks = chunks.length;
-  const allItems: (any[] | null)[] = new Array(totalChunks).fill(null);
+  const allItems: AiTocItem[][] = Array.from({length: totalChunks}, () => []);
   const chunkFailures: ChunkFailure[] = [];
+  const chunkWarnings: ChunkWarning[] = [];
   let completedChunks = 0;
+  onProgress?.(0, totalChunks);
 
-  const chunkPromises = chunks.map(async (chunk, i) => {
-    const chunkStart = chunk[0].pageNum;
-    const chunkEnd = chunk[chunk.length - 1].pageNum;
+  async function processChunk(chunk: PageEntry[], i: number) {
+    const pages = chunk.map(e => e.pageNum);
     const images = chunk.map(e => e.image);
 
-    let result: any[] | null = null;
+    let result: TocRecognitionResult | null = null;
 
     // First attempt
     try {
-      result = await fetchChunk(images, apiKey, provider, customBaseUrl, doubaoEndpointIdText, doubaoEndpointIdVision, modelOverrides, visionPrompt);
+      result = await fetchChunk(images);
     } catch (_firstErr) {
       // Retry once
       try {
-        result = await fetchChunk(images, apiKey, provider, customBaseUrl, doubaoEndpointIdText, doubaoEndpointIdVision, modelOverrides, visionPrompt);
+        result = await fetchChunk(images);
       } catch (retryErr: any) {
         chunkFailures.push({
-          start: chunkStart,
-          end: chunkEnd,
+          pages,
           error: retryErr.message || t('error.ai_failed'),
         });
       }
     }
 
-    if (result && Array.isArray(result)) {
-      allItems[i] = result;
+    if (result) {
+      allItems[i] = result.items;
+      if (result.incomplete) {
+        chunkWarnings.push({ pages, itemCount: result.items.length });
+      }
     }
 
     completedChunks++;
     onProgress?.(completedChunks, totalChunks);
-  });
+  }
 
-  await Promise.allSettled(chunkPromises);
+  let nextChunk = 0;
+  async function runWorker() {
+    while (nextChunk < totalChunks) {
+      const index = nextChunk++;
+      await processChunk(chunks[index], index);
+    }
+  }
+  await Promise.all(Array.from({length: Math.min(MAX_CONCURRENT_TOC_REQUESTS, totalChunks)}, runWorker));
 
-  const mergedItems = allItems.flatMap(r => (Array.isArray(r) ? r : []));
+  chunkFailures.sort((a, b) => a.pages[0] - b.pages[0]);
+  chunkWarnings.sort((a, b) => a.pages[0] - b.pages[0]);
 
-  return { items: mergedItems, chunkFailures };
+  return { items: allItems.flat(), chunkFailures, chunkWarnings };
 }

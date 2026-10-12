@@ -49,6 +49,10 @@
     "custom_text_model_label": "Custom Text Model",
     "custom_vision_model_label": "Custom Vision Model",
     "vision_prompt_label": "Vision Prompt",
+    "pages_per_request": "Pages per request",
+    "pages_per_request_value": "{pages} pages",
+    "pages_per_request_info": "How to choose pages per request",
+    "pages_per_request_hint": "Maximum TOC pages per request; default: 8. Try 2–4 for dense text, incomplete results, or failed requests. Smaller batches make more requests.",
     "vision_prompt_placeholder": "Edit the full ToC image recognition template. Leave blank to use the built-in template.",
     "vision_prompt_reset": "Reset template",
     "vision_prompt_template_select": "Select ToC recognition template",
@@ -316,7 +320,9 @@
     "not_a_toc": "The selected pages don't look like a ToC. Please try adjusting the page range.",
     "request_too_large": "Request too large. Please reduce the page range or lower the resolution.",
     "needs_api_key": "Please add your own API key in API Settings to continue.",
-    "chunk_failed": "Pages {start}–{end} failed: {reason}"
+    "chunk_failed": "PDF pages {pages} failed: {reason}",
+    "chunk_incomplete": "TOC output for PDF pages {pages} is incomplete. Kept {count} valid entries. Check these pages and try 1–2 pages per request when running recognition again.",
+    "text_incomplete": "TOC text output is incomplete. Valid entries were kept; please check the remaining content."
   },
   "toast": {
     "load_failed": "Failed to load core components. Please refresh and try again.",

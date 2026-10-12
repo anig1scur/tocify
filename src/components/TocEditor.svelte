@@ -15,7 +15,7 @@
     Search,
   } from 'lucide-svelte';
   import {t} from 'svelte-i18n';
-  import {processTocDirect} from '$lib/llm/client';
+  import {processTocWithDiagnosticsDirect} from '$lib/llm/client';
   import TocItem from './TocItem.svelte';
   import Tooltip from './Tooltip.svelte';
   import {tocItems, maxPage, autoSaveEnabled, dragDisabled, curFileFingerprint} from '../stores';
@@ -542,7 +542,7 @@
       }
 
       isProcessing = true;
-      const aiResult = await processTocDirect({
+      const aiResult = await processTocWithDiagnosticsDirect({
         text,
         apiKey: apiConfig.apiKey,
         provider: apiConfig.provider,
@@ -552,10 +552,10 @@
         modelOverrides: apiConfig.modelOverrides,
       });
 
-      if (!Array.isArray(aiResult) || aiResult.length === 0) {
+      if (aiResult.items.length === 0) {
         throw new Error('AI could not parse any ToC structure.');
       }
-      dispatch('aiFormatResponse', { items: buildTree(aiResult) });
+      dispatch('aiFormatResponse', { items: buildTree(aiResult.items), incomplete: aiResult.incomplete });
     } catch (error) {
       aiFormatError = error instanceof Error ? error.message : $t('error.ai_failed');
     } finally {

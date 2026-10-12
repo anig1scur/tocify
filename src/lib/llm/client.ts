@@ -1,6 +1,7 @@
 import {
   generateBoard,
   processToc,
+  processTocWithDiagnostics,
   type DirectApiConfig,
   type GraphNodeInput,
   type TocInputConfig,
@@ -10,6 +11,10 @@ export type { DirectApiConfig, GraphNodeInput, GraphResponse, Provider, TocInput
 
 export async function processTocDirect(config: TocInputConfig) {
   return processToc(config);
+}
+
+export async function processTocWithDiagnosticsDirect(config: TocInputConfig) {
+  return processTocWithDiagnostics(config);
 }
 
 export async function generateBoardDirect(

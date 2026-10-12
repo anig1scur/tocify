@@ -1,10 +1,12 @@
 import { jsonrepair } from 'jsonrepair';
+import { DEFAULT_PAGES_PER_REQUEST } from '$lib/llm/batching';
 
 import {
   SYSTEM_PROMPT_GRAPH,
   SYSTEM_PROMPT_TEXT,
   SYSTEM_PROMPT_VISION,
   normalizeToc,
+  type AiTocItem,
 } from '$lib/utils/toc';
 
 export type Provider = 'gemini' | 'qwen' | 'doubao' | 'zhipu' | 'deepseek' | 'custom';
@@ -95,6 +97,17 @@ export interface UiApiConfig extends DirectApiConfig {
   visionPrompt: string;
   visionPromptTemplateId: string;
   visionPromptTemplates: VisionPromptTemplate[];
+  pagesPerRequest: number;
+}
+
+export interface TocRecognitionResult {
+  items: AiTocItem[];
+  incomplete: boolean;
+}
+
+interface JsonModelResponse {
+  text: string;
+  truncated: boolean;
 }
 
 export interface TocInputConfig extends DirectApiConfig {
@@ -375,6 +388,7 @@ export function createEmptyApiConfig(): UiApiConfig {
     visionPrompt: DEFAULT_VISION_PROMPT_TEMPLATE,
     visionPromptTemplateId: DEFAULT_VISION_PROMPT_TEMPLATE_ID,
     visionPromptTemplates: [createDefaultVisionPromptTemplate()],
+    pagesPerRequest: DEFAULT_PAGES_PER_REQUEST,
   };
 }
 
@@ -403,6 +417,44 @@ export function parseJsonPayload<T>(text: string, expectedRoot: 'array' | 'objec
     const repaired = jsonrepair(rawText);
     return JSON.parse(repaired) as T;
   }
+}
+
+function parseTocResponse(response: JsonModelResponse): TocRecognitionResult {
+  const rawText = extractJsonText(response.text, 'array');
+  const stack: string[] = [];
+  let quote = '';
+  let escaped = false;
+  let lastItemEnd = 0;
+  let arrayClosed = false;
+
+  // Keep complete records only: repairing an unfinished page number can change its value.
+  for (let index = 0; index < rawText.length; index++) {
+    const char = rawText[index];
+    if (quote) {
+      if (escaped) escaped = false;
+      else if (char === '\\') escaped = true;
+      else if (char === quote) quote = '';
+      continue;
+    }
+    if (char === '"' || char === "'") {
+      quote = char;
+    } else if (char === '[' || char === '{') {
+      stack.push(char);
+    } else if (char === ']' || char === '}') {
+      if (stack.pop() !== (char === ']' ? '[' : '{')) break;
+      if (stack.length === 1 && char === '}') lastItemEnd = index + 1;
+      if (stack.length === 0 && char === ']') {
+        arrayClosed = true;
+        break;
+      }
+    }
+  }
+
+  const incomplete = response.truncated || !arrayClosed;
+  const jsonText = incomplete
+    ? (lastItemEnd ? `${rawText.slice(0, lastItemEnd)}]` : '[]')
+    : rawText;
+  return { items: normalizeToc(parseJsonPayload<any[]>(jsonText, 'array')), incomplete };
 }
 
 async function parseErrorMessage(response: Response, fallback: string): Promise<string> {
@@ -469,7 +521,7 @@ async function fetchGeminiJson(
   apiKey: string,
   body: Record<string, unknown>,
   fallbackMessage: string,
-): Promise<string> {
+): Promise<JsonModelResponse> {
   const requestApiKey = normalizeApiKeyForRequest(apiKey);
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${ encodeURIComponent(model) }:generateContent`,
@@ -488,7 +540,11 @@ async function fetchGeminiJson(
   }
 
   const data = await response.json();
-  return data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  const candidate = data?.candidates?.[0];
+  return {
+    text: candidate?.content?.parts?.[0]?.text || '',
+    truncated: candidate?.finishReason === 'MAX_TOKENS',
+  };
 }
 
 async function fetchOpenAiCompatJson(
@@ -496,7 +552,7 @@ async function fetchOpenAiCompatJson(
   apiKey: string,
   body: Record<string, unknown>,
   fallbackMessage: string,
-): Promise<string> {
+): Promise<JsonModelResponse> {
   const requestApiKey = normalizeApiKeyForRequest(apiKey);
   const response = await fetch(`${ baseUrl }/chat/completions`, {
     method: 'POST',
@@ -521,10 +577,14 @@ async function fetchOpenAiCompatJson(
   }
 
   const data = await response.json();
-  return data?.choices?.[0]?.message?.content || '[]';
+  const choice = data?.choices?.[0];
+  return {
+    text: choice?.message?.content || '[]',
+    truncated: choice?.finish_reason === 'length',
+  };
 }
 
-function getOpenAiCompatOptions(provider: OpenAiCompatProvider, model: string): Record<string, unknown> {
+function getOpenAiCompatOptions(provider: OpenAiCompatProvider, model: string, vision = false): Record<string, unknown> {
   if (provider === 'deepseek') {
     return { max_tokens: 4096, thinking: { type: 'disabled' } };
   }
@@ -542,7 +602,7 @@ function getOpenAiCompatOptions(provider: OpenAiCompatProvider, model: string): 
 
   if (provider === 'qwen') {
     return {
-      max_tokens: 4096,
+      ...(!vision && { max_tokens: 4096 }),
       ...(model.startsWith('qwen3') && { enable_thinking: false }),
     };
   }
@@ -560,7 +620,7 @@ function getOpenAiCompatOptions(provider: OpenAiCompatProvider, model: string): 
   return { max_tokens: 4096 };
 }
 
-async function requestTextJson(config: DirectApiConfig, systemPrompt: string, userText: string): Promise<string> {
+async function requestTextJson(config: DirectApiConfig, systemPrompt: string, userText: string): Promise<JsonModelResponse> {
   const provider = requireProvider(config.provider);
 
   if (provider === 'gemini') {
@@ -598,7 +658,7 @@ async function requestTextJson(config: DirectApiConfig, systemPrompt: string, us
   );
 }
 
-async function requestVisionJson(config: DirectApiConfig, systemPrompt: string, promptText: string, images: string[]): Promise<string> {
+async function requestVisionJson(config: DirectApiConfig, systemPrompt: string, promptText: string, images: string[]): Promise<JsonModelResponse> {
   const provider = requireProvider(config.provider);
 
   if (provider === 'gemini') {
@@ -637,7 +697,7 @@ async function requestVisionJson(config: DirectApiConfig, systemPrompt: string, 
   const model = getOpenAiCompatVisionModel(provider, config);
   const visionBody: Record<string, unknown> = {
     model,
-    ...getOpenAiCompatOptions(provider, model),
+    ...getOpenAiCompatOptions(provider, model, true),
     messages: [
       { role: 'system', content: systemPrompt },
       {
@@ -661,12 +721,12 @@ async function requestVisionJson(config: DirectApiConfig, systemPrompt: string, 
   );
 }
 
-export async function processToc(config: TocInputConfig) {
+export async function processTocWithDiagnostics(config: TocInputConfig): Promise<TocRecognitionResult> {
   const provider = requireProvider(config.provider);
 
   if (config.text?.trim()) {
     const jsonText = await requestTextJson(config, SYSTEM_PROMPT_TEXT, config.text);
-    return normalizeToc(parseJsonPayload<any[]>(jsonText, 'array'));
+    return parseTocResponse(jsonText);
   }
 
   if (!config.images?.length) {
@@ -682,13 +742,17 @@ export async function processToc(config: TocInputConfig) {
       'Analyze these Table of Contents images and return the single structured JSON.',
       config.images,
     );
-    return normalizeToc(parseJsonPayload<any[]>(jsonText, 'array'));
+    return parseTocResponse(jsonText);
   } catch (err: any) {
     if (provider === 'zhipu' && typeof err?.message === 'string' && err.message.includes('context_length_exceeded')) {
       throw new Error('图片总大小超出了智谱 Flash 模型的限制，请尝试减少图片数量或切换到其他视觉模型');
     }
     throw err;
   }
+}
+
+export async function processToc(config: TocInputConfig): Promise<AiTocItem[]> {
+  return (await processTocWithDiagnostics(config)).items;
 }
 
 export async function generateBoard(tocItems: GraphNodeInput[], config: DirectApiConfig): Promise<GraphResponse> {
@@ -729,7 +793,7 @@ export async function generateBoard(tocItems: GraphNodeInput[], config: DirectAp
   const aiData = parseJsonPayload<{
     nodes?: Array<{ id: string; label?: string; cluster?: string; page?: number | null }>;
     edges?: Array<{ source: string; target: string; type: string; label: string }>;
-  }>(jsonText, 'object');
+  }>(jsonText.text, 'object');
 
   return {
     nodes: (aiData.nodes || []).map((aiNode) => {
