@@ -529,18 +529,20 @@ async function fetchOpenAiCompatJson(
   return choice?.message?.content || '[]';
 }
 
+const VISION_OUTPUT_TOKEN_BUDGET = 16384;
+
 function getOpenAiCompatOptions(provider: OpenAiCompatProvider, model: string, vision = false): Record<string, unknown> {
   if (provider === 'deepseek') {
-    return { max_tokens: 4096, thinking: { type: 'disabled' } };
+    return { max_tokens: vision ? VISION_OUTPUT_TOKEN_BUDGET : 4096, thinking: { type: 'disabled' } };
   }
 
   if (provider === 'doubao' && model.startsWith('doubao-seed-2-1-lite')) {
-    return { max_tokens: 4096, thinking: { type: 'disabled' } };
+    return { max_tokens: vision ? VISION_OUTPUT_TOKEN_BUDGET : 4096, thinking: { type: 'disabled' } };
   }
 
   if (provider === 'custom') {
     return {
-      max_completion_tokens: 4096,
+      max_completion_tokens: vision ? VISION_OUTPUT_TOKEN_BUDGET : 4096,
       ...(model === 'gpt-6-luna' && { reasoning_effort: 'none' }),
     };
   }
@@ -548,7 +550,7 @@ function getOpenAiCompatOptions(provider: OpenAiCompatProvider, model: string, v
   if (provider === 'qwen') {
     const isQwen3Vl = /^qwen3-vl(?:-|$)/.test(model);
     return {
-      max_tokens: vision && isQwen3Vl ? 16384 : 4096,
+      max_tokens: vision ? VISION_OUTPUT_TOKEN_BUDGET : 4096,
       ...(model.startsWith('qwen3') && { enable_thinking: false }),
       ...(vision && isQwen3Vl && { vl_high_resolution_images: true }),
     };
@@ -556,15 +558,15 @@ function getOpenAiCompatOptions(provider: OpenAiCompatProvider, model: string, v
 
   if (provider === 'zhipu') {
     if (model.startsWith('glm-5.3')) {
-      return { max_tokens: 16384, thinking: { type: 'enabled' }, reasoning_effort: 'low' };
+      return { max_tokens: VISION_OUTPUT_TOKEN_BUDGET, thinking: { type: 'enabled' }, reasoning_effort: 'low' };
     }
     if (model === DEFAULT_MODELS.zhipuTextModel || model === DEFAULT_MODELS.zhipuVisionModel) {
-      return { max_tokens: 4096, thinking: { type: 'disabled' } };
+      return { max_tokens: vision ? VISION_OUTPUT_TOKEN_BUDGET : 4096, thinking: { type: 'disabled' } };
     }
-    return {};
+    return vision ? { max_tokens: VISION_OUTPUT_TOKEN_BUDGET } : {};
   }
 
-  return { max_tokens: 4096 };
+  return { max_tokens: vision ? VISION_OUTPUT_TOKEN_BUDGET : 4096 };
 }
 
 async function requestTextJson(config: DirectApiConfig, systemPrompt: string, userText: string): Promise<string> {
