@@ -2,7 +2,19 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createServer } from 'vite';
 
-const vite = await createServer({ server: { middlewareMode: true }, appType: 'custom', logLevel: 'error' });
+const vite = await createServer({
+  server: { middlewareMode: true }, appType: 'custom', logLevel: 'error',
+  plugins: [{
+    name: 'mock-pdf-rendering', enforce: 'pre',
+    transform(code, id) {
+      if (id === `${process.cwd()}/src/stores.ts`) {
+        return `import {writable} from 'svelte/store';
+          export const pdfService = writable({getPageAsImage: async (_, page) =>
+            'data:image/png;base64,' + Buffer.from(String(page)).toString('base64')});`;
+      }
+    },
+  }],
+});
 const originalFetch = globalThis.fetch;
 const calls = [];
 const outline = [{ title: '1 Introduction', level: 1, page: 1 }];
@@ -66,7 +78,7 @@ try {
           } else {
             assert.equal(call.body.model, expectedModel);
             assert.equal(call.headers.Authorization, 'Bearer user-key');
-            assert.equal(call.body.max_tokens, 4096);
+            assert.equal(call.body.max_tokens, provider === 'qwen' && input.images ? undefined : 4096);
           }
           if (provider === 'qwen') assert.equal(call.body.enable_thinking, false);
           if (provider === 'zhipu') assert.deepEqual(call.body.thinking, { type: 'disabled' });
@@ -187,6 +199,158 @@ try {
       assert.equal(response.status, 400);
       assert.equal(calls.length, before);
     } finally { console.error = originalError; }
+  });
+
+  await test('Qwen vision uses provider output defaults without enabling high-resolution input', async () => {
+    for (const model of ['qwen3-vl-plus', 'qwen2.5-vl-72b-instruct', 'qwen-vl-plus']) {
+      await core.processToc({provider: 'qwen', apiKey: 'user-key', images, modelOverrides: {qwenVisionModel: model}});
+      const body = calls.at(-1).body;
+      assert.equal(body.max_tokens, undefined);
+      assert.equal(body.vl_high_resolution_images, undefined);
+      assert.equal(body.enable_thinking, model.startsWith('qwen3') ? false : undefined);
+    }
+  });
+
+  await test('truncated TOC keeps complete records and discards an unfinished page number', async () => {
+    const successFetch = globalThis.fetch;
+    const first = {title: 'Title with braces { } and brackets [ ] and "quotes"', level: 1, page: 10};
+    globalThis.fetch = async () => Response.json({choices: [{finish_reason: 'length', message: {
+      content: `[${JSON.stringify(first)},{"title":"Unfinished","level":1,"page":1`,
+    }}]});
+    try {
+      assert.deepEqual(await core.processTocWithDiagnostics({provider: 'qwen', apiKey: 'user-key', images}),
+        {items: [first], incomplete: true});
+    } finally { globalThis.fetch = successFetch; }
+  });
+
+  await test('an unclosed array is reported even when finish_reason is stop', async () => {
+    const successFetch = globalThis.fetch;
+    globalThis.fetch = async () => Response.json({choices: [{finish_reason: 'stop', message: {
+      content: `[${JSON.stringify(outline[0])},`,
+    }}]});
+    try {
+      assert.deepEqual(await core.processTocWithDiagnostics({provider: 'qwen', apiKey: 'user-key', images}),
+        {items: outline, incomplete: true});
+    } finally { globalThis.fetch = successFetch; }
+  });
+
+  await test('a closed array at the output limit is still reported as incomplete', async () => {
+    const successFetch = globalThis.fetch;
+    globalThis.fetch = async () => Response.json({choices: [{finish_reason: 'length', message: {
+      content: JSON.stringify(outline),
+    }}]});
+    try {
+      assert.deepEqual(await core.processTocWithDiagnostics({provider: 'qwen', apiKey: 'user-key', images}),
+        {items: outline, incomplete: true});
+    } finally { globalThis.fetch = successFetch; }
+  });
+
+  await test('format repair on a complete array does not claim truncation', async () => {
+    const successFetch = globalThis.fetch;
+    globalThis.fetch = async () => Response.json({choices: [{finish_reason: 'stop', message: {
+      content: "[{title: 'Introduction', level: 1, page: 1,}]",
+    }}]});
+    try {
+      assert.deepEqual(await core.processTocWithDiagnostics({provider: 'qwen', apiKey: 'user-key', images}),
+        {items: [{title: 'Introduction', level: 1, page: 1}], incomplete: false});
+    } finally { globalThis.fetch = successFetch; }
+  });
+
+  await test('Gemini token truncation preserves valid TOC entries', async () => {
+    const successFetch = globalThis.fetch;
+    globalThis.fetch = async () => Response.json({candidates: [{finishReason: 'MAX_TOKENS', content: {parts: [
+      {text: `[${JSON.stringify(outline[0])}`},
+    ]}}]});
+    try {
+      assert.deepEqual(await core.processTocWithDiagnostics({provider: 'gemini', apiKey: 'user-key', images}),
+        {items: outline, incomplete: true});
+    } finally { globalThis.fetch = successFetch; }
+  });
+
+  const batching = await vite.ssrLoadModule('/src/lib/llm/batching.ts');
+  const {generateToc} = await vite.ssrLoadModule('/src/lib/toc-service.ts');
+  const {addMessages, init} = await vite.ssrLoadModule('svelte-i18n');
+  addMessages('en', (await vite.ssrLoadModule('/src/lib/i18n/locales/en.json')).default);
+  await init({fallbackLocale: 'en', initialLocale: 'en'});
+
+  await test('saved batch sizes default safely and page ranges preserve gaps', () => {
+    assert.equal(batching.normalizePagesPerRequest(), 8);
+    assert.equal(batching.normalizePagesPerRequest(NaN), 8);
+    assert.equal(batching.normalizePagesPerRequest(0), 1);
+    assert.equal(batching.normalizePagesPerRequest(100), 8);
+    assert.equal(batching.formatPageRanges([1, 2, 10, 11]), '1–2, 10–11');
+  });
+
+  const requestPages = (options) => JSON.parse(options.body).messages[1].content
+    .filter(part => part.type === 'image_url')
+    .map(part => Number(Buffer.from(part.image_url.url.split(',')[1], 'base64').toString()));
+  const config = {pdfInstance: {}, provider: 'qwen', apiKey: 'user-key'};
+
+  await test('ten pages use 8+2 by default and smaller batches preserve order with at most two requests active', async () => {
+    const successFetch = globalThis.fetch;
+    try {
+      for (const size of [undefined, 2, 1]) {
+        let active = 0;
+        let peak = 0;
+        const batches = [];
+        const progress = [];
+        globalThis.fetch = async (_, options) => {
+          const pages = requestPages(options);
+          batches.push(pages);
+          peak = Math.max(peak, ++active);
+          await new Promise(resolve => setTimeout(resolve, pages[0] === 1 ? 15 : 1));
+          active--;
+          return Response.json({choices: [{finish_reason: 'stop', message: {content: JSON.stringify(
+            pages.map(page => ({title: `Chapter ${page}`, level: 1, page})),
+          )}}]});
+        };
+        const result = await generateToc({...config, startPage: 1, endPage: 10, pagesPerRequest: size,
+          onProgress: (current, total) => progress.push([current, total])});
+        assert.deepEqual(batches.map(pages => pages.length), size ? Array(10 / size).fill(size) : [8, 2]);
+        assert.ok(peak <= 2);
+        assert.deepEqual(result.items.map(item => item.page), Array.from({length: 10}, (_, i) => i + 1));
+        assert.deepEqual(result.chunkFailures, []);
+        assert.deepEqual(result.chunkWarnings, []);
+        assert.deepEqual(progress.at(-1), [batches.length, batches.length]);
+      }
+    } finally { globalThis.fetch = successFetch; }
+  });
+
+  await test('an incomplete batch keeps data and reports its exact selected PDF pages without retrying', async () => {
+    const successFetch = globalThis.fetch;
+    const batches = [];
+    globalThis.fetch = async (_, options) => {
+      batches.push(requestPages(options));
+      return Response.json({choices: [{finish_reason: 'length', message: {
+        content: `[${JSON.stringify(outline[0])},{"title":"Unfinished","page":1`,
+      }}]});
+    };
+    try {
+      const result = await generateToc({...config, ranges: [{start: 1, end: 2}, {start: 10, end: 11}]});
+      assert.deepEqual(result.items, outline);
+      assert.deepEqual(result.chunkWarnings, [{pages: [1, 2, 10, 11], itemCount: 1}]);
+      assert.deepEqual(result.chunkFailures, []);
+      assert.equal(batches.length, 1);
+    } finally { globalThis.fetch = successFetch; }
+  });
+
+  await test('failed pages remain visible alongside successful batches', async () => {
+    const successFetch = globalThis.fetch;
+    let failedRequests = 0;
+    globalThis.fetch = async (_, options) => {
+      const pages = requestPages(options);
+      if (pages[0] === 1) {
+        failedRequests++;
+        return Response.json({error: {message: 'Upstream unavailable'}}, {status: 503});
+      }
+      return Response.json({choices: [{finish_reason: 'stop', message: {content: JSON.stringify(outline)}}]});
+    };
+    try {
+      const result = await generateToc({...config, startPage: 1, endPage: 4, pagesPerRequest: 2});
+      assert.deepEqual(result.items, outline);
+      assert.deepEqual(result.chunkFailures, [{pages: [1, 2], error: 'Upstream unavailable'}]);
+      assert.equal(failedRequests, 2);
+    } finally { globalThis.fetch = successFetch; }
   });
 } finally {
   globalThis.fetch = originalFetch;

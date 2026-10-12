@@ -16,6 +16,7 @@
     normalizeModelOverrides,
     type VisionPromptTemplate,
   } from '$lib/llm/core';
+  import {DEFAULT_PAGES_PER_REQUEST, normalizePagesPerRequest} from '$lib/llm/batching';
 
   export let isExpanded = false;
 
@@ -105,6 +106,7 @@
       doubaoEndpointIdVision: config.doubaoEndpointIdVision,
       modelOverrides: normalizeModelOverrides(config.modelOverrides),
       visionPrompt: config.visionPrompt,
+      pagesPerRequest: normalizePagesPerRequest(config.pagesPerRequest),
     };
 
     return effectiveConfig;
@@ -175,6 +177,7 @@
           visionPrompt: activePrompt,
           visionPromptTemplateId: activeId,
           visionPromptTemplates: templates,
+          pagesPerRequest: normalizePagesPerRequest(parsed.pagesPerRequest),
         };
         syncVisionTemplateName();
         dispatch('change', getEffectiveConfig());
@@ -194,6 +197,7 @@
   }
 
   function save() {
+    config.pagesPerRequest = normalizePagesPerRequest(config.pagesPerRequest);
     showApiKeyNotice = apiKeyMissing;
     if (apiKeyMissing) {
       apiKeyNoticeVersion += 1;
@@ -712,6 +716,34 @@
             {/if}
           </div>
         {/if}
+
+        <div class="api-settings-option">
+          <div class="relative mb-1 flex items-center gap-1.5">
+            <label class="font-bold text-sm" for="pages_per_request">
+              {$t('settings.pages_per_request')}
+            </label>
+            <button
+              type="button"
+              class="peer inline-flex items-center rounded-full text-stone-400 hover:text-stone-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+              aria-label={$t('settings.pages_per_request_info')}
+              aria-describedby="pages-per-request-info"
+            >
+              <Info size={14} />
+            </button>
+            <div
+              id="pages-per-request-info"
+              role="tooltip"
+              class="pointer-events-none invisible absolute left-0 top-full z-50 mt-2 w-72 max-w-full rounded-md border border-stone-300 bg-white p-3 text-xs font-normal leading-relaxed text-stone-600 shadow-md opacity-0 transition-opacity peer-hover:visible peer-hover:opacity-100 peer-focus:visible peer-focus:opacity-100"
+            >
+              {$t('settings.pages_per_request_hint')}
+            </div>
+          </div>
+          <select id="pages_per_request" class="form-select w-full" bind:value={config.pagesPerRequest} on:change={markDirty}>
+            {#each Array.from({length: DEFAULT_PAGES_PER_REQUEST}, (_, i) => i + 1) as pages}
+              <option value={pages}>{$t('settings.pages_per_request_value', {values: {pages}})}</option>
+            {/each}
+          </select>
+        </div>
 
         <div class="api-settings-option api-settings-prompt">
           <div class="mb-1 flex items-center justify-between gap-2">

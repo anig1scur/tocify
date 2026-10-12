@@ -16,6 +16,7 @@
   export let tocPdfInstance: any;
   export let isAiLoading = false;
   export let aiError: string | null = null;
+  export let aiWarning: string | null = null;
 
   export let tocRanges: {start: number; end: number; id: string}[];
   export let activeRangeIndex: number;
@@ -92,6 +93,12 @@
   {#if aiError}
     <div class="my-2 p-3 bg-red-100 border-2 border-red-700 text-red-700 rounded-lg whitespace-pre-line">
       {aiError}
+    </div>
+  {/if}
+
+  {#if aiWarning}
+    <div role="status" class="my-2 rounded-lg border-2 border-amber-600 bg-amber-50 p-3 text-amber-900 whitespace-pre-line">
+      {aiWarning}
     </div>
   {/if}
 

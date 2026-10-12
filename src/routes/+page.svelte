@@ -42,6 +42,7 @@
   import {applyCustomPrefix} from '$lib/utils/prefix';
   import {setPageLabels} from '$lib/pdf/page-labels';
   import {createEmptyApiConfig} from '$lib/llm/core';
+  import {formatPageRanges} from '$lib/llm/batching';
   import type {RecognitionIgnoreRegion} from '$lib/pdf/recognition-ignore';
   import {createZipBlob, getUniqueZipFilename, type ZipFileEntry} from '$lib/utils/zip';
 
@@ -127,6 +128,7 @@
   let pendingTocItems: TocItem[] = [];
   let firstTocItem: TocItem | null = null;
   let aiError: string | null = null;
+  let aiWarning: string | null = null;
   let aiProgress: {current: number; total: number} | null = null;
   let config: TocConfig;
 
@@ -306,6 +308,7 @@
       pendingTocItems,
       firstTocItem,
       aiError,
+      aiWarning,
       aiProgress,
       lastPdfContentJson,
       lastInsertAtPage,
@@ -350,6 +353,7 @@
       pendingTocItems,
       firstTocItem,
       aiError,
+      aiWarning,
       aiProgress,
       lastPdfContentJson,
       lastInsertAtPage,
@@ -1064,6 +1068,7 @@
 
     isAiLoading = true;
     aiError = null;
+    aiWarning = null;
     aiProgress = null;
 
     try {
@@ -1077,22 +1082,29 @@
         doubaoEndpointIdVision: customApiConfig.doubaoEndpointIdVision,
         modelOverrides: customApiConfig.modelOverrides,
         visionPrompt: customApiConfig.visionPrompt,
+        pagesPerRequest: customApiConfig.pagesPerRequest,
         recognitionIgnoreRegions,
         onProgress: (current, total) => {
           aiProgress = { current, total };
         },
       });
 
-      const { items, chunkFailures: failures } = res;
+      const { items, chunkFailures: failures, chunkWarnings: warnings } = res;
+
+      if (warnings.length > 0) {
+        aiWarning = warnings
+          .map(w => $t('error.chunk_incomplete', {values: {pages: formatPageRanges(w.pages), count: w.itemCount}}))
+          .join('\n');
+      }
 
       if (failures.length > 0) {
         aiError = failures
-          .map(f => $t('error.chunk_failed', { values: { start: f.start, end: f.end, reason: f.error } }))
+          .map(f => $t('error.chunk_failed', { values: { pages: formatPageRanges(f.pages), reason: f.error } }))
           .join('\n');
       }
 
       if (!items || items.length === 0) {
-        aiError = $t('toast.no_valid_toc');
+        aiError ||= $t('toast.no_valid_toc');
         return;
       }
 
@@ -1126,6 +1138,7 @@
   
   const handleAiFormatResponse = (e: any) => {
     const { items } = e.detail;
+    aiWarning = e.detail.incomplete ? $t('error.text_incomplete') : null;
     pendingTocItems = items;
     firstTocItem = items.length > 0 ? items[0] : null;
 
@@ -1386,6 +1399,7 @@
       {tocPdfInstance}
       {isAiLoading}
       {aiError}
+      {aiWarning}
       {config}
       {customApiConfig}
       {tocPageCount}
