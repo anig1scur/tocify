@@ -277,7 +277,8 @@ try {
     assert.equal(batching.normalizePagesPerRequest(), 8);
     assert.equal(batching.normalizePagesPerRequest(NaN), 8);
     assert.equal(batching.normalizePagesPerRequest(0), 1);
-    assert.equal(batching.normalizePagesPerRequest(100), 8);
+    assert.equal(batching.normalizePagesPerRequest(16), 16);
+    assert.equal(batching.normalizePagesPerRequest(100), 16);
     assert.equal(batching.formatPageRanges([1, 2, 10, 11]), '1–2, 10–11');
   });
 
@@ -289,7 +290,7 @@ try {
   await test('ten pages use 8+2 by default and smaller batches preserve order with at most two requests active', async () => {
     const successFetch = globalThis.fetch;
     try {
-      for (const size of [undefined, 2, 1]) {
+      for (const size of [undefined, 16, 2, 1]) {
         let active = 0;
         let peak = 0;
         const batches = [];
@@ -306,7 +307,9 @@ try {
         };
         const result = await generateToc({...config, startPage: 1, endPage: 10, pagesPerRequest: size,
           onProgress: (current, total) => progress.push([current, total])});
-        assert.deepEqual(batches.map(pages => pages.length), size ? Array(10 / size).fill(size) : [8, 2]);
+        const batchSize = size ?? 8;
+        assert.deepEqual(batches.map(pages => pages.length),
+          Array.from({length: Math.ceil(10 / batchSize)}, (_, i) => Math.min(batchSize, 10 - i * batchSize)));
         assert.ok(peak <= 2);
         assert.deepEqual(result.items.map(item => item.page), Array.from({length: 10}, (_, i) => i + 1));
         assert.deepEqual(result.chunkFailures, []);

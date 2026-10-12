@@ -1,9 +1,10 @@
 export const DEFAULT_PAGES_PER_REQUEST = 8;
+export const MAX_PAGES_PER_REQUEST = 16;
 export const MAX_CONCURRENT_TOC_REQUESTS = 2;
 
 export function normalizePagesPerRequest(value?: number): number {
   return typeof value === 'number' && Number.isFinite(value)
-    ? Math.max(1, Math.min(DEFAULT_PAGES_PER_REQUEST, Math.trunc(value)))
+    ? Math.max(1, Math.min(MAX_PAGES_PER_REQUEST, Math.trunc(value)))
     : DEFAULT_PAGES_PER_REQUEST;
 }
 

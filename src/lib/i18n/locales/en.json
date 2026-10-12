@@ -52,7 +52,7 @@
     "pages_per_request": "Pages per request",
     "pages_per_request_value": "{pages} pages",
     "pages_per_request_info": "How to choose pages per request",
-    "pages_per_request_hint": "Maximum TOC pages sent in one request; default: 8. Try 2–4 for dense text, incomplete results, or failed requests. Use 1 to check each page separately. Smaller batches make more requests; all selected pages are still processed. Click Save to apply.",
+    "pages_per_request_hint": "Maximum TOC pages per request; default: 8. Try 2–4 for dense text, incomplete results, or failed requests. Smaller batches make more requests.",
     "vision_prompt_placeholder": "Edit the full ToC image recognition template. Leave blank to use the built-in template.",
     "vision_prompt_reset": "Reset template",
     "vision_prompt_template_select": "Select ToC recognition template",

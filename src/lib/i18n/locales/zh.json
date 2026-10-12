@@ -48,7 +48,7 @@
     "pages_per_request": "每批识别页数",
     "pages_per_request_value": "{pages} 页",
     "pages_per_request_info": "每批识别页数使用说明",
-    "pages_per_request_hint": "每次请求最多识别多少张目录页面，默认 8 页。目录文字密集、识别不全或请求失败时，可调为 2–4 页；设为 1 页方便逐页核对。调小会增加请求次数，所选页面仍会全部识别。修改后点击保存。",
+    "pages_per_request_hint": "每次请求最多处理的目录页数，默认 8 页。目录文字密集、识别不全或请求失败时，建议调为 2–4 页。调小会增加请求次数。",
     "vision_prompt_placeholder": "编辑完整的目录图片识别模板。留空时使用内置模板。",
     "vision_prompt_reset": "恢复默认模板",
     "vision_prompt_template_select": "选择目录识别模板",

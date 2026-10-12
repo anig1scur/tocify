@@ -42,12 +42,12 @@ if (!providers.length) {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (url, options) => originalFetch(url, { ...options, signal: AbortSignal.timeout(45000) });
   try {
-    const { processToc } = await vite.ssrLoadModule('/src/lib/llm/core.ts');
+    const { processTocWithDiagnostics } = await vite.ssrLoadModule('/src/lib/llm/core.ts');
     for (const name of providers) {
       const apiKey = env[`TOCIFY_TEST_${name.toUpperCase()}_API_KEY`].trim();
       const started = Date.now();
       try {
-        const result = await processToc({
+        const recognition = await processTocWithDiagnostics({
           provider: name,
           apiKey,
           customBaseUrl: env.TOCIFY_TEST_CUSTOM_BASE_URL,
@@ -56,6 +56,8 @@ if (!providers.length) {
           modelOverrides: model ? Object.fromEntries(modelFields[name].map((field) => [field, model])) : undefined,
           ...(images ? { images } : { text: '1 Introduction .... 1\n1.1 Background .... 3\n2 Methods .... 8' }),
         });
+        const result = recognition.items;
+        assert.equal(recognition.incomplete, false, 'The model returned an incomplete outline.');
         assert.ok(result.length > 0, 'The model returned no outline entries.');
         if (!images) {
           assert.deepEqual(result, [

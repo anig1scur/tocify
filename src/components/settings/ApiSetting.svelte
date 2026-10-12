@@ -16,7 +16,7 @@
     normalizeModelOverrides,
     type VisionPromptTemplate,
   } from '$lib/llm/core';
-  import {DEFAULT_PAGES_PER_REQUEST, normalizePagesPerRequest} from '$lib/llm/batching';
+  import {MAX_PAGES_PER_REQUEST, normalizePagesPerRequest} from '$lib/llm/batching';
 
   export let isExpanded = false;
 
@@ -739,7 +739,7 @@
             </div>
           </div>
           <select id="pages_per_request" class="form-select w-full" bind:value={config.pagesPerRequest} on:change={markDirty}>
-            {#each Array.from({length: DEFAULT_PAGES_PER_REQUEST}, (_, i) => i + 1) as pages}
+            {#each Array.from({length: MAX_PAGES_PER_REQUEST}, (_, i) => i + 1) as pages}
               <option value={pages}>{$t('settings.pages_per_request_value', {values: {pages}})}</option>
             {/each}
           </select>
