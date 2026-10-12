@@ -521,10 +521,15 @@ async function fetchOpenAiCompatJson(
   }
 
   const data = await response.json();
-  return data?.choices?.[0]?.message?.content || '[]';
+  const choice = data?.choices?.[0];
+  // A repaired, truncated JSON array can silently omit later TOC entries.
+  if (choice?.finish_reason === 'length') {
+    throw new Error(`The ${ String(body.model) } response reached its output token limit. Try fewer TOC pages per request.`);
+  }
+  return choice?.message?.content || '[]';
 }
 
-function getOpenAiCompatOptions(provider: OpenAiCompatProvider, model: string): Record<string, unknown> {
+function getOpenAiCompatOptions(provider: OpenAiCompatProvider, model: string, vision = false): Record<string, unknown> {
   if (provider === 'deepseek') {
     return { max_tokens: 4096, thinking: { type: 'disabled' } };
   }
@@ -541,9 +546,11 @@ function getOpenAiCompatOptions(provider: OpenAiCompatProvider, model: string): 
   }
 
   if (provider === 'qwen') {
+    const isQwen3Vl = /^qwen3-vl(?:-|$)/.test(model);
     return {
-      max_tokens: 4096,
+      max_tokens: vision && isQwen3Vl ? 16384 : 4096,
       ...(model.startsWith('qwen3') && { enable_thinking: false }),
+      ...(vision && isQwen3Vl && { vl_high_resolution_images: true }),
     };
   }
 
@@ -637,7 +644,7 @@ async function requestVisionJson(config: DirectApiConfig, systemPrompt: string, 
   const model = getOpenAiCompatVisionModel(provider, config);
   const visionBody: Record<string, unknown> = {
     model,
-    ...getOpenAiCompatOptions(provider, model),
+    ...getOpenAiCompatOptions(provider, model, true),
     messages: [
       { role: 'system', content: systemPrompt },
       {
