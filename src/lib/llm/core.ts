@@ -548,11 +548,10 @@ function getOpenAiCompatOptions(provider: OpenAiCompatProvider, model: string, v
   }
 
   if (provider === 'qwen') {
-    const isQwen3Vl = /^qwen3-vl(?:-|$)/.test(model);
     return {
       max_tokens: vision ? VISION_OUTPUT_TOKEN_BUDGET : 4096,
       ...(model.startsWith('qwen3') && { enable_thinking: false }),
-      ...(vision && isQwen3Vl && { vl_high_resolution_images: true }),
+      ...(vision && { vl_high_resolution_images: true }),
     };
   }
 
