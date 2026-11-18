@@ -6,6 +6,7 @@
   import {ChevronLeft, ChevronRight, Copy, Eraser, Trash2, X, RotateCcw} from 'lucide-svelte';
   import Modal from './modals/Modal.svelte';
   import {MOTION} from '$lib/utils/motion';
+  import {modKey} from '$lib/utils/shortcuts';
   import type {RecognitionIgnoreRegion} from '$lib/pdf/recognition-ignore';
   import {normalizeRegion} from '$lib/pdf/recognition-ignore';
 
@@ -119,14 +120,45 @@
     } else {
       currentPage = selectedPageNumbers.find((page) => allPageNumbers.includes(page)) || allPageNumbers[0] || 1;
     }
+    undoStack = [];
+    redoStack = [];
     isOpen = true;
     await tick();
     canvasWrap?.closest('[role="dialog"]')?.querySelector('[aria-current="page"]')?.scrollIntoView({block: 'nearest', inline: 'nearest'});
     renderPage();
   }
 
-  function updateRegions(nextRegions: RecognitionIgnoreRegion[]) {
+  // Area edits are undoable while the editor is open (⌘Z / ⌘⇧Z).
+  let undoStack: RecognitionIgnoreRegion[][] = [];
+  let redoStack: RecognitionIgnoreRegion[][] = [];
+  const MAX_UNDO = 50;
+
+  function emitRegions(nextRegions: RecognitionIgnoreRegion[]) {
     dispatch('change', nextRegions.map(normalizeRegion).filter((region) => region.width > 0 && region.height > 0));
+  }
+
+  function updateRegions(nextRegions: RecognitionIgnoreRegion[]) {
+    undoStack = [...undoStack.slice(-(MAX_UNDO - 1)), ignoreRegions.map((region) => ({...region}))];
+    redoStack = [];
+    emitRegions(nextRegions);
+  }
+
+  function stepHistory(direction: 'undo' | 'redo') {
+    const from = direction === 'undo' ? undoStack : redoStack;
+    const snapshot = from[from.length - 1];
+    if (!snapshot) return;
+    const current = ignoreRegions.map((region) => ({...region}));
+    if (direction === 'undo') {
+      undoStack = undoStack.slice(0, -1);
+      redoStack = [...redoStack, current];
+    } else {
+      redoStack = redoStack.slice(0, -1);
+      undoStack = [...undoStack, current];
+    }
+    resetInteraction();
+    if (focusedRegionId && !snapshot.some((region) => region.id === focusedRegionId)) focusedRegionId = '';
+    hoveredRegionId = '';
+    emitRegions(snapshot);
   }
 
   async function renderPage() {
@@ -362,9 +394,18 @@
   }
 
   function handleWindowKeydown(e: KeyboardEvent) {
-    if (!isOpen || e.defaultPrevented || e.isComposing || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (!isOpen || e.defaultPrevented || e.isComposing || e.altKey) return;
     const target = e.target instanceof HTMLElement ? e.target : null;
     if (target?.closest('input, textarea, select, [contenteditable]')) return;
+
+    if (e.metaKey || e.ctrlKey) {
+      const key = e.key.toLowerCase();
+      if (key === 'z' || key === 'y') {
+        e.preventDefault();
+        stepHistory(key === 'y' || e.shiftKey ? 'redo' : 'undo');
+      }
+      return;
+    }
 
     if ((e.key === 'Delete' || e.key === 'Backspace') && focusedRegionId) {
       e.preventDefault();
@@ -584,6 +625,7 @@
   size="xl"
   tall
   on:close={closeEditor}
+  on:submit={closeEditor}
 >
   <svelte:fragment slot="icon"><Eraser size={18} strokeWidth={2.25} /></svelte:fragment>
 
@@ -694,7 +736,7 @@
             on:click={() => stepPage(-1)}
             disabled={currentPageIndex <= 0}
             aria-label={$t('recognition_ignore.prev_page')}
-            title={$t('recognition_ignore.prev_page')}
+            title="{$t('recognition_ignore.prev_page')} (←)"
           >
             <ChevronLeft size={16} />
           </button>
@@ -707,7 +749,7 @@
             on:click={() => stepPage(1)}
             disabled={currentPageIndex >= allPageNumbers.length - 1}
             aria-label={$t('recognition_ignore.next_page')}
-            title={$t('recognition_ignore.next_page')}
+            title="{$t('recognition_ignore.next_page')} (→)"
           >
             <ChevronRight size={16} />
           </button>
@@ -804,6 +846,7 @@
       type="button"
       class="nb-btn bg-green-500 px-5"
       on:click={closeEditor}
+      title="{$t('recognition_ignore.done')} ({modKey} ↩)"
     >
       {$t('recognition_ignore.done')}
     </button>

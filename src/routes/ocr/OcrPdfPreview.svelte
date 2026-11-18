@@ -1,4 +1,5 @@
 <script lang="ts">
+  import {modKey} from '$lib/utils/shortcuts';
   import { t } from 'svelte-i18n';
   import { ChevronLeft, ChevronRight, Download, Loader2, RotateCw, Upload, ZoomIn, ZoomOut } from 'lucide-svelte';
 
@@ -270,7 +271,7 @@
           <button
             class="btn flex gap-2 items-center justify-center font-bold bg-white text-black border-2 border-black rounded-lg px-4 py-2 shadow-[2px_2px_0px_var(--hard-shadow-color)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all disabled:bg-gray-300 disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0 w-full md:w-auto"
             on:click={openFilePicker}
-            title={$t('tooltip.upload_new')}
+            title="{$t('tooltip.upload_new')} ({modKey} O)"
           >
             <Upload size={16} />
             {$t('btn.upload_new')}
@@ -280,7 +281,7 @@
             on:click={generateSearchablePdf}
             disabled={!pdfFile || isFileLoading || isBuilding}
             aria-busy={isBuilding}
-            title={$t('tooltip.export_pdf')}
+            title="{$t('tooltip.export_pdf')} ({modKey} S)"
           >
             {#if isBuilding}
               <Loader2 size={16} class="animate-spin" />

@@ -7,6 +7,7 @@
   import type {ExportableChapter} from '$lib/pdf/chapter-export';
   import {MOTION} from '$lib/utils/motion';
   import Modal from './Modal.svelte';
+  import {hasMod, isEditableTarget, modKey} from '$lib/utils/shortcuts';
 
   export let showChapterExportModal = false;
   export let chapters: ExportableChapter[] = [];
@@ -20,6 +21,24 @@
   let visibleChapters: ExportableChapter[] = [];
   let lastExpandInitKey = '';
   let wasOpen = false;
+  let searchInput: HTMLInputElement;
+
+  function confirmExport() {
+    if (selectedCount > 0) dispatch('confirm');
+  }
+
+  /** ⌘A selects every chapter, / jumps to the search box. */
+  function handleKeydown(e: KeyboardEvent) {
+    if (!showChapterExportModal || e.defaultPrevented || e.isComposing || isEditableTarget(e.target)) return;
+    if (hasMod(e) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'a') {
+      e.preventDefault();
+      selectAll();
+    } else if (e.key === '/' && !hasMod(e) && !e.altKey) {
+      e.preventDefault();
+      e.stopPropagation();
+      searchInput?.focus();
+    }
+  }
 
   $: selectedCount = selectedChapterIds.length;
   $: selectedIdSet = new Set(selectedChapterIds);
@@ -160,8 +179,11 @@
   }
 </script>
 
+<svelte:window on:keydown={handleKeydown} />
+
 <Modal
   bind:open={showChapterExportModal}
+  on:submit={confirmExport}
   title={$t('chapter_export.title')}
   closeLabel={$t('chapter_export.close')}
   accent="green"
@@ -175,7 +197,15 @@
       <Search size={16} aria-hidden="true" class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
       <input
         type="text"
+        bind:this={searchInput}
         bind:value={searchQuery}
+        on:keydown={(e) => {
+          // First Esc clears the search; the next one closes the dialog.
+          if (e.key === 'Escape' && searchQuery) {
+            e.preventDefault();
+            searchQuery = '';
+          }
+        }}
         aria-label={$t('chapter_export.search_placeholder')}
         placeholder={$t('chapter_export.search_placeholder')}
         class="nb-field pl-9 pr-9"
@@ -194,7 +224,7 @@
     </div>
 
     <div class="flex flex-wrap items-center gap-1.5" role="group" aria-label={$t('chapter_export.selection_actions')}>
-      <button type="button" class="nb-chip" aria-pressed={isAllSelected} on:click={selectAll} disabled={chapters.length === 0}>
+      <button type="button" class="nb-chip" aria-pressed={isAllSelected} on:click={selectAll} disabled={chapters.length === 0} title="{$t('chapter_export.select_all')} ({modKey} A)">
         {$t('chapter_export.select_all')}
       </button>
       {#if hasExpandableChapters}
@@ -312,8 +342,9 @@
 
     <button
       type="button"
-      on:click={() => dispatch('confirm')}
+      on:click={confirmExport}
       disabled={selectedCount === 0}
+      title="{$t('chapter_export.export')} ({modKey} ↩)"
       class="nb-btn bg-green-500"
     >
       <Download size={15} strokeWidth={2.25} />

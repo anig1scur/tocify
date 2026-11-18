@@ -25,6 +25,7 @@
   import {flip} from 'svelte/animate';
   import {fly} from 'svelte/transition';
   import {settle} from '$lib/utils/motion';
+  import {hasMod, isDialogOpen, isEditableTarget, modKey} from '$lib/utils/shortcuts';
 
   function focusOnMount(node: HTMLInputElement) {
     node.focus();
@@ -56,6 +57,9 @@
   let showBatchOffsetEditor = false;
   let selectedIds = new Set<string>();
   let selectionAnchorId: string | null = null;
+  // The moving end of a keyboard selection (↑/↓, ⇧↑/⇧↓).
+  let selectionCursorId: string | null = null;
+  let searchInput: HTMLInputElement | undefined;
   let isSelectionDragging = false;
   let selectionDragAnchorId: string | null = null;
   let selectionDragMode: 'add' | 'remove' = 'add';
@@ -101,38 +105,204 @@
     handleMouseUp();
     selectedIds = new Set();
     selectionAnchorId = null;
+    selectionCursorId = null;
     showBatchOffsetEditor = false;
     batchOffsetInput = '';
   }
 
-  function isEditableKeyboardTarget(target: EventTarget | null) {
-    const element = target instanceof HTMLElement ? target : null;
-    return Boolean(element?.closest('input, textarea, select, [contenteditable]'));
+  /** Selecting rows ends any title/page edit, so Delete, Esc and arrows act on the selection. */
+  function releaseTreeFieldFocus() {
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && active.closest('.toc-tree-body') && isEditableTarget(active)) {
+      active.blur();
+    }
+  }
+
+  type VisibleRow = {id: string; parentId: string | null; hasChildren: boolean; open: boolean};
+
+  /** Rows as they appear on screen: collapsed subtrees and search misses are skipped. */
+  function getVisibleRows(items: TocEntry[], parentId: string | null = null): VisibleRow[] {
+    return items.flatMap((item) => {
+      const hasChildren = (item.children?.length ?? 0) > 0;
+      const row = {id: item.id, parentId, hasChildren, open: Boolean(item.open)};
+      return hasChildren && item.open ? [row, ...getVisibleRows(item.children, item.id)] : [row];
+    });
+  }
+
+  function getRowElement(id: string) {
+    // A row that just moved can briefly exist twice: the old copy fades out inside an inert container.
+    return [...document.querySelectorAll<HTMLElement>(`.toc-tree-body [data-toc-item-id="${CSS.escape(id)}"]`)]
+      .find((element) => !element.closest('[inert]')) ?? null;
+  }
+
+  function revealRow(id: string) {
+    tick().then(() => getRowElement(id)?.scrollIntoView({block: 'nearest'}));
+  }
+
+  function getCursorIndex(rows: VisibleRow[]) {
+    const byCursor = selectionCursorId ? rows.findIndex((row) => row.id === selectionCursorId) : -1;
+    if (byCursor !== -1) return byCursor;
+    for (let index = rows.length - 1; index >= 0; index -= 1) {
+      if (selectedIds.has(rows[index].id)) return index;
+    }
+    return -1;
+  }
+
+  function moveSelectionCursor(delta: 1 | -1, extend: boolean) {
+    const rows = getVisibleRows(displayedTocItems);
+    if (rows.length === 0) return;
+
+    const cursorIndex = getCursorIndex(rows);
+    const nextIndex =
+      cursorIndex === -1
+        ? delta > 0 ? 0 : rows.length - 1
+        : Math.max(0, Math.min(rows.length - 1, cursorIndex + delta));
+    const nextId = rows[nextIndex].id;
+
+    if (extend) {
+      const anchorId =
+        selectionAnchorId && rows.some((row) => row.id === selectionAnchorId)
+          ? selectionAnchorId
+          : rows[Math.max(cursorIndex, 0)].id;
+      selectRange(anchorId, nextId, 'add', new Set());
+    } else {
+      selectedIds = new Set([nextId]);
+      selectionAnchorId = nextId;
+    }
+
+    selectionCursorId = nextId;
+    revealRow(nextId);
+  }
+
+  function selectOnly(id: string) {
+    selectedIds = new Set([id]);
+    selectionAnchorId = id;
+    selectionCursorId = id;
+    revealRow(id);
+  }
+
+  function setItemOpen(id: string, open: boolean) {
+    const updateRecursive = (items: TocEntry[]): TocEntry[] =>
+      items.map((item) => {
+        if (item.id === id) return {...item, open};
+        return item.children?.length ? {...item, children: updateRecursive(item.children)} : item;
+      });
+    $tocItems = updateRecursive($tocItems);
+  }
+
+  /** ← collapses, or steps out to the parent; → expands, or steps into the first child. */
+  function stepTree(direction: 'in' | 'out') {
+    const rows = getVisibleRows(displayedTocItems);
+    const cursorIndex = getCursorIndex(rows);
+    if (cursorIndex === -1) return;
+    const row = rows[cursorIndex];
+
+    if (direction === 'out') {
+      if (row.hasChildren && row.open && !normalizedTocSearch) setItemOpen(row.id, false);
+      else if (row.parentId) selectOnly(row.parentId);
+      return;
+    }
+
+    if (!row.hasChildren) return;
+    if (!row.open && !normalizedTocSearch) setItemOpen(row.id, true);
+    else if (rows[cursorIndex + 1]) selectOnly(rows[cursorIndex + 1].id);
+  }
+
+  function editRowTitle(id: string) {
+    const input = getRowElement(id)?.querySelector<HTMLInputElement>('.toc-item-title');
+    if (!input) return;
+    input.focus();
+    const end = input.value.length;
+    input.setSelectionRange(end, end);
+  }
+
+  function selectAllVisibleItems() {
+    const ids = normalizedTocSearch
+      ? [...searchMatchedIds]
+      : flattenTocItems($tocItems).map((item) => item.id);
+    if (ids.length === 0) return;
+    selectedIds = new Set(ids);
+    selectionAnchorId = ids[0];
+    selectionCursorId = ids[ids.length - 1];
+  }
+
+  function focusSearch() {
+    if (!searchInput) return false;
+    searchInput.focus();
+    searchInput.select();
+    return true;
   }
 
   function handleKeydown(e: KeyboardEvent) {
-    if (e.isComposing || e.defaultPrevented || isEditableKeyboardTarget(e.target)) return;
+    if (e.isComposing || e.defaultPrevented) return;
     // Dialogs own the keyboard while open (e.g. Backspace deletes an erase area there).
-    if (e.target instanceof Element && e.target.closest('[role="dialog"]')) return;
+    if (isDialogOpen()) return;
 
+    const target = e.target instanceof Element ? e.target : null;
+    const inField = isEditableTarget(target);
+    const inTree = Boolean(target?.closest('.toc-tree'));
+    // Enter and Tab keep their native meaning on a focused button or link.
+    const onControl = Boolean(target?.closest('button, a, select, summary, [role="tab"]'));
+    const mod = hasMod(e);
+    const key = e.key;
     let handled = false;
-    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
+
+    if (key === 'Escape') {
+      // Esc steps back one layer at a time: the field being edited (or the search text), then the selection.
+      if (inField && inTree) {
+        if (target === searchInput && tocSearchQuery) {
+          tocSearchQuery = '';
+        } else {
+          (target as HTMLElement).blur();
+        }
+        handled = true;
+      } else if (!inField && selectedIds.size > 0) {
+        clearSelection();
+        handled = true;
+      } else if (!inField && tocSearchQuery) {
+        tocSearchQuery = '';
+        handled = true;
+      }
+    } else if (inField) {
+      // Typing keeps native behaviour; the title/page fields add their own keys in TocItem.
+      if (inTree && mod && key === 'Enter' && target instanceof HTMLTextAreaElement && hasInvalidLines) {
+        handleAiFormat();
+        handled = true;
+      }
+    } else if (mod && !e.altKey && key.toLowerCase() === 'z') {
       handled = true;
       if (e.shiftKey) redo();
       else undo();
-    } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'y') {
+    } else if (mod && !e.altKey && key.toLowerCase() === 'y') {
       handled = true;
       redo();
-    } else if (
-      (e.key === 'Delete' || e.key === 'Backspace') &&
-      !e.metaKey &&
-      !e.ctrlKey &&
-      !e.altKey
-    ) {
-      handled = deleteSelectedTocItems();
-    } else if (e.key === 'Escape' && selectedIds.size > 0) {
-      handled = true;
-      clearSelection();
+    } else if (view === 'tree' && $tocItems.length > 0) {
+      const hasSelection = selectedIds.size > 0;
+
+      if ((key === 'Delete' || key === 'Backspace') && !mod && !e.altKey) {
+        handled = deleteSelectedTocItems();
+      } else if (mod && !e.altKey && !e.shiftKey && key.toLowerCase() === 'a') {
+        selectAllVisibleItems();
+        handled = true;
+      } else if (mod && !e.shiftKey && !e.altKey && key.toLowerCase() === 'f') {
+        handled = focusSearch();
+      } else if (!mod && !e.altKey && (key === 'ArrowDown' || key === 'ArrowUp') && hasSelection) {
+        moveSelectionCursor(key === 'ArrowDown' ? 1 : -1, e.shiftKey);
+        handled = true;
+      } else if (!mod && !e.altKey && !e.shiftKey && (key === 'ArrowLeft' || key === 'ArrowRight') && hasSelection) {
+        stepTree(key === 'ArrowRight' ? 'in' : 'out');
+        handled = true;
+      } else if (key === 'Enter' && !mod && !e.altKey && hasSelection && !onControl) {
+        const rows = getVisibleRows(displayedTocItems);
+        const cursorIndex = getCursorIndex(rows);
+        if (cursorIndex !== -1) {
+          editRowTitle(rows[cursorIndex].id);
+          handled = true;
+        }
+      } else if (key === 'Tab' && !mod && !e.altKey && hasSelection && !onControl) {
+        adjustSelectedLevels(e.shiftKey ? -1 : 1);
+        handled = true;
+      }
     }
 
     if (!handled) return;
@@ -408,6 +578,8 @@
 
   function handleSelectItem(item: TocEntry, event: MouseEvent) {
     window.getSelection()?.removeAllRanges();
+    releaseTreeFieldFocus();
+    selectionCursorId = item.id;
 
     const flatItems = flattenTocItems($tocItems);
     const indexMap = getFlatIndexMap(flatItems);
@@ -434,6 +606,8 @@
 
   function handleSelectionDragStart(item: TocEntry, event: MouseEvent) {
     if (event.button !== 0) return;
+    releaseTreeFieldFocus();
+    selectionCursorId = item.id;
     isSelectionDragging = true;
     selectionDragAnchorId = item.id;
     selectionAnchorId = item.id;
@@ -466,6 +640,7 @@
 
     if (!itemId) return;
     selectRange(selectionDragAnchorId, itemId, selectionDragMode, selectionBeforeDrag);
+    selectionCursorId = itemId;
   }
 
   function adjustSelectedPageOffset(delta: number) {
@@ -498,11 +673,23 @@
   }
 
   function adjustSelectedLevels(delta: -1 | 1) {
-    if (selectedIds.size === 0) return;
+    adjustLevels(selectedIds, delta);
+  }
+
+  /** Tab / ⇧Tab inside a title: move that one entry (with its children) down or up a level. */
+  async function indentItem(item: TocEntry, delta: -1 | 1) {
+    const changed = adjustLevels(new Set([item.id]), delta);
+    if (!changed) return;
+    await tick();
+    editRowTitle(item.id);
+  }
+
+  function adjustLevels(ids: Set<string>, delta: -1 | 1) {
+    if (ids.size === 0) return false;
 
     const originalFlatItems = normalizeFlatLevels(flattenTocItems($tocItems));
     const flatItems = [...originalFlatItems];
-    const selectedRootIds = getSelectedRootIds(originalFlatItems, selectedIds);
+    const selectedRootIds = getSelectedRootIds(originalFlatItems, ids);
     const selectedRootIdSet = new Set(selectedRootIds);
     const indexMap = getFlatIndexMap(originalFlatItems);
     let hasChanges = false;
@@ -529,13 +716,14 @@
       hasChanges = true;
     }
 
-    if (!hasChanges) return;
+    if (!hasChanges) return false;
 
     const nextFlatItems = assignParentIdsFromLevels(flatItems);
     const forceOpenIds = getAncestorIds(nextFlatItems, selectedRootIds);
 
     saveHistory();
     $tocItems = buildTreeFromFlat(nextFlatItems, forceOpenIds);
+    return true;
   }
 
   async function handleAiFormat() {
@@ -880,79 +1068,82 @@
   <div class="toc-tree ui-card relative">
     <div class="toc-tree-header sticky top-0 z-30 flex min-h-[46px] items-center gap-2 rounded-t-[6px] border-b border-[color:var(--divider)] bg-white px-2.5 py-2">
       {#if selectedCount >= 1 && view === 'tree'}
-        <div class="flex min-w-0 flex-1 flex-wrap items-center gap-1.5" in:settle>
-          <span class="mr-1 rounded-md bg-yellow-100 px-2 py-1 text-xs font-bold tabular-nums text-black" title={$t('toc.batch_operations')}>
+        <!-- One row when it fits; otherwise count + close on top and the actions share the second row evenly. -->
+        <div class="selection-bar" in:settle>
+          <span class="selection-count" title={$t('toc.batch_operations')}>
             {$t('toc.selected_count', {values: {count: selectedCount}})}
           </span>
-          <button
-            type="button"
-            on:click={() => adjustSelectedLevels(-1)}
-            title={$t('toc.promote_selected_hint')}
-            class="nb-btn nb-btn-sm bg-blue-300"
-          >
-            <ArrowUp size={13} strokeWidth={2.25} />
-            {$t('toc.promote_selected')}
-          </button>
-          <button
-            type="button"
-            on:click={() => adjustSelectedLevels(1)}
-            title={$t('toc.demote_selected_hint')}
-            class="nb-btn nb-btn-sm bg-lime-300"
-          >
-            <ArrowDown size={13} strokeWidth={2.25} />
-            {$t('toc.demote_selected')}
-          </button>
-          {#if showBatchOffsetEditor}
-            <div class="flex items-center gap-1.5" in:settle={{y: 0}}>
-              <input
-                type="number"
-                bind:value={batchOffsetInput}
-                placeholder={$t('toc.offset_placeholder')}
-                on:keydown={(e) => {
-                  if (e.key === 'Enter') applyBatchOffset();
-                  if (e.key === 'Escape') {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    showBatchOffsetEditor = false;
-                  }
-                }}
-                use:focusOnMount
-                aria-label={$t('toc.offset_selected_hint')}
-                class="nb-field h-7 w-16 px-2 text-xs"
-              />
-              <button
-                type="button"
-                on:click={applyBatchOffset}
-                title={$t('toc.apply_offset_hint')}
-                class="nb-btn nb-btn-sm bg-yellow-400"
-              >
-                {$t('toc.apply_offset')}
-              </button>
-            </div>
-          {:else}
+          <div class="selection-actions">
             <button
               type="button"
-              on:click={() => {
-                showBatchOffsetEditor = true;
-                batchOffsetInput = '';
-              }}
-              title={$t('toc.offset_selected_hint')}
-              class="nb-btn nb-btn-sm bg-yellow-400"
+              on:click={() => adjustSelectedLevels(-1)}
+              title="{$t('toc.promote_selected_hint')} (⇧Tab)"
+              class="nb-btn nb-btn-sm bg-blue-300"
             >
-              <Hash size={13} strokeWidth={2.25} />
-              {$t('toc.offset_selected')}
+              <ArrowUp size={13} strokeWidth={2.25} />
+              {$t('toc.promote_selected')}
             </button>
-          {/if}
+            <button
+              type="button"
+              on:click={() => adjustSelectedLevels(1)}
+              title="{$t('toc.demote_selected_hint')} (Tab)"
+              class="nb-btn nb-btn-sm bg-lime-300"
+            >
+              <ArrowDown size={13} strokeWidth={2.25} />
+              {$t('toc.demote_selected')}
+            </button>
+            {#if showBatchOffsetEditor}
+              <div class="offset-editor" in:settle={{y: 0}}>
+                <input
+                  type="number"
+                  bind:value={batchOffsetInput}
+                  placeholder={$t('toc.offset_placeholder')}
+                  on:keydown={(e) => {
+                    if (e.key === 'Enter') applyBatchOffset();
+                    if (e.key === 'Escape') {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      showBatchOffsetEditor = false;
+                    }
+                  }}
+                  use:focusOnMount
+                  aria-label={$t('toc.offset_selected_hint')}
+                  class="nb-field h-8 min-w-0 flex-1 px-2 text-center text-xs [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                />
+                <button
+                  type="button"
+                  on:click={applyBatchOffset}
+                  title={$t('toc.apply_offset_hint')}
+                  class="nb-btn nb-btn-sm bg-yellow-400"
+                >
+                  {$t('toc.apply_offset')}
+                </button>
+              </div>
+            {:else}
+              <button
+                type="button"
+                on:click={() => {
+                  showBatchOffsetEditor = true;
+                  batchOffsetInput = '';
+                }}
+                title={$t('toc.offset_selected_hint')}
+                class="nb-btn nb-btn-sm bg-yellow-400"
+              >
+                <Hash size={13} strokeWidth={2.25} />
+                {$t('toc.offset_selected')}
+              </button>
+            {/if}
+          </div>
+          <button
+            type="button"
+            on:click={clearSelection}
+            class="selection-close nb-icon-btn"
+            aria-label={$t('toc.clear_selection')}
+            title="{$t('toc.clear_selection')} (Esc)"
+          >
+            <X size={16} />
+          </button>
         </div>
-        <button
-          type="button"
-          on:click={clearSelection}
-          class="nb-icon-btn self-start"
-          aria-label={$t('toc.clear_selection')}
-          title={$t('toc.clear_selection')}
-        >
-          <X size={16} />
-        </button>
       {:else}
         <div class="flex min-w-0 flex-1 items-center gap-2" in:settle>
           <div class="ui-segmented shrink-0" role="tablist" aria-label={$t('header.toc')}>
@@ -971,7 +1162,9 @@
               <Search size={14} aria-hidden="true" class="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
                 type="text"
+                bind:this={searchInput}
                 bind:value={tocSearchQuery}
+                title="{$t('toc.search_placeholder') || 'Search ToC...'} ({modKey} F)"
                 aria-label={$t('toc.search_placeholder') || 'Search ToC...'}
                 placeholder={$t('toc.search_placeholder') || 'Search ToC...'}
                 class="nb-field h-8 pl-8 pr-7 text-xs"
@@ -1079,6 +1272,7 @@
                 onDragEnd={handleDragEnd}
                 onSelect={handleSelectItem}
                 onSelectionDragStart={handleSelectionDragStart}
+                onIndent={indentItem}
                 {currentPage}
                 {isPreview}
                 {pageOffset}
@@ -1145,6 +1339,80 @@
 </div>
 
 <style>
+  .toc-tree-header {
+    container-type: inline-size;
+  }
+
+  /* Narrow sidebar: count and close share the top row, the three actions split the second row evenly. */
+  .selection-bar {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'count close'
+      'actions actions';
+    align-items: center;
+    gap: 8px 6px;
+  }
+
+  .selection-count {
+    grid-area: count;
+    justify-self: start;
+    display: inline-flex;
+    align-items: center;
+    height: 24px;
+    padding: 0 8px;
+    border-radius: 6px;
+    background: #fef9c3;
+    color: #000;
+    font-size: 12px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .selection-actions {
+    grid-area: actions;
+    display: flex;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .selection-actions > button {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .offset-editor {
+    display: flex;
+    flex: 1.5 1 0;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .selection-close {
+    grid-area: close;
+  }
+
+  /* Wide enough for everything: a single row. */
+  @container (min-width: 430px) {
+    .selection-bar {
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      grid-template-areas: 'count actions close';
+      column-gap: 8px;
+    }
+
+    .selection-actions > button {
+      flex: 0 0 auto;
+    }
+
+    .offset-editor {
+      flex: 0 1 11rem;
+    }
+  }
+
   textarea.toc-text,
   textarea.toc-text:focus {
     border: 0;

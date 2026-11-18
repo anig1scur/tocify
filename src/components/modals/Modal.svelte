@@ -22,7 +22,7 @@
   export let bodyClass = '';
   export let labelledBy = '';
 
-  const dispatch = createEventDispatcher<{close: void}>();
+  const dispatch = createEventDispatcher<{close: void; submit: void}>();
   const titleId = `dialog-title-${Math.random().toString(36).slice(2, 9)}`;
 
   let panel: HTMLDivElement;
@@ -81,10 +81,16 @@
     open = false;
   }
 
+  /** Esc closes; ⌘/Ctrl + Enter fires the dialog's primary action (`on:submit`). */
   function handleKeydown(event: KeyboardEvent) {
-    if (!open || event.defaultPrevented || event.key !== 'Escape') return;
-    event.preventDefault();
-    close();
+    if (!open || event.defaultPrevented || event.isComposing) return;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      close();
+    } else if (event.key === 'Enter' && (event.metaKey || event.ctrlKey) && !event.altKey) {
+      event.preventDefault();
+      dispatch('submit');
+    }
   }
 
   function trapFocus(event: KeyboardEvent) {
@@ -145,7 +151,7 @@
           type="button"
           class="nb-icon-btn"
           on:click={close}
-          title={closeLabel}
+          title="{closeLabel} (Esc)"
           aria-label={closeLabel}
         >
           <X size={18} />

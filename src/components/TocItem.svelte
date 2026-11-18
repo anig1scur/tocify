@@ -23,6 +23,8 @@
   export let onDragEnd: () => void = () => {};
   export let onSelect: (item: TocItem, event: MouseEvent) => void = () => {};
   export let onSelectionDragStart: (item: TocItem, event: MouseEvent) => void = () => {};
+  /** Tab / ⇧Tab in a title: demote / promote this entry. */
+  export let onIndent: (item: TocItem, delta: -1 | 1) => void = () => {};
   export let selectedIds: Set<string> = new Set();
   export let searchQuery = '';
 
@@ -47,6 +49,8 @@
   let isFocused = false;
   let isPageFocused = false;
   let suppressNextRowClick = false;
+  // Set while Tab re-parents this row: its input is torn down, and that blur must not write a stale copy back.
+  let skipBlurCommit = false;
 
   $: currentNumber = prefix ? `${prefix}.${index}` : `${index}`;
   $: isSelected = selectedIds.has(item.id);
@@ -80,7 +84,8 @@
   }
 
   function handleUpdateTitle() {
-    onUpdate(item, {title: editTitle});
+    // Blur fires on every focus change; only real edits become an undo step.
+    if (editTitle !== item.title) onUpdate(item, {title: editTitle});
   }
 
   function handleUpdatePage() {
@@ -152,6 +157,15 @@
   }
 
   function handleTitleKeydown(e: KeyboardEvent) {
+    if (e.isComposing) return;
+    if (e.key === 'Tab' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      e.preventDefault();
+      handleUpdateTitle();
+      skipBlurCommit = true;
+      onIndent(item, e.shiftKey ? -1 : 1);
+      setTimeout(() => (skipBlurCommit = false));
+      return;
+    }
     if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
       e.preventDefault();
       const allInputs = Array.from(document.querySelectorAll<HTMLInputElement>('.toc-item-title'));
@@ -165,6 +179,15 @@
         }
       }
     }
+  }
+
+  /** Arrow keys step the page by 1 (native); with Shift by 10. */
+  function handlePageKeydown(e: KeyboardEvent) {
+    if ((e.key !== 'ArrowUp' && e.key !== 'ArrowDown') || !e.shiftKey || e.metaKey || e.ctrlKey || e.altKey) return;
+    e.preventDefault();
+    const next = Math.max(1, Math.floor(Number(editPage) || 0) + (e.key === 'ArrowUp' ? 10 : -10));
+    editPage = next;
+    dispatch('jumpToPage', {to: next});
   }
 
   function handleTitleFocus() {
@@ -184,7 +207,11 @@
 
   function isSelectionBlockedTarget(target: EventTarget | null) {
     const element = target as HTMLElement | null;
-    return Boolean(element?.closest('button,input,textarea,label,a,[data-drag-handle]'));
+    // In selection mode the title and page are part of the row's hit area, unless one is being edited (Enter).
+    const blocked = selectionMode && !isFocused && !isPageFocused
+      ? 'button,label,a,[data-drag-handle]'
+      : 'button,input,textarea,label,a,[data-drag-handle]';
+    return Boolean(element?.closest(blocked));
   }
 
   function handleRowClick(event: MouseEvent) {
@@ -349,7 +376,7 @@
           on:focus={handleTitleFocus}
           on:blur={() => {
             isFocused = false;
-            handleUpdateTitle();
+            if (!skipBlurCommit) handleUpdateTitle();
           }}
           on:keydown={handleTitleKeydown}
           on:keypress={(e) => e.key === 'Enter' && (e.target as HTMLElement).blur()}
@@ -367,6 +394,7 @@
         bind:value={editPage}
         on:mousedown={handleShiftSelectFromInput}
         on:input={handlePageInput}
+        on:keydown={handlePageKeydown}
         on:focus={() => (isPageFocused = true)}
         on:blur={() => {
           isPageFocused = false;
@@ -425,6 +453,7 @@
               {onDragEnd}
               {onSelect}
               {onSelectionDragStart}
+              {onIndent}
               {selectedIds}
               {searchQuery}
               {currentPage}
@@ -447,6 +476,7 @@
   /* Rows read like the printed contents page: title · · · · page. Edit chrome appears on hover. */
   .toc-row {
     --row-bg: #fff;
+    scroll-margin: 56px 0 64px;
     transition: background-color 120ms ease;
   }
 
@@ -542,6 +572,21 @@
   .toc-row.is-selected .toc-check,
   .toc-check:focus-visible {
     opacity: 1;
+  }
+
+  /* Selection mode: the whole row is one target. Fields stop taking clicks and text can't be swept. */
+  .toc-row.selection-mode {
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  .toc-row.selection-mode:not(.is-editing) .toc-field {
+    pointer-events: none;
+  }
+
+  .toc-row.selection-mode .toc-actions {
+    display: none;
   }
 
   /* While typing, nothing floats over the field: tools hide and the title takes the leader's room. */

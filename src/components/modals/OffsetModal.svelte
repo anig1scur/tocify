@@ -5,6 +5,7 @@
   import type {TocItem} from '$lib/pdf/service';
   import Tooltip from '../Tooltip.svelte';
   import Modal from './Modal.svelte';
+  import {isBareKey, isEditableTarget} from '$lib/utils/shortcuts';
 
   export let showOffsetModal: boolean;
   export let firstTocItem: TocItem | null;
@@ -21,10 +22,27 @@
   }
 
   $: open = Boolean(showOffsetModal && firstTocItem);
+
+  /** ←/→ step the candidate page; Enter accepts it. */
+  function handleKeydown(e: KeyboardEvent) {
+    if (!open || e.defaultPrevented || e.isComposing || !isBareKey(e)) return;
+    const target = e.target instanceof Element ? e.target : null;
+
+    if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !isEditableTarget(target)) {
+      e.preventDefault();
+      updatePage(offsetPreviewPageNum + (e.key === 'ArrowRight' ? 1 : -1));
+    } else if (e.key === 'Enter' && !e.shiftKey && !target?.closest('button, a')) {
+      e.preventDefault();
+      dispatch('confirm');
+    }
+  }
 </script>
+
+<svelte:window on:keydown={handleKeydown} />
 
 <Modal
   {open}
+  on:submit={() => dispatch('confirm')}
   title={$t('offset.title')}
   closeLabel="Close"
   backdrop="lime"
@@ -59,6 +77,7 @@
             class="nb-btn w-10 bg-white px-0"
             on:click={() => updatePage(offsetPreviewPageNum - 1)}
             disabled={offsetPreviewPageNum <= 1}
+            title="-1 (←)"
             aria-label="-1"
           >
             <Minus size={16} strokeWidth={2.25} />
@@ -77,6 +96,7 @@
             class="nb-btn w-10 bg-white px-0"
             on:click={() => updatePage(offsetPreviewPageNum + 1)}
             disabled={offsetPreviewPageNum >= totalPages}
+            title="+1 (→)"
             aria-label="+1"
           >
             <Plus size={16} strokeWidth={2.25} />
@@ -87,6 +107,7 @@
       <button
         type="button"
         on:click={() => dispatch('confirm')}
+        title="{$t('btn.yes_this_page')} (↩)"
         class="nb-btn mt-auto h-11 w-full bg-blue-400 text-base"
       >
         <Check size={18} strokeWidth={2.5} />

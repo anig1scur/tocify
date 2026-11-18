@@ -8,6 +8,7 @@
   import { renderQueue, isRenderCancelled } from '$lib/pdf/render-queue';
   import { formatPageLabel } from '$lib/pdf/page-labels';
   import type {RecognitionIgnoreRegion} from '$lib/pdf/recognition-ignore';
+  import {isBareKey, isDialogOpen, isEditableTarget} from '$lib/utils/shortcuts';
 
   export let pdfState: PDFState;
   export let originalPdfInstance: any = null;
@@ -607,9 +608,48 @@
     };
   }
 
+  /** Preview keys: ←/→ PageUp/PageDown turn pages, Home/End jump, + − 0 zoom. */
+  function handlePreviewKeydown(e: KeyboardEvent) {
+    if (mode !== 'single' || e.defaultPrevented || e.isComposing || !isBareKey(e)) return;
+    if (isEditableTarget(e.target) || isDialogOpen()) return;
+
+    let handled = true;
+    switch (e.key) {
+      case 'ArrowLeft':
+      case 'PageUp':
+        goToPrevPage();
+        break;
+      case 'ArrowRight':
+      case 'PageDown':
+        goToNextPage();
+        break;
+      case 'Home':
+        pdfState.currentPage = 1;
+        break;
+      case 'End':
+        if (activeTotalPages > 0) pdfState.currentPage = activeTotalPages;
+        break;
+      case '+':
+      case '=':
+        zoomIn();
+        break;
+      case '-':
+      case '_':
+        zoomOut();
+        break;
+      case '0':
+        resetZoom();
+        break;
+      default:
+        handled = false;
+    }
+
+    if (handled) e.preventDefault();
+  }
 </script>
 
 <svelte:window
+  on:keydown={handlePreviewKeydown}
   on:pointermove={handlePointerMove}
   on:pointerup={handlePointerUp}
   on:pointercancel={handlePointerUp}
@@ -672,7 +712,7 @@
           <button
             on:click={zoomOut}
             class="p-1 md:p-2 rounded-lg hover:bg-gray-100 text-gray-600"
-            title={$t('tooltip.zoom_out')}
+            title="{$t('tooltip.zoom_out')} (−)"
           >
             <ZoomOut size={20} />
           </button>
@@ -682,14 +722,14 @@
           <button
             on:click={zoomIn}
             class="p-1 md:p-2 rounded-lg hover:bg-gray-100 text-gray-600"
-            title={$t('tooltip.zoom_in')}
+            title="{$t('tooltip.zoom_in')} (+)"
           >
             <ZoomIn size={20} />
           </button>
           <button
             on:click={resetZoom}
             class="p-1 md:p-2 rounded-lg hover:bg-gray-100 text-gray-600"
-            title={$t('tooltip.reset')}
+            title="{$t('tooltip.reset')} (0)"
           >
             <RotateCw size={20} />
           </button>
@@ -725,6 +765,8 @@
       <button
         on:click={goToPrevPage}
         disabled={currentPage <= 1}
+        title="{$t('recognition_ignore.prev_page')} (←)"
+        aria-label={$t('recognition_ignore.prev_page')}
         class="absolute left-2 top-1/2 -translate-y-1/2 p-1 md:left-4 md:p-2 rounded-full bg-white shadow-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed z-20 border-2 border-black"
       >
         <ChevronLeft size={24} />
@@ -742,6 +784,8 @@
       <button
         on:click={goToNextPage}
         disabled={currentPage >= activeTotalPages}
+        title="{$t('recognition_ignore.next_page')} (→)"
+        aria-label={$t('recognition_ignore.next_page')}
         class="absolute right-2 top-1/2 -translate-y-1/2 p-1 md:right-4 md:p-2 rounded-full bg-white shadow-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed z-20 border-2 border-black"
       >
         <ChevronRight size={24} />

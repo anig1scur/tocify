@@ -4,6 +4,7 @@
   import {createEventDispatcher} from 'svelte';
 
   import Header from '../Header.svelte';
+  import {modKey} from '$lib/utils/shortcuts';
   import ApiSetting from '../settings/ApiSetting.svelte';
   import TocSettings from '../settings/TocSetting.svelte';
   import AiPageSelector from '../PageSelector.svelte';
@@ -75,7 +76,7 @@
       ? $t('status.generating')
       : !originalPdfInstance
         ? $t('status.load_pdf_first')
-        : $t('tooltip.generate_ai')}
+        : `${$t('tooltip.generate_ai')} (${modKey} ↩)`}
     disabled={isAiLoading || !originalPdfInstance}
   >
     {#if isAiLoading}

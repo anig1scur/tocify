@@ -45,6 +45,7 @@
   import {formatPageRanges} from '$lib/llm/batching';
   import type {RecognitionIgnoreRegion} from '$lib/pdf/recognition-ignore';
   import {createZipBlob, getUniqueZipFilename, type ZipFileEntry} from '$lib/utils/zip';
+  import {blurActiveField, hasMod, isBareKey, isDialogOpen, isEditableTarget} from '$lib/utils/shortcuts';
 
   import Toast from '../components/Toast.svelte';
   import Footer from '../components/Footer.svelte';
@@ -1301,6 +1302,50 @@
   const handleViewerMessage = (event: CustomEvent<{message: string; type: 'success' | 'error' | 'info'}>) => {
     toastProps = {show: true, message: event.detail.message, type: event.detail.type};
   };
+
+  let shortcutFileInput: HTMLInputElement;
+
+  function handleShortcutFileChange(e: Event) {
+    const input = e.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    if (file) loadPdfFile(file);
+    input.value = '';
+  }
+
+  /** Page-level shortcuts; the ToC tree, preview and dialogs handle their own keys first. */
+  function handleGlobalKeydown(e: KeyboardEvent) {
+    if (e.defaultPrevented || e.isComposing || e.repeat || isDialogOpen()) return;
+    const key = e.key.toLowerCase();
+    const mod = hasMod(e);
+
+    if (mod && !e.altKey && !e.shiftKey && key === 'o') {
+      e.preventDefault();
+      shortcutFileInput?.click();
+    } else if (mod && !e.altKey && key === 's') {
+      // ⌘S exports, ⌘⇧S exports by chapter. Commit the field being typed in first.
+      e.preventDefault();
+      blurActiveField();
+      if (!pdfState.doc) {
+        toastProps = {show: true, message: $t('toast.no_pdf_to_export'), type: 'error'};
+      } else if (e.shiftKey) {
+        openChapterExportModal();
+      } else {
+        exportPDF();
+      }
+    } else if (mod && !e.altKey && !e.shiftKey && e.key === 'Enter') {
+      // Inside the ToC, ⌘↩ belongs to the outline text (AI Format), not a fresh AI run.
+      if (e.target instanceof Element && e.target.closest('.toc-tree')) return;
+      e.preventDefault();
+      blurActiveField();
+      if (originalPdfInstance && !isAiLoading) generateTocFromAI();
+    } else if (isBareKey(e) && !e.shiftKey && key === 'p' && !isEditableTarget(e.target)) {
+      e.preventDefault();
+      togglePreviewMode();
+    } else if (e.key === 'Escape' && showGraphDrawer) {
+      e.preventDefault();
+      showGraphDrawer = false;
+    }
+  }
 </script>
 
 {#if !showGraphDrawer && tocItems && isGraphEntranceVisible}
@@ -1488,7 +1533,17 @@
   <StarRequestModal bind:show={showStarRequestModal} />
 {/if}
 
-<svelte:window on:beforeunload={handleBeforeUnload} />
+<svelte:window on:beforeunload={handleBeforeUnload} on:keydown={handleGlobalKeydown} />
+
+<input
+  type="file"
+  class="hidden"
+  accept=".pdf,application/pdf"
+  tabindex="-1"
+  aria-hidden="true"
+  bind:this={shortcutFileInput}
+  on:change={handleShortcutFileChange}
+/>
 
 
 <style>

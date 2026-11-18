@@ -1,4 +1,5 @@
 <script lang="ts">
+  import {modKey} from '$lib/utils/shortcuts';
   import { t } from 'svelte-i18n';
   import { Loader2, X } from 'lucide-svelte';
 
@@ -204,6 +205,7 @@
     class="btn w-full font-bold transition-all duration-300 text-black border-2 border-black rounded-lg px-3 py-2 shadow-[2px_2px_0px_var(--hard-shadow-color)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0 {isBusy ? 'pr-12' : ''} {(isRunning || isInitializing || isCancelling || !isRunDisabled) ? 'bg-blue-400' : 'bg-gray-300'}"
     on:click={onRun}
     disabled={isRunDisabled}
+    title="{modKey} ↩"
   >
     <span class="block text-center">
       {#if isCancelling}

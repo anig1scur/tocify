@@ -3,6 +3,7 @@
   import {Upload, PencilIcon, EyeIcon, Download, Menu} from 'lucide-svelte';
   import {fly, fade} from 'svelte/transition';
   import { t } from 'svelte-i18n';
+  import {modKey} from '$lib/utils/shortcuts';
 
   export let isPreviewLoading: boolean;
   export let isPreviewMode: boolean;
@@ -16,7 +17,7 @@
   <button
     class="btn flex gap-2 items-center justify-center font-bold bg-white text-black border-2 border-black rounded-lg px-4 py-2 shadow-[2px_2px_0px_var(--hard-shadow-color)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all disabled:bg-gray-300 disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0 w-full md:w-auto"
     on:click={() => dispatch('triggerUpload')}
-    title={$t('tooltip.upload_new')}
+    title="{$t('tooltip.upload_new')} ({modKey} O)"
     in:fly={{y: 10, duration: 250, delay: 0}}
   >
     <Upload size={16} />
@@ -26,9 +27,9 @@
     class="btn flex gap-2 items-center justify-center font-bold bg-yellow-400 text-black border-2 border-black rounded-lg px-4 py-2 shadow-[2px_2px_0px_var(--hard-shadow-color)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all disabled:bg-gray-300 disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0 w-full md:w-auto"
     on:click={() => dispatch('togglePreview')}
     disabled={!originalPdfInstance || isPreviewLoading}
-    title={isPreviewMode
+    title="{isPreviewMode
       ? $t('tooltip.switch_edit')
-      : $t('tooltip.switch_preview')}
+      : $t('tooltip.switch_preview')} (P)"
     in:fly={{y: 10, duration: 250, delay: 100}}
   >
     {#key isPreviewLoading.toString() + isPreviewMode.toString()}
@@ -57,7 +58,7 @@
       class="btn flex-1 md:flex-none flex gap-2 items-center justify-center font-bold bg-green-500 text-black border-2 border-black rounded-l-lg px-4 py-2 shadow-[2px_2px_0px_var(--hard-shadow-color)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all disabled:bg-gray-300 disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0"
       on:click={() => dispatch('export')}
       disabled={!doc}
-      title={$t('tooltip.export_pdf')}
+      title="{$t('tooltip.export_pdf')} ({modKey} S)"
     >
       <Download size={16} />
       {$t('btn.generate_pdf')}
@@ -66,7 +67,7 @@
       class="btn flex items-center justify-center font-bold bg-green-500 text-black border-y-2 border-r-2 border-black rounded-r-lg px-2.5 py-2 shadow-[2px_2px_0px_var(--hard-shadow-color)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all disabled:bg-gray-300 disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0"
       on:click={() => dispatch('openChapterExport')}
       disabled={!doc}
-      title={$t('tooltip.export_chapters')}
+      title="{$t('tooltip.export_chapters')} ({modKey} ⇧ S)"
       aria-label={$t('tooltip.export_chapters')}
     >
       <Menu size={16} />

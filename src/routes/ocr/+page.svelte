@@ -62,6 +62,7 @@
   import { workspacePdfFiles } from '$lib/pdf/workspace-files';
   import {renderQueue, isRenderCancelled} from '$lib/pdf/render-queue';
   import { isLegacyBrowser } from '$lib/utils';
+  import { blurActiveField, hasMod, isBareKey, isDialogOpen } from '$lib/utils/shortcuts';
   import OcrControls from './OcrControls.svelte';
   import OcrPdfPreview from './OcrPdfPreview.svelte';
   import OcrResultTree from './OcrResultTree.svelte';
@@ -1167,17 +1168,80 @@
     return true;
   }
 
-  function handleOcrKeyboardShortcut(event: KeyboardEvent) {
-    if (event.isComposing || isEditableKeyboardTarget(event.target)) return;
+  let shortcutFileInput: HTMLInputElement;
 
+  function stepSelectedLine(delta: 1 | -1) {
+    if (selectedLines.length === 0) return false;
+    const nextIndex = Math.max(0, Math.min(selectedLines.length - 1, Number(selectedLineIndex) + delta));
+    selectLine(Number(selectedPageNumber), nextIndex);
+    void scrollSelectedOcrTreeItem();
+    return true;
+  }
+
+  function handleOcrKeyboardShortcut(event: KeyboardEvent) {
+    if (event.isComposing || event.defaultPrevented || isDialogOpen()) return;
+    const key = event.key.toLowerCase();
+    const mod = hasMod(event);
     let handled = false;
 
-    if ((event.key === 'Delete' || event.key === 'Backspace') && !event.metaKey && !event.ctrlKey && !event.altKey) {
-      handled = deleteSelectedOcrLine();
-    } else if (event.key.toLowerCase() === 'z' && (event.metaKey || event.ctrlKey)) {
-      handled = event.shiftKey
-        ? redoOcrSelectionHistory()
-        : undoOcrSelectionHistory();
+    // Commands that also work while typing.
+    if (mod && !event.altKey && !event.shiftKey && key === 'o') {
+      shortcutFileInput?.click();
+      handled = true;
+    } else if (mod && !event.altKey && !event.shiftKey && key === 's') {
+      blurActiveField();
+      if (pdfFile && !isFileLoading && !isBuilding) void generateSearchablePdf();
+      handled = true;
+    } else if (mod && !event.altKey && !event.shiftKey && event.key === 'Enter') {
+      blurActiveField();
+      if (pdfFile && !isFileLoading && !isBuilding && !isRunningOcr && !isInitializingOcr && !isCancellingOcr) void runLocalOcr();
+      handled = true;
+    }
+
+    if (!handled && !isEditableKeyboardTarget(event.target)) {
+      if ((event.key === 'Delete' || event.key === 'Backspace') && isBareKey(event)) {
+        handled = deleteSelectedOcrLine();
+      } else if (key === 'z' && mod && !event.altKey) {
+        handled = event.shiftKey
+          ? redoOcrSelectionHistory()
+          : undoOcrSelectionHistory();
+      } else if (key === 'y' && mod && !event.altKey) {
+        handled = redoOcrSelectionHistory();
+      } else if (isBareKey(event) && pdfInstance) {
+        const onControl = event.target instanceof Element && Boolean(event.target.closest('button, a, select'));
+        handled = true;
+        switch (event.key) {
+          case 'ArrowLeft':
+          case 'PageUp':
+            goToPreviousPreviewPage();
+            break;
+          case 'ArrowRight':
+          case 'PageDown':
+            goToNextPreviewPage();
+            break;
+          case 'ArrowUp':
+          case 'ArrowDown':
+            handled = stepSelectedLine(event.key === 'ArrowDown' ? 1 : -1);
+            break;
+          case 'Enter':
+            handled = !onControl && Boolean(selectedLine);
+            if (handled) void startPreviewTextEdit(Number(selectedLineIndex));
+            break;
+          case '+':
+          case '=':
+            zoomPreviewIn();
+            break;
+          case '-':
+          case '_':
+            zoomPreviewOut();
+            break;
+          case '0':
+            resetPreviewZoom();
+            break;
+          default:
+            handled = false;
+        }
+      }
     }
 
     if (!handled) return;
@@ -2318,5 +2382,18 @@
   </div>
 
   <HelpModal bind:showHelpModal />
+  <input
+    type="file"
+    class="hidden"
+    accept=".pdf,application/pdf"
+    tabindex="-1"
+    aria-hidden="true"
+    bind:this={shortcutFileInput}
+    on:change={async (event) => {
+      const input = event.currentTarget;
+      await handleFileChange(event);
+      input.value = '';
+    }}
+  />
   <Footer />
 </div>
