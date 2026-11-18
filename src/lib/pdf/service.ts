@@ -18,7 +18,6 @@ export interface TocItem {
 
 export interface PDFState {
   doc: PDFDocument | null;
-  newDoc: PDFDocument | null;
   instance: pdfjsLib.PDFDocumentProxy | null;
   filename: string;
   currentPage: number;
@@ -43,7 +42,17 @@ if (browser) {
 }
 
 export class PDFService {
-  static sharedWorker: pdfjsLib.PDFWorker | null = browser ? new pdfjsLib.PDFWorker() : null;
+  static sharedWorker: pdfjsLib.PDFWorker | null = null;
+
+  static getSharedWorker() {
+    if (browser && !this.sharedWorker) this.sharedWorker = new pdfjsLib.PDFWorker();
+    return this.sharedWorker || undefined;
+  }
+
+  static destroySharedWorker() {
+    this.sharedWorker?.destroy();
+    this.sharedWorker = null;
+  }
 
   static regularFontBytes: Map<string, ArrayBuffer> = new Map();
   static boldFontBytes: Map<string, ArrayBuffer> = new Map();
@@ -83,16 +92,21 @@ export class PDFService {
   private worker: Worker | null = null;
   private workerCallbacks: Map<string, { resolve: Function, reject: Function }> = new Map();
   private workerLoadedFonts: Set<string> = new Set();
+  private generation = 0;
 
-  constructor () {
-    if (browser && !PDFService.sharedWorker) {
-      PDFService.sharedWorker = new pdfjsLib.PDFWorker();
+  dispose() {
+    this.generation++;
+    if (this.worker) {
+      this.worker.onmessage = null;
+      this.worker.onerror = null;
+      this.worker.terminate();
+      this.worker = null;
     }
-    // Initialize Worker
-    if (browser) {
-      this.initWorker();
+    for (const callback of this.workerCallbacks.values()) {
+      callback.reject(new DOMException('PDF task cancelled', 'AbortError'));
     }
-    this.loadFonts('huiwen');
+    this.workerCallbacks.clear();
+    this.workerLoadedFonts.clear();
   }
 
   private initWorker() {
@@ -109,19 +123,32 @@ export class PDFService {
         this.workerCallbacks.delete(id);
       }
     };
+    this.worker.onerror = (event) => {
+      const error = new Error(event.message || 'PDF worker failed');
+      for (const callback of this.workerCallbacks.values()) callback.reject(error);
+      this.workerCallbacks.clear();
+      this.dispose();
+    };
   }
 
   private postWorkerMessage(type: string, payload: any, transfer: Transferable[] = []): Promise<any> {
+    if (!this.worker && browser) this.initWorker();
     if (!this.worker) throw new Error('Worker not initialized');
     const id = Date.now().toString() + Math.random();
     const { promise, resolve, reject } = Promise.withResolvers();
     this.workerCallbacks.set(id, { resolve, reject });
-    this.worker.postMessage({ type, id, payload }, transfer);
+    try {
+      this.worker.postMessage({ type, id, payload }, transfer);
+    } catch (error) {
+      this.workerCallbacks.delete(id);
+      reject(error);
+    }
     return promise;
   }
 
   async loadFonts(family: string = 'huiwen') {
     if (!browser) return;
+    const generation = this.generation;
 
     if (!PDFService.regularFontBytes.has(family) || !PDFService.boldFontBytes.has(family)) {
       if (PDFService.fontLoadingPromises.has(family)) {
@@ -168,8 +195,8 @@ export class PDFService {
       }
     }
 
-    // 2. Ensure bytes are sent to Current Worker
-    if (this.worker && !this.workerLoadedFonts.has(family)) {
+    if (generation !== this.generation) throw new DOMException('PDF task cancelled', 'AbortError');
+    if (!this.workerLoadedFonts.has(family)) {
       if (PDFService.regularFontBytes.has(family) && PDFService.boldFontBytes.has(family)) {
         const regular = PDFService.regularFontBytes.get(family)!;
         const bold = PDFService.boldFontBytes.get(family)!;
@@ -179,16 +206,18 @@ export class PDFService {
           regular: regular.slice(0),
           bold: bold.slice(0)
         });
+        if (generation !== this.generation) throw new DOMException('PDF task cancelled', 'AbortError');
         this.workerLoadedFonts.add(family);
       }
     }
   }
 
   async initPreview(sourceDoc: PDFDocument, isCurrent = () => true) {
-    if (!this.worker) return;
+    const generation = this.generation;
     const bytes = await sourceDoc.save();
-    if (!isCurrent()) return;
-    await this.postWorkerMessage('INIT', { pdfBytes: bytes });
+    if (!isCurrent() || generation !== this.generation) return;
+    await this.postWorkerMessage('INIT', {pdfBytes: bytes}, [bytes.buffer]);
+    if (!isCurrent() || generation !== this.generation) return;
     await this.loadFonts('huiwen');
   }
 
@@ -206,8 +235,10 @@ export class PDFService {
     items: TocItem[], config: TocConfig, previewOnly = false, pageSize?: { width: number; height: number }):
     Promise<{ newDoc: PDFDocument | null; tocPageCount: number; tocBytes: Uint8Array }> {
 
+    const generation = this.generation;
     const fontKey = config.fontFamily || 'huiwen';
     await this.loadFonts(fontKey);
+    if (generation !== this.generation) throw new DOMException('PDF task cancelled', 'AbortError');
 
     const result = await this.postWorkerMessage('GENERATE', { items, config, previewOnly, pageSize });
     const { pdfBytes, tocPageCount, tocBytes } = result;
@@ -305,7 +336,8 @@ export class PDFService {
   async getPageAsImage(
     pdf: any, pageNum: number, targetScale: number = 1.5,
     maxDimension: number = 2048,
-    ignoreRegions: RecognitionIgnoreRegion[] = []): Promise<string> {
+    ignoreRegions: RecognitionIgnoreRegion[] = [], signal?: AbortSignal): Promise<string> {
+    signal?.throwIfAborted();
     const page = await pdf.getPage(pageNum);
 
     let viewport = page.getViewport({ scale: targetScale });
@@ -325,17 +357,22 @@ export class PDFService {
     canvas.width = viewport.width;
 
     const context = canvas.getContext('2d', { alpha: false });
-    if (!context) throw new Error('Could not create 2D context');
+    if (!context) {
+      page.cleanup();
+      canvas.width = canvas.height = 1;
+      throw new Error('Could not create 2D context');
+    }
 
-    const renderTask = page.render({
-      canvasContext: context,
-      viewport,
-    });
-
-    await renderTask.promise.then(() => page.cleanup()).catch(() => page.cleanup());
-
-    const pageRegions = ignoreRegions.filter((region) => region.pageNum === pageNum);
-    if (pageRegions.length > 0) {
+    let renderTask: pdfjsLib.RenderTask | undefined;
+    const cancel = () => renderTask?.cancel();
+    signal?.addEventListener('abort', cancel, {once: true});
+    try {
+      const task: pdfjsLib.RenderTask = page.render({canvasContext: context, viewport});
+      renderTask = task;
+      if (signal?.aborted) cancel();
+      await task.promise;
+      signal?.throwIfAborted();
+      const pageRegions = ignoreRegions.filter((region) => region.pageNum === pageNum);
       for (const region of pageRegions) {
         context.fillStyle = region.fill === 'black' ? '#000000' : '#ffffff';
         context.fillRect(
@@ -345,9 +382,14 @@ export class PDFService {
           Math.ceil(region.height * canvas.height),
         );
       }
-    }
 
-    return canvas.toDataURL('image/jpeg', 0.9);
+      return canvas.toDataURL('image/jpeg', 0.9);
+    } finally {
+      signal?.removeEventListener('abort', cancel);
+      page.cleanup();
+      canvas.width = 1;
+      canvas.height = 1;
+    }
   }
 
   /**

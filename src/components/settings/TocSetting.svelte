@@ -5,7 +5,7 @@
   import type {TocConfig} from '../../stores';
   import PageLabelSetting from './PageLabelSetting.svelte';
   import { isDefaultPageLabelSegments, suggestPageLabelSegmentsFromTocRanges } from '$lib/pdf/page-labels';
-  import { HelpCircle } from 'lucide-svelte';
+  import { HelpCircle, Minus, Plus } from 'lucide-svelte';
 
   import PrefixSettings from './PrefixSetting.svelte';
 
@@ -77,13 +77,13 @@
   }
 </script>
 
-<section class="toc-settings border-black border-2 rounded-lg p-2 my-4 shadow-[2px_2px_0px_var(--hard-shadow-color)] bg-white" aria-label={$t('settings.title')}>
-  <div class="flex justify-between items-center gap-2">
+<section class="toc-settings px-3.5" aria-label={$t('settings.title')}>
+  <div class="flex min-h-[44px] cursor-pointer select-none items-center justify-between gap-2" on:click={() => dispatch('toggleExpand')} role="presentation">
     <h2>{$t('settings.title')}</h2>
     <button
       type="button"
       class="w-6 h-6 flex items-center justify-center transition-transform duration-200"
-      on:click={() => dispatch('toggleExpand')}
+      on:click|stopPropagation={() => dispatch('toggleExpand')}
       aria-label={$t('settings.toggle_expand')}
       aria-expanded={isTocConfigExpanded}
       aria-controls="toc-settings-options"
@@ -104,20 +104,40 @@
   </div>
 
   {#if isTocConfigExpanded}
-    <div id="toc-settings-options" transition:slide={{duration: 200}}>
+    <div id="toc-settings-options" class="pb-1" transition:slide={{duration: 200}}>
       <div class="toc-settings-option">
         <div class="flex gap-2 items-center">
           <label
             class="whitespace-nowrap text-sm"
             for="page_offset">{$t('settings.page_offset')}</label
           >
-          <input
-            type="number"
-            id="page_offset"
-            value={config.pageOffset}
-            on:input={(e) => updateField('pageOffset', parseInt((e.target as HTMLInputElement).value, 10) || 0)}
-            class="w-20 border border-gray-300 rounded px-1 focus:outline-none focus:bg-gray-50 transition-colors"
-          />
+          <div class="inline-flex items-center overflow-hidden rounded-md border border-gray-300 bg-white focus-within:ring-2 focus-within:ring-blue-400">
+            <button
+              type="button"
+              class="flex h-7 w-7 items-center justify-center text-gray-600 hover:bg-gray-100 hover:text-black"
+              on:click={() => updateField('pageOffset', (config.pageOffset || 0) - 1)}
+              aria-label={$t('settings.decrease_page_offset')}
+              title={$t('settings.decrease_page_offset')}
+            >
+              <Minus size={14} />
+            </button>
+            <input
+              type="number"
+              id="page_offset"
+              value={config.pageOffset}
+              on:input={(e) => updateField('pageOffset', parseInt((e.target as HTMLInputElement).value, 10) || 0)}
+              class="h-7 w-14 min-w-0 border-x border-gray-300 px-1 text-center outline-none transition-colors focus:bg-gray-50 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+            />
+            <button
+              type="button"
+              class="flex h-7 w-7 items-center justify-center text-gray-600 hover:bg-gray-100 hover:text-black"
+              on:click={() => updateField('pageOffset', (config.pageOffset || 0) + 1)}
+              aria-label={$t('settings.increase_page_offset')}
+              title={$t('settings.increase_page_offset')}
+            >
+              <Plus size={14} />
+            </button>
+          </div>
         </div>
         <div class="text-xs text-gray-500 mt-1">{$t('settings.offset_hint')}</div>
       </div>

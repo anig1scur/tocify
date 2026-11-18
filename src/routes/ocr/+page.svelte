@@ -1,6 +1,45 @@
 <script context="module" lang="ts">
   let ocrViewCache: any = null;
-  let defaultPdfLoad: Promise<void> | null = null;
+  import {renderQueue as cachedRenderQueue} from '$lib/pdf/render-queue';
+  import type {LocalOcrEngine as CachedOcrEngine} from '$lib/ocr/types';
+  let activeOcrView: symbol | null = null;
+  let localOcrPool: CachedOcrEngine[] = [];
+  let localOcrRuntimeKey = '';
+  let ocrPoolIdleTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function cancelOcrPoolIdleRelease() {
+    if (ocrPoolIdleTimer !== null) clearTimeout(ocrPoolIdleTimer);
+    ocrPoolIdleTimer = null;
+  }
+
+  async function releaseOcrPool(pool: CachedOcrEngine[]) {
+    const engines = pool.splice(0);
+    await Promise.allSettled(engines.map((engine) => Promise.resolve().then(() => engine.dispose())));
+  }
+
+  function scheduleOcrPoolIdleRelease(pool: CachedOcrEngine[]) {
+    cancelOcrPoolIdleRelease();
+    ocrPoolIdleTimer = setTimeout(() => {
+      ocrPoolIdleTimer = null;
+      if (!activeOcrRunPromise) void releaseOcrPool(pool);
+    }, 60_000);
+  }
+
+  async function releaseCachedOcrResources() {
+    if (activeOcrView || activeOcrRunPromise || !ocrViewCache) return;
+    cancelOcrPoolIdleRelease();
+    const cache = ocrViewCache;
+    const instance = cache.pdfInstance;
+    cache.pdfInstance = null;
+    localOcrRuntimeKey = '';
+    activeOcrRunState = null;
+    lastOcrRunSnapshot = null;
+    if (instance) cachedRenderQueue.clearDocument(instance);
+    await Promise.allSettled([
+      releaseOcrPool(localOcrPool),
+      ...(instance ? [instance.destroy()] : []),
+    ]);
+  }
   let activeOcrRunPromise: Promise<void> | null = null;
   let activeOcrRunState: any = null;
   let activeOcrRunControl: { runId: number; cancelled: boolean } | null = null;
@@ -97,10 +136,10 @@
   }
 
   let pdfFile: File | null = null;
-  let pdfBytes: Uint8Array | null = null;
+  const viewId = Symbol('ocr-view');
+  let pdfLoadSequence = 0;
+  let pdfLoadingTask: pdfjsLib.PDFDocumentLoadingTask | null = null;
   let pdfInstance: pdfjsLib.PDFDocumentProxy | null = null;
-  let localOcrPool: LocalOcrEngine[] = [];
-  let localOcrRuntimeKey = '';
 
   let isFileLoading = false;
   let isViewActive = false;
@@ -283,7 +322,7 @@
   function syncOcrRunStateFromModule() {
     const snapshot = activeOcrRunState || lastOcrRunSnapshot;
     if (!snapshot) return;
-    if (snapshot.pdfBytes && pdfBytes && snapshot.pdfBytes !== pdfBytes) return;
+    if (snapshot.pdfFile && pdfFile && snapshot.pdfFile !== pdfFile) return;
     const isActiveSnapshot = Boolean(activeOcrRunPromise || snapshot.isRunningOcr || snapshot.isInitializingOcr || snapshot.isCancellingOcr);
     if (!isActiveSnapshot && lastSyncedCompletedRunId === snapshot.runId) return;
 
@@ -321,6 +360,7 @@
 
   onMount(() => {
     isViewActive = true;
+    activeOcrView = viewId;
     restoreOcrRuntimeSettings();
     syncOcrRunStateFromModule();
     ocrRunSyncInterval = window.setInterval(syncOcrRunStateFromModule, 250);
@@ -341,39 +381,29 @@
 
   onDestroy(() => {
     isViewActive = false;
+    if (activeOcrView === viewId) activeOcrView = null;
+    pdfLoadSequence++;
+    if (pdfLoadingTask) void pdfLoadingTask.destroy().catch(() => undefined);
+    pdfLoadingTask = null;
     cancelPreviewRender();
+    if (previewCanvas) previewCanvas.width = previewCanvas.height = 1;
     saveOcrViewCache();
+    void releaseCachedOcrResources();
   });
 
   async function loadDefaultPdf() {
-    if (defaultPdfLoad) {
-      isFileLoading = true;
-      await defaultPdfLoad;
-      if (isViewActive) restoreOcrViewCache();
-      return;
-    }
-
     if (pdfInstance) return;
-    const file = get(workspacePdfFiles).toc;
-    if (!file) return;
-
-    const loading = loadPdf(file);
-    defaultPdfLoad = loading;
-    try {
-      await loading;
-    } finally {
-      if (defaultPdfLoad === loading) defaultPdfLoad = null;
-    }
+    const file = pdfFile || get(workspacePdfFiles).toc;
+    if (file) await loadPdf(file, {restoreView: Boolean(pdfFile)});
   }
 
   function restoreOcrViewCache() {
     if (!ocrViewCache) return;
+    cancelOcrPoolIdleRelease();
 
     ({
       pdfFile,
-      pdfBytes,
       pdfInstance,
-      localOcrRuntimeKey,
       pageStart,
       pageEnd,
       ocrModelSize,
@@ -398,19 +428,7 @@
     ocrResolutionQuality = normalizeOcrResolutionQuality(ocrResolutionQuality);
     ocrBoxExtension = clampOcrBoxExtension(ocrBoxExtension);
 
-    localOcrPool = Array.isArray(ocrViewCache.localOcrPool)
-      ? ocrViewCache.localOcrPool
-      : ocrViewCache.localOcr
-        ? [ocrViewCache.localOcr]
-        : [];
-
-    if (localOcrPool.length && localOcrRuntimeKey !== getLocalOcrRuntimeKey()) {
-      const stalePool = localOcrPool;
-      localOcrPool = [];
-      localOcrRuntimeKey = '';
-      void Promise.all(stalePool.map((ocr) => ocr.dispose().catch(() => undefined)));
-    }
-
+    ocrViewCache = null;
     isFileLoading = false;
     isInitializingOcr = false;
     isRunningOcr = false;
@@ -425,10 +443,7 @@
   function saveOcrViewCache() {
     ocrViewCache = {
       pdfFile,
-      pdfBytes,
       pdfInstance,
-      localOcrPool,
-      localOcrRuntimeKey,
       pageStart,
       pageEnd,
       ocrModelSize,
@@ -436,7 +451,7 @@
       ocrWorkerPoolSize,
       ocrResolutionQuality,
       ocrBoxExtension,
-      ocrJson,
+      ocrJson: editorDoc ? '' : ocrJson,
       timingSummary,
       editorDoc,
       selectedPageNumber,
@@ -688,39 +703,57 @@
     }
   }
 
-  async function loadPdf(file: File) {
+  async function loadPdf(file: File, {restoreView = false} = {}) {
+    const sequence = ++pdfLoadSequence;
+    const isCurrent = () => isViewActive && sequence === pdfLoadSequence;
     isFileLoading = true;
     errorMessage = '';
+    cancelPreviewRender();
+    const previousTask = pdfLoadingTask;
+    pdfLoadingTask = null;
+    if (previousTask) void previousTask.destroy().catch(() => undefined);
 
     try {
-      const buffer = await file.arrayBuffer();
-      const bytes = new Uint8Array(buffer);
-
-      if (!looksLikePdf(bytes)) {
-        throw new Error($t('ocr_lab.errors.not_pdf'));
+      if (activeOcrRunPromise && !restoreView) {
+        cancelLocalOcr();
+        await activeOcrRunPromise;
       }
-
-      if (pdfInstance) {
-        renderQueue.clearDocument(pdfInstance);
-        await pdfInstance.destroy().catch(() => undefined);
+      if (!isCurrent()) return;
+      if (!restoreView) {
+        activeOcrRunState = null;
+        lastOcrRunSnapshot = null;
+        resetStateForNewFile();
       }
-
-      const loadingTask = pdfjsLib.getDocument({ data: bytes.slice() });
-      const instance = await loadingTask.promise;
-
       pdfFile = file;
-      pdfBytes = bytes.slice();
-      pdfInstance = instance;
-      pageStart = 1;
-      pageEnd = instance.numPages;
-      selectedPageNumber = 1;
-      resetPreviewViewForDocument();
       workspacePdfFiles.update((files) => ({...files, ocr: file}));
+      const previousInstance = pdfInstance;
+      pdfInstance = null;
+      if (previousInstance) {
+        renderQueue.clearDocument(previousInstance);
+        await previousInstance.destroy().catch(() => undefined);
+      }
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      if (!isCurrent()) return;
+      if (!looksLikePdf(bytes)) throw new Error($t('ocr_lab.errors.not_pdf'));
+      const task = pdfjsLib.getDocument({data: bytes});
+      pdfLoadingTask = task;
+      const instance = await task.promise;
+      if (!isCurrent()) {
+        await instance.destroy();
+        return;
+      }
+      pdfLoadingTask = null;
+      pdfInstance = instance;
+      if (!restoreView) {
+        pageStart = 1;
+        pageEnd = instance.numPages;
+        selectedPageNumber = 1;
+        resetPreviewViewForDocument();
+      }
     } catch (error: any) {
-      errorMessage = error?.message || $t('ocr_lab.errors.load_failed');
+      if (isCurrent() && error.name !== 'AbortError') errorMessage = error?.message || $t('ocr_lab.errors.load_failed');
     } finally {
-      isFileLoading = false;
-      if (!isViewActive) saveOcrViewCache();
+      if (isCurrent()) isFileLoading = false;
     }
   }
 
@@ -728,7 +761,6 @@
     const target = event.currentTarget as HTMLInputElement;
     const file = target.files?.[0];
     if (!file) return;
-    resetStateForNewFile();
     await loadPdf(file);
   }
 
@@ -738,7 +770,6 @@
     isPreviewDragging = false;
     const file = event.dataTransfer?.files?.[0];
     if (!file) return;
-    resetStateForNewFile();
     await loadPdf(file);
   }
 
@@ -1652,14 +1683,14 @@
   }
 
   async function disposeLocalOcrPool() {
-    const pool = localOcrPool;
-    localOcrPool = [];
+    cancelOcrPoolIdleRelease();
     localOcrRuntimeKey = '';
-    await Promise.all(pool.map((ocr) => ocr.dispose().catch(() => undefined)));
+    await releaseOcrPool(localOcrPool);
   }
 
   async function ensureLocalOcrPool(control: { runId: number; cancelled: boolean } | null = null) {
     assertOcrRunActive(control);
+    cancelOcrPoolIdleRelease();
     const runtimeKey = getLocalOcrRuntimeKey();
     if (localOcrPool.length && localOcrRuntimeKey === runtimeKey) return localOcrPool;
     if (localOcrPool.length) {
@@ -1840,7 +1871,6 @@
 
     const runId = nextOcrRunId++;
     const currentPdfInstance = pdfInstance;
-    const currentPdfBytes = pdfBytes;
     const requestedPageRange = normalizeOcrPageRange(pageStart, pageEnd, currentPdfInstance.numPages);
     const requestedBoxExtension = clampOcrBoxExtension(ocrBoxExtension);
     const requestedWatermarkCleanup = Boolean(ocrWatermarkCleanup);
@@ -1853,7 +1883,6 @@
     activeOcrRunState = {
       runId,
       pdfFile,
-      pdfBytes: currentPdfBytes,
       isInitializingOcr: false,
       isRunningOcr: true,
       isCancellingOcr: false,
@@ -1935,6 +1964,7 @@
             getOcrQualitySize(),
             { watermarkCleanup: requestedWatermarkCleanup },
           );
+          try {
           if (isOcrRunCancelled(runControl)) return;
           renderedCount += 1;
           applyOcrRunPatch({
@@ -1994,10 +2024,21 @@
             endMs: Math.round(taskEndedAt - startedAt),
             durationMs: Math.round(taskEndedAt - taskStartedAt),
           });
+          } finally {
+            canvas.width = 1;
+            canvas.height = 1;
+          }
         }
       };
 
-      await Promise.all(ocrPool.map((ocr, workerIndex) => runOcrWorker(ocr, workerIndex)));
+      const results = await Promise.allSettled(ocrPool.map((ocr, workerIndex) =>
+        runOcrWorker(ocr, workerIndex).catch((error) => {
+          runControl.cancelled = true;
+          throw error;
+        }),
+      ));
+      const failed = results.find((result) => result.status === 'rejected');
+      if (failed?.status === 'rejected') throw failed.reason;
       if (isOcrRunCancelled(runControl)) {
         applyOcrRunPatch({
           ocrProgress: null,
@@ -2073,6 +2114,12 @@
       if (activeOcrRunControl === runControl) {
         activeOcrRunControl = null;
       }
+      if (!activeOcrView) {
+        saveOcrViewCache();
+        await releaseCachedOcrResources();
+      } else {
+        scheduleOcrPoolIdleRelease(localOcrPool);
+      }
     }
   }
 
@@ -2106,31 +2153,37 @@
   }
 
   async function generateSearchablePdf() {
-    if (!pdfBytes || !pdfFile || !pdfInstance) {
+    if (isBuilding || isFileLoading) return;
+    if (!pdfFile || !pdfInstance) {
       errorMessage = $t('ocr_lab.errors.no_pdf');
       return;
     }
 
     isBuilding = true;
     errorMessage = '';
+    const file = pdfFile;
+    const instance = pdfInstance;
+    const sequence = pdfLoadSequence;
+    const isCurrent = () => isViewActive && sequence === pdfLoadSequence && instance === pdfInstance;
 
     try {
 	      flushOcrJsonFromEditor();
 	      const parsed = parseJson();
 	      const result = await buildSearchablePdf({
-	        pdfBytes,
+            pdfBytes: new Uint8Array(await file.arrayBuffer()),
 	        ocr: parsed,
 	        pageStart: 1,
-	        pageEnd: pdfInstance.numPages,
+	        pageEnd: instance.numPages,
 	      });
 
-      const nextName = pdfFile.name.toLowerCase().endsWith('.pdf')
-        ? `${pdfFile.name.slice(0, -4)}_searchable.pdf`
-        : `${pdfFile.name}_searchable.pdf`;
+      if (!isCurrent()) return;
+      const nextName = file.name.toLowerCase().endsWith('.pdf')
+        ? `${file.name.slice(0, -4)}_searchable.pdf`
+        : `${file.name}_searchable.pdf`;
 
       await savePdfBytes(result, nextName);
     } catch (error: any) {
-      errorMessage = error?.message || $t('ocr_lab.errors.build_failed');
+      if (isCurrent()) errorMessage = error?.message || $t('ocr_lab.errors.build_failed');
     } finally {
       isBuilding = false;
     }

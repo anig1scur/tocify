@@ -1,5 +1,5 @@
 <script lang="ts">
-  import {fade} from 'svelte/transition';
+  import {slide} from 'svelte/transition';
   import {t} from 'svelte-i18n';
   import {createEventDispatcher} from 'svelte';
 
@@ -35,26 +35,27 @@
 <div class="w-full lg:w-[35%] flex-shrink-0">
   <Header activePage="toc" on:openhelp={() => dispatch('openhelp')} />
 
-  <ApiSetting
-    on:change={(e) => dispatch('apiConfigChange', e.detail)}
-    on:save={() => dispatch('apiConfigSave')}
-  />
-
-  <TocSettings
-    {config}
-    {tocPdfInstance}
-    {tocRanges}
-    totalPages={pdfState.totalPages}
-    bind:isTocConfigExpanded
-    bind:addPhysicalTocPage
-    on:toggleExpand={() => (isTocConfigExpanded = !isTocConfigExpanded)}
-    on:updateField={(e) => dispatch('updateField', e.detail)}
-    on:jumpToTocPage={() => dispatch('jumpToTocPage')}
-    on:jumpToPage={(e) => dispatch('jumpToPage', e.detail)}
-  />
+  <div class="ui-card my-4 divide-y divide-[color:var(--divider)]">
+    <ApiSetting
+      on:change={(e) => dispatch('apiConfigChange', e.detail)}
+      on:save={() => dispatch('apiConfigSave')}
+    />
+    <TocSettings
+      {config}
+      {tocPdfInstance}
+      {tocRanges}
+      totalPages={pdfState.totalPages}
+      bind:isTocConfigExpanded
+      bind:addPhysicalTocPage
+      on:toggleExpand={() => (isTocConfigExpanded = !isTocConfigExpanded)}
+      on:updateField={(e) => dispatch('updateField', e.detail)}
+      on:jumpToTocPage={() => dispatch('jumpToTocPage')}
+      on:jumpToPage={(e) => dispatch('jumpToPage', e.detail)}
+    />
+  </div>
 
   {#if originalPdfInstance}
-    <div transition:fade={{duration: 200}}>
+    <div transition:slide={{duration: 200}}>
       <AiPageSelector
         bind:tocRanges
         bind:activeRangeIndex
@@ -68,7 +69,7 @@
   {/if}
 
   <button
-    class="btn w-full my-2 font-bold bg-blue-400 transition-all duration-300 text-black border-2 border-black rounded-lg px-3 py-2 shadow-[2px_2px_0px_var(--hard-shadow-color)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] disabled:bg-gray-300 disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0"
+    class="btn w-full my-2 font-bold bg-blue-400 transition-all duration-300 text-black border-2 border-black rounded-lg px-3 py-2 shadow-[2px_2px_0px_var(--hard-shadow-color)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] disabled:bg-gray-300 disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0"
     on:click={() => dispatch('generateAi')}
     title={isAiLoading
       ? $t('status.generating')

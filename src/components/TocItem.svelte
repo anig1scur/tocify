@@ -1,5 +1,8 @@
 <script lang="ts">
-  import {ChevronRight, ChevronDown, Plus, Trash, GripVertical} from 'lucide-svelte';
+  import {ChevronRight, Plus, Trash2, GripVertical} from 'lucide-svelte';
+  import {slide} from 'svelte/transition';
+  import {cubicOut} from 'svelte/easing';
+  import {MOTION} from '$lib/utils/motion';
   import ShortUniqueId from 'short-unique-id';
   import Self from './TocItem.svelte';
   import {maxPage, tocConfig, dragDisabled} from '../stores';
@@ -52,6 +55,10 @@
   $: highlightedTitleParts = getHighlightedParts(editTitle, normalizedSearchQuery);
   $: isShadowItem = Boolean(getDndMarker(item));
   $: nestedChildren = item?.id === SHADOW_PLACEHOLDER_ITEM_ID ? [] : (item.children || []);
+  $: depth = prefix ? prefix.split('.').length : 0;
+  $: hasChildren = (item?.children || []).length > 0;
+  $: selectionMode = selectedIds.size > 0;
+  $: titlePlaceholder = prefix === '' ? $t('toc.new_chapter_default') : ($t('toc.new_item_default') || 'New Item');
 
   $: if (item && !isFocused && item.title !== editTitle) {
     editTitle = item.title;
@@ -266,94 +273,94 @@
 </script>
 
 {#if item}
-  <div>
+  <div class="toc-node" style="--depth: {depth}">
     <div
-      class="flex items-center gap-1 py-1.5 rounded-md group -mr-1 border-2 border-transparent"
-      class:bg-blue-200={isActive}
-      class:font-bold={isActive}
-      class:border-amber-400={isSelected}
-      class:bg-amber-50={isSelected && !isActive}
+      class="toc-row group/row relative flex h-9 items-center gap-1 rounded-md pl-1 pr-0.5"
+      class:is-active={isActive}
+      class:is-selected={isSelected}
+      class:is-editing-title={isFocused}
+      class:is-editing={isFocused || isPageFocused}
+      class:is-root={depth === 0}
+      class:selection-mode={selectionMode}
       data-is-dnd-shadow-item-hint={isShadowItem}
       data-toc-item-id={item.id}
       on:mouseenter={handleMouseEnter}
       on:mousedown={handleRowMouseDown}
       on:click={handleRowClick}
     >
-      <div
-        class="flex items-center gap-1 flex-1 min-w-0 h-full"
-      >
-        <div class="toc-item-gutter flex w-12 shrink-0 flex-col items-center justify-center">
-          {#if $tocConfig.prefixSettings.enabled}
-            <span class="toc-item-number max-w-full truncate text-[10px] leading-3 text-gray-600 font-mono select-none" title={currentNumber} dir="rtl">
-              <bdi dir="ltr">{currentNumber}</bdi>
-            </span>
-          {/if}
-          <div class="flex items-center gap-1">
-            <div
-              data-drag-handle
-              class="cursor-grab active:cursor-grabbing rounded-md p-0.5 transition-opacity opacity-100 md:opacity-0 md:group-hover:opacity-100 text-gray-400"
-              on:mousedown={enableDrag}
-              on:touchstart={enableDrag}
-            >
-              <GripVertical size={12} />
-            </div>
-            <button
-              type="button"
-              on:click|stopPropagation={(event) => {
-                if (event.detail === 0) onSelect(item, event);
-              }}
-              on:mousedown={handleSelectionDotMouseDown}
-              class="relative -left-0.5 w-3 h-3 rounded-full border-2 flex-shrink-0 transition-all duration-150 {isSelected ? 'bg-amber-400 border-amber-500 scale-100' : 'border-gray-400 scale-90 opacity-0 group-hover:opacity-60 hover:!opacity-100 hover:!scale-100 hover:!border-amber-400'}"
-              title={$t('toc.select_item')}
-              aria-label={$t('toc.select_item')}
-            ></button>
-
-            <button
-              on:click|stopPropagation={handleToggle}
-              class="hover:bg-gray-200 rounded-md text-gray-500 ml-[-4px]"
-              class:invisible={!item.children || item.children.length === 0}
-              title={$t('settings.toggle_expand')}
-            >
-              {#if item.open}
-                <ChevronDown size={16} />
-              {:else}
-                <ChevronRight size={16} />
-              {/if}
-            </button>
-          </div>
+      <!-- Drag handle + checkbox live in one column at the tree's left edge, whatever the depth. -->
+      <div class="toc-gutter">
+        <div
+          data-drag-handle
+          class="toc-handle"
+          on:mousedown={enableDrag}
+          on:touchstart={enableDrag}
+          aria-hidden="true"
+        >
+          <GripVertical size={14} />
         </div>
-
-        <div class="relative flex-1 min-w-[100px]">
-          {#if shouldHighlightTitle}
-            <div
-              class="absolute inset-0 px-2 py-1 text-sm leading-6 truncate pointer-events-none"
-              aria-hidden="true"
-            >
-              {#each highlightedTitleParts as part}
-                {#if part.matched}
-                  <mark class="bg-yellow-300 text-black rounded-sm px-0.5">{part.text}</mark>
-                {:else}
-                  <span>{part.text}</span>
-                {/if}
-              {/each}
-            </div>
-          {/if}
-          <input
-            type="text"
-            bind:value={editTitle}
-            on:mousedown={handleShiftSelectFromInput}
-            on:focus={handleTitleFocus}
-            on:blur={() => {
-              isFocused = false;
-              handleUpdateTitle();
-            }}
-            on:keydown={handleTitleKeydown}
-            on:keypress={(e) => e.key === 'Enter' && (e.target as HTMLElement).blur()}
-            placeholder={prefix === '' ? $t('toc.new_chapter_default') : ($t('toc.new_item_default') || 'New Item')}
-            class="toc-editor-field toc-item-title relative w-full bg-transparent border-2 border-black rounded px-2 py-1 text-sm myfocus focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-gray-400 {shouldHighlightTitle ? 'text-transparent caret-black' : ''}"
-          />
-        </div>
+        <button
+          type="button"
+          on:click|stopPropagation={(event) => {
+            if (event.detail === 0) onSelect(item, event);
+          }}
+          on:mousedown={handleSelectionDotMouseDown}
+          class="toc-check nb-check"
+          aria-pressed={isSelected}
+          title={$t('toc.select_item')}
+          aria-label={$t('toc.select_item')}
+        ></button>
       </div>
+
+      <button
+        type="button"
+        on:click|stopPropagation={handleToggle}
+        class="toc-caret"
+        class:invisible={!hasChildren}
+        aria-expanded={hasChildren ? Boolean(item.open) : undefined}
+        title={$t('settings.toggle_expand')}
+        aria-label={$t('settings.toggle_expand')}
+        tabindex={hasChildren ? 0 : -1}
+      >
+        <ChevronRight size={14} strokeWidth={2.25} class="transition-transform duration-200 {item.open ? 'rotate-90' : ''}" />
+      </button>
+
+      {#if $tocConfig.prefixSettings.enabled}
+        <span class="toc-number shrink-0 select-none text-xs tabular-nums text-gray-500" title={currentNumber}>{currentNumber}</span>
+      {/if}
+
+      <div class="toc-title-wrap" data-value={editTitle || titlePlaceholder}>
+        {#if shouldHighlightTitle}
+          <div class="toc-title-highlight" aria-hidden="true">
+            {#each highlightedTitleParts as part}
+              {#if part.matched}
+                <mark class="rounded-sm bg-yellow-300 text-black">{part.text}</mark>
+              {:else}
+                <span>{part.text}</span>
+              {/if}
+            {/each}
+          </div>
+        {/if}
+        <input
+          type="text"
+          size="1"
+          bind:value={editTitle}
+          on:mousedown={handleShiftSelectFromInput}
+          on:focus={handleTitleFocus}
+          on:blur={() => {
+            isFocused = false;
+            handleUpdateTitle();
+          }}
+          on:keydown={handleTitleKeydown}
+          on:keypress={(e) => e.key === 'Enter' && (e.target as HTMLElement).blur()}
+          placeholder={titlePlaceholder}
+          aria-label={titlePlaceholder}
+          class="toc-field toc-item-title"
+          class:is-highlighted={shouldHighlightTitle}
+        />
+      </div>
+
+      <span class="toc-leader" aria-hidden="true"></span>
 
       <input
         type="number"
@@ -366,35 +373,41 @@
           handleUpdatePage();
         }}
         on:keypress={(e) => e.key === 'Enter' && (e.target as HTMLElement).blur()}
-        class="toc-editor-field w-14 border-2 border-black rounded ml-1 pl-1.5 py-1 text-sm myfocus focus:outline-none focus:ring-2 focus:ring-blue-500"
+        aria-label={$t('toc.page_number')}
+        class="toc-field toc-page"
       />
 
-      <div class="flex">
+      <div class="toc-actions">
         <button
+          type="button"
           on:click={handleAddChild}
-          class="p-1 hover:bg-gray-200 rounded-md"
+          class="toc-action"
           title={$t('toc.add_child')}
+          aria-label={$t('toc.add_child')}
         >
-          <Plus size={14} />
+          <Plus size={15} strokeWidth={2.25} />
         </button>
         <button
+          type="button"
           on:click={() => onDelete(item)}
-          class="px-1 hover:bg-gray-200 rounded-md text-black"
+          class="toc-action hover:!text-red-600"
           title={$t('toc.delete_item')}
+          aria-label={$t('toc.delete_item')}
         >
-          <Trash size={14} />
+          <Trash2 size={14} />
         </button>
       </div>
     </div>
 
     {#if item.open && nestedChildren.length > 0}
       <div
-        class="ml-6 pl-2 border-transparent hover:border-gray-200 transition-colors"
+        class="toc-children"
+        transition:slide={{duration: MOTION.base, easing: cubicOut}}
         use:dndzone={{
           items: nestedChildren,
           flipDurationMs,
           dragDisabled: $dragDisabled || Boolean(normalizedSearchQuery),
-          dropTargetStyle: nestedChildren.length > 0 ? {outline: '2px dashed #000', borderRadius: '4px'} : {},
+          dropTargetStyle: nestedChildren.length > 0 ? {outline: '2px dashed #000', outlineOffset: '2px', borderRadius: '6px'} : {},
         }}
         on:consider={handleDndConsider}
         on:finalize={handleDndFinalize}
@@ -429,3 +442,314 @@
     {/if}
   </div>
 {/if}
+
+<style>
+  /* Rows read like the printed contents page: title · · · · page. Edit chrome appears on hover. */
+  .toc-row {
+    --row-bg: #fff;
+    transition: background-color 120ms ease;
+  }
+
+  .toc-row:hover {
+    --row-bg: #f5f5f4;
+    background: var(--row-bg);
+  }
+
+  .toc-row.is-selected {
+    --row-bg: #fef9c3;
+    background: var(--row-bg);
+  }
+
+  .toc-row.is-active {
+    --row-bg: #bfdbfe;
+    background: var(--row-bg);
+  }
+
+  .toc-row.is-root .toc-field {
+    font-weight: 500;
+  }
+
+  .toc-row.is-active .toc-field {
+    font-weight: 700;
+  }
+
+  .toc-gutter {
+    position: absolute;
+    top: 0;
+    left: calc(var(--depth) * -1 * var(--toc-indent, 20px) - var(--toc-gutter, 56px) + 2px);
+    display: flex;
+    align-items: center;
+    height: 100%;
+  }
+
+  .toc-handle {
+    display: grid;
+    place-items: center;
+    width: 16px;
+    height: 26px;
+    border-radius: 5px;
+    color: #9ca3af;
+    cursor: grab;
+  }
+
+  .toc-handle:hover {
+    color: #000;
+    background: rgb(0 0 0 / .06);
+  }
+
+  .toc-handle:active {
+    cursor: grabbing;
+  }
+
+  /* Row tools float over the leader on hover, so titles keep the full width. */
+  .toc-actions {
+    position: absolute;
+    top: 50%;
+    right: calc(2.75rem + 6px);
+    display: flex;
+    align-items: center;
+    padding-left: 18px;
+    transform: translateY(-50%);
+    background: linear-gradient(to right, transparent, var(--row-bg) 16px);
+  }
+
+  .toc-handle,
+  .toc-check,
+  .toc-actions {
+    opacity: 0;
+    transition: opacity 120ms ease;
+  }
+
+  .toc-check {
+    margin-left: 1px;
+  }
+
+  .toc-actions {
+    pointer-events: none;
+  }
+
+  .toc-row:hover .toc-actions,
+  .toc-row:focus-within .toc-actions {
+    pointer-events: auto;
+  }
+
+  .toc-row:hover .toc-handle,
+  .toc-row:hover .toc-check,
+  .toc-row:hover .toc-actions,
+  .toc-row:focus-within .toc-actions,
+  .toc-row:focus-within .toc-check,
+  .toc-row.selection-mode .toc-check,
+  .toc-row.is-selected .toc-check,
+  .toc-check:focus-visible {
+    opacity: 1;
+  }
+
+  /* While typing, nothing floats over the field: tools hide and the title takes the leader's room. */
+  .toc-row.is-editing .toc-actions {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .toc-row.is-editing-title .toc-title-wrap {
+    flex: 1 1 auto;
+  }
+
+  .toc-row.is-editing-title > .toc-leader {
+    display: none;
+  }
+
+  @media (hover: none) {
+    .toc-handle,
+    .toc-check,
+    .toc-actions {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .toc-actions {
+      position: static;
+      padding-left: 0;
+      transform: none;
+      background: none;
+    }
+
+    .toc-row.is-editing .toc-actions {
+      display: none;
+    }
+  }
+
+  .toc-node .toc-node .toc-field,
+  .toc-node .toc-node .toc-title-wrap::after,
+  .toc-node .toc-node .toc-title-highlight {
+    font-size: 13px;
+  }
+
+  .toc-caret {
+    position: absolute;
+    left: calc(-1 * var(--toc-indent, 20px));
+    top: 50%;
+    display: grid;
+    place-items: center;
+    width: 20px;
+    height: 24px;
+    margin-top: -12px;
+    border-radius: 4px;
+    color: #6b7280;
+  }
+
+  .toc-caret:hover {
+    color: #000;
+    background: rgb(0 0 0 / .06);
+  }
+
+  .toc-caret:focus-visible {
+    outline: 2px solid #3b82f6;
+    outline-offset: -2px;
+  }
+
+  .toc-number {
+    padding-left: 4px;
+  }
+
+  /* Auto-width title: the hidden copy in ::after sizes the grid cell to the text. */
+  .toc-title-wrap {
+    position: relative;
+    display: inline-grid;
+    flex: 0 1 auto;
+    min-width: 4ch;
+    max-width: 100%;
+  }
+
+  .toc-title-wrap::after,
+  .toc-title-wrap > input {
+    grid-area: 1 / 1;
+  }
+
+  .toc-title-wrap::after {
+    content: attr(data-value) '  ';
+    visibility: hidden;
+    overflow: hidden;
+    height: 0;
+    padding: 0 8px;
+    border: 1px solid transparent;
+    font-size: 14px;
+    white-space: pre;
+  }
+
+  .toc-row.is-root .toc-title-wrap::after {
+    font-weight: 500;
+  }
+
+  .toc-field {
+    --field-border-width: 1px;
+    --field-border-color: transparent;
+    width: 100%;
+    min-width: 0;
+    height: 28px;
+    padding: 0 7px;
+    border-radius: 6px !important;
+    background: transparent;
+    color: var(--ink);
+    font-size: 14px;
+    line-height: 24px;
+    text-overflow: ellipsis;
+    transition: border-color 120ms ease, background-color 120ms ease;
+  }
+
+  .toc-field::placeholder {
+    color: #9ca3af;
+    font-weight: 400;
+  }
+
+  .toc-field:hover {
+    --field-border-color: #d1d5db;
+    background: #fff;
+  }
+
+  .toc-field:focus {
+    background: #fff;
+  }
+
+  .toc-title-highlight {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    padding: 0 8px;
+    font-size: 14px;
+    line-height: 28px;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    pointer-events: none;
+  }
+
+  /* While search highlights a title, only the highlighted copy is visible. */
+  .toc-field.is-highlighted {
+    color: transparent;
+    caret-color: #000;
+  }
+
+  .toc-row.is-root .toc-title-highlight {
+    font-weight: 500;
+  }
+
+  /* Dots run on under the empty left part of the right-aligned number. */
+  .toc-row > .toc-leader {
+    margin-right: -10px;
+  }
+
+  .toc-page {
+    position: relative;
+    flex: none;
+    width: 2.75rem;
+    padding: 0 4px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    appearance: textfield;
+    -moz-appearance: textfield;
+  }
+
+  .toc-page::-webkit-inner-spin-button,
+  .toc-page::-webkit-outer-spin-button {
+    appearance: none;
+    margin: 0;
+  }
+
+  .toc-action {
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 5px;
+    color: #6b7280;
+    transition: background-color 120ms ease, color 120ms ease, transform 120ms var(--ease-out-soft);
+  }
+
+  .toc-action:hover {
+    color: #000;
+    background: rgb(0 0 0 / .07);
+  }
+
+  .toc-action:active {
+    transform: scale(.9);
+  }
+
+  .toc-action:focus-visible {
+    outline: 2px solid #3b82f6;
+    outline-offset: -2px;
+  }
+
+  /* Nested level: indentation alone shows the hierarchy. */
+  .toc-children {
+    position: relative;
+    margin-left: var(--toc-indent, 20px);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .toc-row,
+    .toc-field,
+    .toc-check,
+    .toc-actions {
+      transition: none;
+    }
+  }
+</style>

@@ -1,6 +1,6 @@
 <script context="module" lang="ts">
   let tocViewCache: any = null;
-  let defaultPdfLoad: Promise<void> | null = null;
+  let tocResourceCleanup: Promise<void> = Promise.resolve();
   type TocPreparation = {
     instance: import('pdfjs-dist').PDFDocumentProxy;
     ready: Promise<void>;
@@ -19,7 +19,7 @@
   import {init, trackEvent} from '@aptabase/web';
 
   import '../lib/i18n';
-  import {pdfService, tocItems, curFileFingerprint, tocConfig, autoSaveEnabled, type TocConfig} from '../stores';
+  import {pdfService, tocItems, curFileFingerprint, tocConfig, autoSaveEnabled, flushTocDraft, type TocConfig} from '../stores';
   import {PDFService, type PDFState, type TocItem} from '$lib/pdf/service';
   import {workspacePdfFiles} from '$lib/pdf/workspace-files';
   import {
@@ -92,7 +92,7 @@
   let showStarRequestModal = false;
   let offsetPreviewPageNum = 1;
   let selectedChapterExportIds: string[] = [];
-  let chapterExportMode: 'merge' | 'separate' = 'merge';
+  let chapterExportMode: 'merge' | 'separate' = 'separate';
 
   let toastProps: {
     show: boolean;
@@ -111,7 +111,6 @@
 
   let pdfState: PDFState = {
     doc: null,
-    newDoc: null,
     instance: null,
     filename: '',
     currentPage: 1,
@@ -143,6 +142,13 @@
   let tocEditor: any;
   let recognitionIgnoreEditor: any;
   let offsetRenderController: AbortController | null = null;
+
+  let pdfLoadSequence = 0;
+  let pdfUpdateSequence = 0;
+  const pdfLoadingTasks = new Set<PdfjsLibTypes.PDFDocumentLoadingTask>();
+  let activeAiController: AbortController | null = null;
+  let isExporting = false;
+  let hasRestoredView = false;
 
   restoreTocViewCache();
 
@@ -182,10 +188,6 @@
   });
 
   onMount(() => {
-    if (!tocViewCache) {
-      $pdfService = new PDFService();
-    }
-
     localStorage.removeItem('tocify_client_promo_hidden_until');
 
     const hideUntil = localStorage.getItem('tocify_hide_graph_entrance_until');
@@ -225,8 +227,12 @@
 
   onDestroy(() => {
     isViewActive = false;
-    offsetRenderController?.abort();
+    pdfLoadSequence++;
+    pdfUpdateSequence++;
+    debouncedUpdatePDF.cancel();
+    flushTocDraft();
     saveTocViewCache();
+    void releasePdfResources();
     unsubscribeTocItems();
   });
 
@@ -252,7 +258,7 @@
     tocPreparation = preparation;
     const service = $pdfService;
     const doc = pdfState.doc;
-    preparation.ready = new Promise<void>((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0))).then(() => {
+    preparation.ready = new Promise<void>((resolve) => setTimeout(resolve, 0)).then(() => {
       if (tocPreparation === preparation) return service.initPreview(doc, () => tocPreparation === preparation);
     });
     preparation.pages = preparation.ready.then(() => tocPreparation === preparation ? service.detectTocPages() : []).catch((error) => {
@@ -263,24 +269,35 @@
   }
 
   async function loadDefaultPdf() {
-    if (defaultPdfLoad) {
-      isFileLoading = true;
-      await defaultPdfLoad;
-      if (isViewActive) restoreTocViewCache();
-      return;
-    }
+    const files = get(workspacePdfFiles);
+    const file = hasRestoredView ? files.toc : files.toc || files.ocr;
+    if (file) await loadPdfFile(file, {showLoadHint: false, restoreView: hasRestoredView});
+  }
 
-    if (originalPdfInstance) return;
-    const file = get(workspacePdfFiles).ocr;
-    if (!file) return;
-
-    const loading = loadPdfFile(file, {showLoadHint: false});
-    defaultPdfLoad = loading;
-    try {
-      await loading;
-    } finally {
-      if (defaultPdfLoad === loading) defaultPdfLoad = null;
-    }
+  function releasePdfResources() {
+    tocPreparation = null;
+    offsetRenderController?.abort();
+    activeAiController?.abort();
+    activeAiController = null;
+    isAiLoading = false;
+    const documents = [originalPdfInstance, tocPdfInstance].filter(Boolean) as PdfjsLibTypes.PDFDocumentProxy[];
+    const loadingTasks = [...pdfLoadingTasks];
+    pdfLoadingTasks.clear();
+    originalPdfInstance = null;
+    tocPdfInstance = null;
+    pdfState = {...pdfState, doc: null, instance: null};
+    $pdfService.dispose();
+    const worker = PDFService.sharedWorker;
+    PDFService.sharedWorker = null;
+    for (const instance of documents) renderQueue.clearDocument(instance);
+    tocResourceCleanup = tocResourceCleanup.then(async () => {
+      await Promise.allSettled([
+        ...documents.map((instance) => instance.destroy()),
+        ...loadingTasks.map((task) => task.destroy()),
+      ]);
+      worker?.destroy();
+    });
+    return tocResourceCleanup;
   }
 
   function restoreTocViewCache() {
@@ -297,8 +314,6 @@
       offsetPreviewPageNum,
       selectedChapterExportIds,
       chapterExportMode,
-      originalPdfInstance,
-      tocPdfInstance,
       pdfState,
       tocRanges,
       recognitionIgnoreRegions,
@@ -318,12 +333,14 @@
       previousAddPhysicalTocPage,
     } = tocViewCache);
 
+    hasRestoredView = true;
+    tocViewCache = null;
     isDragging = false;
     isFileLoading = false;
     isAiLoading = false;
     isPreviewLoading = false;
     showGraphDrawer = false;
-    showOffsetModal = false;
+    showOffsetModal = Boolean(firstTocItem && pendingTocItems.length);
     showHelpModal = false;
     showChapterExportModal = false;
     showStarRequestModal = false;
@@ -342,9 +359,7 @@
       offsetPreviewPageNum,
       selectedChapterExportIds,
       chapterExportMode,
-      originalPdfInstance,
-      tocPdfInstance,
-      pdfState,
+      pdfState: {...pdfState, doc: null, instance: null},
       tocRanges,
       recognitionIgnoreRegions,
       activeRangeIndex,
@@ -432,6 +447,7 @@
 
     if (isPreviewMode && !isFileLoading && lastConfigJson) {
       if (currentConfigJson !== lastConfigJson) {
+        syncPreviewPageOffset(JSON.parse(lastConfigJson), config);
         debouncedUpdatePDF();
       }
     }
@@ -496,7 +512,7 @@
     }
   }
 
-  const debouncedUpdatePDF = debounce(updatePDF, 300);
+  const debouncedUpdatePDF = debounce(() => { void updatePDF().catch(() => {}); }, 300);
 
   const toggleShowInsertTocHint = () => {
     if (!hasShownTocHint && addPhysicalTocPage && $tocItems.length > 0) {
@@ -551,6 +567,29 @@
     });
   }
 
+  function syncPreviewPageOffset(previousConfig: TocConfig, nextConfig: TocConfig) {
+    const offsetChange = (nextConfig.pageOffset || 0) - (previousConfig.pageOffset || 0);
+    if (!offsetChange || !originalPdfInstance) return;
+
+    const insertedPageCount = addPhysicalTocPage ? tocPageCount : 0;
+    const previousInsertAt = previousConfig.insertAtPage || 2;
+    const currentPage = pdfState.currentPage;
+
+    // Generated TOC pages stay in place while their content is refreshed.
+    if (currentPage >= previousInsertAt && currentPage < previousInsertAt + insertedPageCount) return;
+
+    const contentPage = currentPage >= previousInsertAt + insertedPageCount
+      ? currentPage - insertedPageCount
+      : currentPage;
+    const nextContentPage = Math.max(1, Math.min(originalPdfInstance.numPages, contentPage + offsetChange));
+    const nextInsertAt = nextConfig.insertAtPage || 2;
+    const nextPage = nextContentPage >= nextInsertAt
+      ? nextContentPage + insertedPageCount
+      : nextContentPage;
+
+    pdfState = {...pdfState, currentPage: nextPage};
+  }
+
   const updateViewerInstance = () => {
     pdfState.instance = originalPdfInstance;
     if (isPreviewMode) {
@@ -561,143 +600,90 @@
     pdfState = {...pdfState};
   };
 
-  async function updatePDF(forceFull = false) {
-    const isFull = !isPreviewMode || forceFull;
-    if (!pdfState.doc || !$pdfService) return;
-    isPreviewLoading = true;
-
-    if (!pdfjs || !PdfLib) {
-      console.error('PDF libraries not loaded.');
-      toastProps = {show: true, message: $t('toast.components_not_loaded'), type: 'error'};
-      return;
-    }
+  async function updatePDF(forceFull = false): Promise<import('pdf-lib').PDFDocument | null> {
+    if (!pdfState.doc || !$pdfService || isFileLoading) return null;
+    const sourceDoc = pdfState.doc;
+    const loadSequence = pdfLoadSequence;
+    const sequence = forceFull ? pdfUpdateSequence : ++pdfUpdateSequence;
+    const isCurrent = () => isViewActive && loadSequence === pdfLoadSequence && sourceDoc === pdfState.doc
+      && (forceFull || sequence === pdfUpdateSequence);
+    const settings = structuredClone(config);
+    const items = structuredClone($tocItems);
+    const insertToc = addPhysicalTocPage;
+    if (!forceFull) isPreviewLoading = true;
 
     try {
-      if (addPhysicalTocPage && tocPreparation?.instance === originalPdfInstance) await tocPreparation.ready;
-      const settings = config.prefixSettings;
-      const tocItems_ = settings.enabled ? applyCustomPrefix($tocItems, settings.configs) : $tocItems;
-
-      let newDoc = pdfState.doc;
-
-      const fontKey = config.fontFamily || 'huiwen';
-      const isFontMissing = !PDFService.regularFontBytes.has(fontKey);
-      if (isFontMissing) {
-        const translate = get(t);
-        toastProps = {
-          show: true,
-          message: translate('msg.font_loading', {values: {font: fontKey}}),
-          type: 'info',
-          duration: 100000,
-        };
-        isPreviewLoading = true;
-      }
-
-      const currentInsertPage = config.insertAtPage || 2;
+      if (!pdfjs || !PdfLib) throw new Error($t('toast.components_not_loaded'));
+      if (insertToc && tocPreparation?.instance === originalPdfInstance) await tocPreparation.ready;
+      if (!isCurrent()) return null;
+      const tocItems_ = settings.prefixSettings.enabled
+        ? applyCustomPrefix(items, settings.prefixSettings.configs) : items;
+      let newDoc: import('pdf-lib').PDFDocument | null = null;
+      let nextTocPageCount = 0;
       let tocBytes: Uint8Array | null = null;
 
-      if (addPhysicalTocPage) {
+      if (insertToc) {
+        const currentInsertPage = settings.insertAtPage || 2;
         if (currentInsertPage !== lastInsertAtPage) {
-          await $pdfService.initPreview(pdfState.doc);
+          await $pdfService.initPreview(sourceDoc, isCurrent);
+          if (!isCurrent()) return null;
           lastInsertAtPage = currentInsertPage;
         }
-
-        const firstPage = pdfState.doc.getPages()[0];
-        const pageSize = firstPage ? firstPage.getSize() : undefined;
-
-        const res = await $pdfService.updateTocPages(tocItems_, config, !isFull, pageSize);
-        newDoc = res.newDoc || pdfState.doc;
-        tocPageCount = res.tocPageCount;
-        tocBytes = res.tocBytes;
-
-        if (isFontMissing) {
-          if (PDFService.regularFontBytes.has(fontKey)) {
-            toastProps = {
-              show: true,
-              message: $t('msg.font_loaded', {values: {font: fontKey}}),
-              type: 'success',
-              duration: 3000,
-            };
-          } else {
-            toastProps = {
-              show: true,
-              message: $t('msg.font_load_failed', {values: {font: fontKey}}),
-              type: 'error',
-              duration: 5000,
-            };
-          }
-        }
-      } else {
-        newDoc = await pdfState.doc.copy();
-        tocPageCount = 0;
+        const pageSize = sourceDoc.getPages()[0]?.getSize();
+        const result = await $pdfService.updateTocPages(tocItems_, settings, !forceFull, pageSize);
+        if (!isCurrent()) return null;
+        newDoc = result.newDoc;
+        nextTocPageCount = result.tocPageCount;
+        tocBytes = result.tocBytes;
+      } else if (forceFull) {
+        newDoc = await sourceDoc.copy();
       }
 
-      setOutline(newDoc!, tocItems_, { pageOffset: config.pageOffset, tocPageCount });
-      setPageLabels(newDoc!, config.pageLabelSettings, { tocPageCount, insertAtPage: config.insertAtPage || 2 });
-
-      if (isFull) {
-        const pdfBytes = await newDoc!.save({
-          useObjectStreams: false,
+      if (forceFull) {
+        if (!isCurrent()) return null;
+        if (!newDoc) throw new Error($t('toast.no_pdf_to_export'));
+        await setOutline(newDoc, tocItems_, {pageOffset: settings.pageOffset, tocPageCount: nextTocPageCount});
+        setPageLabels(newDoc, settings.pageLabelSettings, {
+          tocPageCount: nextTocPageCount, insertAtPage: settings.insertAtPage || 2,
         });
-        pdfState.newDoc = newDoc;
+        return newDoc;
       }
 
+      let nextTocInstance: PdfjsLibTypes.PDFDocumentProxy | null = null;
       if (tocBytes) {
-        const loadingTask = pdfjs.getDocument({
+        const task = pdfjs.getDocument({
           data: tocBytes,
-          worker: PDFService.sharedWorker || undefined,
+          worker: PDFService.getSharedWorker(),
           cMapUrl: `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/cmaps/`,
           cMapPacked: true,
         });
-
-        const newTocInstance = await loadingTask.promise;
-
-        if (tocPdfInstance) {
-          try {
-            renderQueue.clearDocument(tocPdfInstance);
-            await tocPdfInstance.destroy();
-          } catch (e) {
-            console.warn('Error destroying old TOC instance:', e);
-          }
+        pdfLoadingTasks.add(task);
+        nextTocInstance = await task.promise.finally(() => pdfLoadingTasks.delete(task));
+        if (!isCurrent()) {
+          await nextTocInstance.destroy();
+          return null;
         }
-
-        tocPdfInstance = newTocInstance;
-      } else {
-        if (tocPdfInstance) {
-          try {
-            renderQueue.clearDocument(tocPdfInstance);
-            await tocPdfInstance.destroy();
-          } catch (e) {}
-        }
-        tocPdfInstance = null;
       }
-
-      if (isFull) {
-        pdfState.newDoc = newDoc;
+      const previousTocInstance = tocPdfInstance;
+      tocPdfInstance = nextTocInstance;
+      tocPageCount = nextTocPageCount;
+      if (previousTocInstance) {
+        renderQueue.clearDocument(previousTocInstance);
+        await previousTocInstance.destroy();
       }
-
-      if (isPreviewMode) {
-        pdfState.totalPages = (originalPdfInstance?.numPages || 0) + tocPageCount;
-
-        if (pdfState.currentPage > pdfState.totalPages) {
-          pdfState.currentPage = pdfState.totalPages;
-        }
-      } else {
-        pdfState.totalPages = originalPdfInstance?.numPages || 0;
-      }
-
-      pdfState = {...pdfState};
+      if (!isCurrent()) return null;
+      updateViewerInstance();
+      pdfState = {...pdfState, currentPage: Math.min(pdfState.currentPage, pdfState.totalPages)};
+      return null;
     } catch (error: any) {
+      if (!isCurrent() || error.name === 'AbortError') return null;
+      if (forceFull) throw error;
       console.error('Error updating PDF:', error);
-      const msg =
-        error.name === 'InvalidPDFException'
-          ? $t('toast.pdf_corrupted')
-          : error.message;
+      const msg = error.name === 'InvalidPDFException' ? $t('toast.pdf_corrupted') : error.message;
       toastProps = {show: true, message: $t('toast.error_updating_pdf', {values: {msg}}), type: 'error'};
+      throw error;
     } finally {
-      if (isPreviewLoading && !isFileLoading) {
-        // Only reset if we are not in another loading state, though simply false is usually fine here
-        isPreviewLoading = false;
-      }
+      if (!forceFull && sequence === pdfUpdateSequence) isPreviewLoading = false;
     }
   }
 
@@ -763,162 +749,126 @@
     }
   };
 
-  const loadPdfFile = async (file: File, {showLoadHint = true} = {}) => {
+  const loadPdfFile = async (file: File, {showLoadHint = true, restoreView = false} = {}) => {
     if (!file) return;
-
-    tocPreparation = null;
-    offsetRenderController?.abort();
-
+    const sequence = ++pdfLoadSequence;
+    pdfUpdateSequence++;
+    debouncedUpdatePDF.cancel();
+    flushTocDraft();
+    autoSaveEnabled.set(false);
+    isFileLoading = true;
+    const isCurrent = () => isViewActive && sequence === pdfLoadSequence;
+    const savedView = restoreView ? {
+      currentPage: pdfState.currentPage, isPreviewMode, tocRanges, recognitionIgnoreRegions, activeRangeIndex,
+    } : null;
+    if (!restoreView) {
+      hasShownTocHint = false;
+      showOffsetModal = false;
+      showChapterExportModal = false;
+      selectedChapterExportIds = [];
+      pendingTocItems = [];
+      firstTocItem = null;
+    }
     const fingerprint = `${file.name}_${file.size}`;
     curFileFingerprint.set(fingerprint);
     localStorage.setItem('tocify_last_fingerprint', fingerprint);
-
-    isFileLoading = true;
-    autoSaveEnabled.set(false);
-    hasShownTocHint = false;
-    showOffsetModal = false;
-    showChapterExportModal = false;
-    selectedChapterExportIds = [];
-
-    pendingTocItems = [];
-    firstTocItem = null;
-
-    tocItems.set([]);
-    await tick();
-
-    if (originalPdfInstance) {
-      renderQueue.clearDocument(originalPdfInstance);
-      try {
-        await originalPdfInstance.destroy();
-      } catch (e: any) {
-        console.warn('Error destroying original instance:', e);
-      }
-    }
-    if (tocPdfInstance) {
-      renderQueue.clearDocument(tocPdfInstance);
-      try {
-        await tocPdfInstance.destroy();
-      } catch (e: any) {
-        console.warn('Error destroying TOC instance:', e);
-      }
-    }
-
-    pdfState.instance = null;
-    originalPdfInstance = null;
-    tocPdfInstance = null;
-    pdfState = {...pdfState};
-    await tick();
-
-    pdfState.filename = file.name;
-    pdfState.totalPages = 0;
+    tocItems.set(restoreView ? $tocItems : []);
+    workspacePdfFiles.update((files) => ({...files, toc: file}));
 
     try {
+      await releasePdfResources();
+      if (!isCurrent()) return;
+      pdfState = {...pdfState, filename: file.name, totalPages: 0};
       await loadPdfLibraries();
-
-      if (!pdfjs || !PdfLib) {
-        return;
-      }
-
-      const {PDFDocument} = PdfLib;
-
-      const arrayBuffer = await file.arrayBuffer();
-      const uint8Array = new Uint8Array(arrayBuffer);
-
-      pdfState.doc = await PDFDocument.load(uint8Array);
-      PDFService.sanitizePdfMetadata(pdfState.doc);
-
-      if ($pdfService) {
-        const initPage = config.insertAtPage || 2;
-        lastInsertAtPage = initPage;
-
-        const firstPage = pdfState.doc.getPage(pdfState.doc.getPageCount() > 1 ? 1 : 0);
-        const {width} = firstPage.getSize();
-        const autoLayout = PDFService.getAutoLayout(width);
-
-        tocConfig.update((c) => ({
-          ...c,
-          firstLevel: {...c.firstLevel, fontSize: autoLayout.fontSizeL1},
-          otherLevels: {...c.otherLevels, fontSize: autoLayout.fontSizeLOther},
+      if (!isCurrent() || !pdfjs || !PdfLib) return;
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      if (!isCurrent()) return;
+      const doc = await PdfLib.PDFDocument.load(bytes);
+      if (!isCurrent()) return;
+      PDFService.sanitizePdfMetadata(doc);
+      pdfState = {...pdfState, doc};
+      lastInsertAtPage = config.insertAtPage || 2;
+      if (!restoreView) {
+        const page = doc.getPage(doc.getPageCount() > 1 ? 1 : 0);
+        const layout = PDFService.getAutoLayout(page.getSize().width);
+        tocConfig.update((c) => ({...c,
+          firstLevel: {...c.firstLevel, fontSize: layout.fontSizeL1},
+          otherLevels: {...c.otherLevels, fontSize: layout.fontSizeLOther},
         }));
       }
-
-      const loadingTask = pdfjs.getDocument({
-        data: uint8Array,
-        worker: PDFService.sharedWorker || undefined,
+      const task = pdfjs.getDocument({
+        data: bytes,
+        worker: PDFService.getSharedWorker(),
         cMapUrl: `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/cmaps/`,
         cMapPacked: true,
       });
-      originalPdfInstance = await loadingTask.promise;
-
-      tocPdfInstance = null;
-      isPreviewMode = false;
+      pdfLoadingTasks.add(task);
+      const instance = await task.promise.finally(() => pdfLoadingTasks.delete(task));
+      if (!isCurrent()) {
+        await instance.destroy();
+        return;
+      }
+      originalPdfInstance = instance;
       tocPageCount = 0;
-      pdfState.currentPage = 1;
-      tocRanges = [{start: 1, end: 1, id: 'default'}];
-      recognitionIgnoreRegions = [];
-      activeRangeIndex = 0;
+      isPreviewMode = savedView?.isPreviewMode || false;
+      pdfState.currentPage = Math.min(savedView?.currentPage || 1, instance.numPages);
+      tocRanges = savedView?.tocRanges || [{start: 1, end: 1, id: 'default'}];
+      recognitionIgnoreRegions = savedView?.recognitionIgnoreRegions || [];
+      activeRangeIndex = savedView?.activeRangeIndex || 0;
 
-      const session = localStorage.getItem(`toc_draft_${fingerprint}`);
-
-      if (session) {
-        const {items, pageOffset} = JSON.parse(session);
-        tocItems.set(cleanTocItems(items));
-        updateTocField('pageOffset', pageOffset);
-      } else {
-        try {
-          const existingOutline = await originalPdfInstance.getOutline();
-
-          if (existingOutline && existingOutline.length > 0) {
-            const importedItems = await convertPdfJsOutlineToTocItems(existingOutline, originalPdfInstance);
-            tocItems.set(importedItems);
-            updateTocField('pageOffset', 0);
-
-            toastProps = {show: true, message: $t('toast.raw_toc_imported'), type: 'info'};
-          } else {
-            tocItems.set([]);
-            updateTocField('pageOffset', 0);
-          }
-        } catch (err: any) {
-          console.warn('PDF load outline error:', err);
-          tocItems.set([]);
+      if (!restoreView) {
+        const session = localStorage.getItem(`toc_draft_${fingerprint}`);
+        if (session) {
+          const {items, pageOffset} = JSON.parse(session);
+          tocItems.set(cleanTocItems(items));
+          updateTocField('pageOffset', pageOffset);
+        } else {
+          const outline = await instance.getOutline();
+          const items = outline?.length ? await convertPdfJsOutlineToTocItems(outline, instance) : [];
+          if (!isCurrent()) return;
+          tocItems.set(items);
           updateTocField('pageOffset', 0);
+          if (items.length) toastProps = {show: true, message: $t('toast.raw_toc_imported'), type: 'info'};
         }
       }
-
       lastPdfContentJson = JSON.stringify(getPdfEffectiveData($tocItems));
-
       prepareTocInBackground();
-      workspacePdfFiles.update((files) => ({...files, toc: file}));
-      if (showLoadHint) {
-        toastProps = {show: true, message: $t('msg.pdf_loaded'), type: 'success'};
-      }
+      if (showLoadHint) toastProps = {show: true, message: $t('msg.pdf_loaded'), type: 'success'};
     } catch (error: any) {
+      if (!isCurrent() || error.name === 'AbortError') return;
+      await releasePdfResources();
+      curFileFingerprint.set('');
       console.error('Error loading PDF:', error);
       toastProps = {show: true, message: $t('toast.error_loading_pdf', {values: {msg: error.message}}), type: 'error'};
     } finally {
-      updateViewerInstance();
-      await tick();
-      isFileLoading = false;
-
-      autoSaveEnabled.set(true);
-      if (!isViewActive) saveTocViewCache();
+      if (isCurrent()) {
+        updateViewerInstance();
+        isFileLoading = false;
+        autoSaveEnabled.set(true);
+        if (originalPdfInstance && isPreviewMode) void updatePDF().catch(() => {});
+      }
     }
   };
 
   const exportPDF = async () => {
+    if (isExporting || isFileLoading) return;
+    isExporting = true;
+    const sourceDoc = pdfState.doc;
+    const filename = pdfState.filename;
     try {
       toastProps = {show: true, message: $t('toast.exporting'), type: 'info'};
-
-      await updatePDF(true);
-      if (!pdfState.newDoc) {
+      const document = await updatePDF(true);
+      if (sourceDoc !== pdfState.doc || !isViewActive) return;
+      if (!document) {
         toastProps = {show: true, message: $t('toast.no_pdf_to_export'), type: 'error'};
         return;
       }
-      const pdfBytes = await pdfState.newDoc.save();
+      const pdfBytes = await document.save();
+      if (sourceDoc !== pdfState.doc || !isViewActive) return;
 
       const saved = await savePdfBytes(
         pdfBytes,
-        pdfState.filename.replace('.pdf', '_outlined.pdf'),
+        filename.replace(/\.pdf$/i, '_outlined.pdf'),
       );
       if (!saved) {
         return;
@@ -934,20 +884,31 @@
         }
       }, 1000);
     } catch (error: any) {
+      if (sourceDoc !== pdfState.doc || !isViewActive) return;
       console.error('Error exporting PDF:', error);
       toastProps = {show: true, message: $t('toast.error_exporting', {values: {msg: error.message}}), type: 'error'};
+    } finally {
+      isExporting = false;
     }
   };
 
   function openChapterExportModal() {
     selectedChapterExportIds = [];
-    chapterExportMode = 'merge';
+    chapterExportMode = 'separate';
     showChapterExportModal = true;
   }
 
   async function exportSelectedChapters() {
+    if (isExporting || isFileLoading) return;
+    isExporting = true;
+    const sequence = pdfLoadSequence;
+    const sourceDoc = pdfState.doc;
+    const sourceItems = structuredClone($tocItems);
+    const pageOffset = $tocConfig.pageOffset || 0;
+    const filename = pdfState.filename;
+    const isCurrent = () => isViewActive && sequence === pdfLoadSequence && sourceDoc === pdfState.doc;
     try {
-      if (!PdfLib || !pdfState.doc || !originalPdfInstance) {
+      if (!PdfLib || !sourceDoc || !originalPdfInstance) {
         toastProps = {show: true, message: $t('toast.no_pdf_to_export'), type: 'error'};
         return;
       }
@@ -965,7 +926,6 @@
       toastProps = {show: true, message: $t('toast.exporting_chapters'), type: 'info'};
 
       const {PDFDocument} = PdfLib;
-      const sourceDoc = pdfState.doc;
 
       if (chapterExportMode === 'merge') {
         const mergedDoc = await PDFDocument.create();
@@ -978,23 +938,26 @@
             (_, index) => range.startPage - 1 + index,
           );
           const copiedPages = await mergedDoc.copyPages(sourceDoc, pageIndices);
+          if (!isCurrent()) return;
           copiedPages.forEach((page) => mergedDoc.addPage(page));
         }
 
         PDFService.sanitizePdfMetadata(mergedDoc);
         const mergedOutline = selectedRootChapters
-          .map((chapter) => findTocItemById($tocItems, chapter.id))
+          .map((chapter) => findTocItemById(sourceItems, chapter.id))
           .filter(Boolean)
-          .map((item) => buildOutlineTreeForExport(item as TocItem, pageMap, $tocConfig.pageOffset || 0))
+          .map((item) => buildOutlineTreeForExport(item as TocItem, pageMap, pageOffset))
           .filter(Boolean) as TocItem[];
 
         if (mergedOutline.length > 0) {
           await setOutline(mergedDoc, mergedOutline);
         }
 
+        const mergedBytes = await mergedDoc.save();
+        if (!isCurrent()) return;
         const saved = await savePdfBytes(
-          await mergedDoc.save(),
-          getMergedChapterFilename(pdfState.filename, selectedChapters),
+          mergedBytes,
+          getMergedChapterFilename(filename, selectedChapters),
         );
         if (!saved) return;
       } else {
@@ -1010,14 +973,15 @@
             (_, index) => chapter.startPage - 1 + index,
           );
           const copiedPages = await chapterDoc.copyPages(sourceDoc, pageIndices);
+          if (!isCurrent()) return;
           copiedPages.forEach((page) => chapterDoc.addPage(page));
           PDFService.sanitizePdfMetadata(chapterDoc);
           const pageMap = createPageMapForRanges([
             {startPage: chapter.startPage, endPage: chapter.endPage},
           ]);
-          const chapterItem = findTocItemById($tocItems, chapter.id);
+          const chapterItem = findTocItemById(sourceItems, chapter.id);
           const chapterOutline = chapterItem
-            ? buildOutlineTreeForExport(chapterItem, pageMap, $tocConfig.pageOffset || 0)
+            ? buildOutlineTreeForExport(chapterItem, pageMap, pageOffset)
             : null;
 
           if (chapterOutline) {
@@ -1025,15 +989,16 @@
           }
 
           const chapterBytes = await chapterDoc.save();
-          const filename = getChapterFilename(pdfState.filename, chapter);
+          if (!isCurrent()) return;
+          const chapterFilename = getChapterFilename(filename, chapter);
 
           if (shouldZipSeparateExport) {
             zipEntries.push({
-              name: getUniqueZipFilename(filename, usedZipFilenames),
+              name: getUniqueZipFilename(chapterFilename, usedZipFilenames),
               data: chapterBytes,
             });
           } else {
-            const saved = await savePdfBytes(chapterBytes, filename, false);
+            const saved = await savePdfBytes(chapterBytes, chapterFilename, false);
             if (!saved) return;
           }
         }
@@ -1041,7 +1006,7 @@
         if (shouldZipSeparateExport) {
           const saved = await saveBlob(
             createZipBlob(zipEntries),
-            getChapterArchiveFilename(pdfState.filename, selectedRootChapters),
+            getChapterArchiveFilename(filename, selectedRootChapters),
             {
               description: 'ZIP Archive',
               accept: {'application/zip': ['.zip']},
@@ -1051,11 +1016,15 @@
         }
       }
 
+      if (!isCurrent()) return;
       showChapterExportModal = false;
       toastProps = {show: true, message: $t('toast.export_chapters_success'), type: 'success'};
     } catch (error: any) {
+      if (!isCurrent()) return;
       console.error('Error exporting chapters:', error);
       toastProps = {show: true, message: $t('toast.error_exporting', {values: {msg: error.message}}), type: 'error'};
+    } finally {
+      isExporting = false;
     }
   }
 
@@ -1066,6 +1035,11 @@
       return;
     }
 
+    activeAiController?.abort();
+    const controller = new AbortController();
+    activeAiController = controller;
+    const instance = originalPdfInstance;
+    const isCurrent = () => !controller.signal.aborted && isViewActive && instance === originalPdfInstance;
     isAiLoading = true;
     aiError = null;
     aiWarning = null;
@@ -1073,7 +1047,8 @@
 
     try {
       const res = await generateToc({
-        pdfInstance: originalPdfInstance,
+        signal: controller.signal,
+        pdfInstance: instance,
         ranges: tocRanges,
         apiKey: customApiConfig.apiKey,
         provider: customApiConfig.provider,
@@ -1085,10 +1060,11 @@
         pagesPerRequest: customApiConfig.pagesPerRequest,
         recognitionIgnoreRegions,
         onProgress: (current, total) => {
-          aiProgress = { current, total };
+          if (isCurrent()) aiProgress = {current, total};
         },
       });
 
+      if (!isCurrent()) return;
       const { items, chunkFailures: failures, chunkWarnings: warnings } = res;
 
       if (warnings.length > 0) {
@@ -1122,6 +1098,7 @@
         pendingTocItems = [];
       }
     } catch (error: any) {
+      if (!isCurrent()) return;
       console.error('Error generating ToC from AI:', error);
       if (error.code === ERROR_NEEDS_API_KEY) {
         isTocConfigExpanded = false;
@@ -1131,8 +1108,11 @@
         toastProps = {show: true, message: error.message, type: 'error'};
       }
     } finally {
-      isAiLoading = false;
-      aiProgress = null;
+      if (activeAiController === controller) {
+        activeAiController = null;
+        isAiLoading = false;
+        aiProgress = null;
+      }
     }
   };
   

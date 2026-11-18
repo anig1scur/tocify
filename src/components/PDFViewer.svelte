@@ -93,7 +93,7 @@
   $: activeTotalPages = stateTotalPages;
 
   function getVirtualPageInfo(pageNum: number) {
-    if (!tocPdfInstance || !addPhysicalTocPage) {
+    if (mode === 'grid' || !tocPdfInstance || !addPhysicalTocPage) {
       return { instance: originalPdfInstance, localPageNum: pageNum };
     }
 

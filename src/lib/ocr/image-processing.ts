@@ -45,6 +45,8 @@ export async function renderPdfPageAsCanvas(
 
   const context = canvas.getContext('2d', { alpha: false });
   if (!context) {
+    page.cleanup();
+    canvas.width = canvas.height = 1;
     throw new Error('Could not create canvas context for OCR image rendering.');
   }
 
@@ -53,11 +55,16 @@ export async function renderPdfPageAsCanvas(
     viewport,
   });
 
-  await renderTask.promise.then(() => page.cleanup()).catch(() => page.cleanup());
-  if (options.watermarkCleanup) {
-    applyWatermarkCleanupForOcr(canvas);
+  try {
+    await renderTask.promise;
+    if (options.watermarkCleanup) applyWatermarkCleanupForOcr(canvas);
+    return canvas;
+  } catch (error) {
+    canvas.width = canvas.height = 1;
+    throw error;
+  } finally {
+    page.cleanup();
   }
-  return canvas;
 }
 
 function polyToBBox(poly: Array<[number, number]>): OcrBBox {

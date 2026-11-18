@@ -12,6 +12,8 @@
     "insert_at_page": "插入到页码 #",
     "title_y_start": "标题垂直偏移",
     "page_offset": "页码偏移量",
+    "decrease_page_offset": "减小页码偏移量",
+    "increase_page_offset": "增大页码偏移量",
     "offset_hint": "（物理页码 #）-（标注页码 #）",
     "first_level": "一级目录",
     "other_levels": "其他层级",
@@ -92,7 +94,7 @@
     "segment_range_n": "范围 {n}"
   },
   "recognition_ignore": {
-    "title": "忽略区域",
+    "title": "拖拽擦除",
     "open": "编辑忽略区域",
     "close": "关闭",
     "instruction": "拖拽擦除识别前要忽略的内容",
@@ -103,7 +105,10 @@
     "region_n": "区域 {n}",
     "empty_hint": "拖拽擦除",
     "clear_page": "清空当前页区域",
-    "done": "完成"
+    "clear_all_pages": "清空所有页区域",
+    "done": "完成",
+    "prev_page": "上一页",
+    "next_page": "下一页"
   },
   "toc": {
     "prompt_intro": "AI Format 仅当书本没有影印目录，只能找文本内容时使用。将不符合格式的文本粘贴到框内，它将智能处理目录文本为目标格式。\n\n或者，你可以自行通过下列提示词获取目标文本:\n\n1 Food Categories I Love 1\n2 Fruits 2\n2.1 Strawberry 3\n\n将下方的目录整理为目标格式，并移除无用的注释\n${YOUR_TOCS_COPY_FROM_ANYWHERE}",
@@ -129,7 +134,9 @@
     "clear_search": "清空搜索",
     "select_item": "选中目录项",
     "add_child": "添加子项",
-    "delete_item": "删除目录项"
+    "delete_item": "删除目录项",
+    "page_number": "页码",
+    "view_text": "文本"
   },
   "btn": {
     "generate_toc_ai": "从所选页面生成目录",
@@ -145,7 +152,8 @@
     "yes_this_page": "是的！就是这一页！",
     "skip_this_item": "跳过此项",
     "save": "保存",
-    "saved": "已保存"
+    "saved": "已保存",
+    "add_chapter": "添加章节"
   },
   "status": {
     "loading_rendering": "正在加载 PDF...",
@@ -180,6 +188,7 @@
     "collapse": "收起",
     "no_children": "没有子章节",
     "selected_count": "已选 {count} 项",
+    "selected_summary": "已选 {count} 项 · 共 {pages} 页",
     "mode_merge": "合并为一个 PDF",
     "mode_separate": "分开导出",
     "page_range": "第 {start}-{end} 页",

@@ -30,69 +30,62 @@
   <div class="flex justify-between items-center mb-2">
     <h3 class="font-bold">{$t('label.toc_pages_selection')}</h3>
     <button
+      type="button"
       on:click={addRange}
       class="p-1 rounded-md hover:bg-black/10 transition-colors"
       title="Add another range"
+      aria-label="Add another range"
     >
       <Plus size={18} />
     </button>
   </div>
 
-  <div class="flex flex-col gap-3">
+  <div class="flex flex-col gap-1.5">
     {#each tocRanges as range, i (range.id)}
       <div
-        class="flex flex-col gap-2 p-2 rounded border-2 transition-all cursor-pointer {i ===
-        activeRangeIndex
+        class="flex items-center gap-2 rounded border-2 px-2 py-1.5 transition-all {i === activeRangeIndex
           ? 'border-blue-500 bg-white/50'
-          : 'border-transparent hover:bg-black/[0.03]'}"
+          : 'cursor-pointer border-transparent hover:bg-black/[0.03]'}"
         on:click={() => setActiveRange(i)}
+        role="presentation"
       >
-        <div class="flex items-center justify-between">
-          <span class="text-xs font-bold text-gray-500 uppercase tracking-wider"
-            >{$t('label.range_n', {values: {n: i + 1}})}</span
+        <span class="w-14 shrink-0 truncate text-xs font-bold text-gray-500">
+          {$t('label.range_n', {values: {n: i + 1}})}
+        </span>
+        <input
+          type="number"
+          id={`start-${range.id}`}
+          bind:value={range.start}
+          on:input={handleRangeChange}
+          min={1}
+          max={totalPages}
+          aria-label={$t('label.start')}
+          title={$t('label.start')}
+          class="h-8 w-full min-w-0 rounded px-2 text-sm"
+        />
+        <span class="shrink-0 text-gray-500" aria-hidden="true">–</span>
+        <input
+          type="number"
+          id={`end-${range.id}`}
+          bind:value={range.end}
+          on:input={handleRangeChange}
+          min={range.start}
+          max={totalPages}
+          aria-label={$t('label.end')}
+          title={$t('label.end')}
+          class="h-8 w-full min-w-0 rounded px-2 text-sm"
+        />
+        {#if tocRanges.length > 1}
+          <button
+            type="button"
+            on:click|stopPropagation={() => removeRange(i)}
+            class="text-blue-600 p-1 hover:bg-blue-100 rounded"
+            aria-label="Remove range"
+            title="Remove range"
           >
-          {#if tocRanges.length > 1}
-            <button
-              on:click|stopPropagation={() => removeRange(i)}
-              class="text-blue-600 p-1 hover:bg-blue-100 rounded"
-            >
-              <Trash2 size={14} />
-            </button>
-          {/if}
-        </div>
-
-        <div class="flex gap-2 items-center">
-          <div class="flex flex-col gap-1 flex-1">
-            <label
-              for={`start-${range.id}`}
-              class="text-xs font-bold text-gray-600">{$t('label.start')}</label
-            >
-            <input
-              type="number"
-              id={`start-${range.id}`}
-              bind:value={range.start}
-              on:input={handleRangeChange}
-              min={1}
-              max={totalPages}
-              class="border-2 border-black rounded px-2 py-1 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          <div class="flex flex-col gap-1 flex-1">
-            <label
-              for={`end-${range.id}`}
-              class="text-xs font-bold text-gray-600">{$t('label.end')}</label
-            >
-            <input
-              type="number"
-              id={`end-${range.id}`}
-              bind:value={range.end}
-              on:input={handleRangeChange}
-              min={range.start}
-              max={totalPages}
-              class="border-2 border-black rounded px-2 py-1 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-        </div>
+            <Trash2 size={14} />
+          </button>
+        {/if}
       </div>
     {/each}
   </div>

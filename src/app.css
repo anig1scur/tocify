@@ -4,6 +4,11 @@
 
 :root {
   --hard-shadow-color: #333;
+  --ease-out-soft: cubic-bezier(.22, 1, .36, 1);
+  --ease-land: cubic-bezier(.34, 1.4, .64, 1);
+  --paper: #f9f8f5;
+  /* One light line for separators inside a black-framed surface. */
+  --divider: #e5e7eb;
 }
 
 @font-face {
@@ -138,3 +143,195 @@ input.ocr-search-input:focus {
 .peer:checked + .settings-toggle::after { transform: translateX(18px); }
 .peer:focus-visible + .settings-toggle { outline: 2px solid #3b82f6; outline-offset: 2px; }
 .peer:disabled + .settings-toggle { cursor: not-allowed; }
+
+/* ---------------------------------------------------------------------------
+   Shared building blocks, in the app's own language: frames and controls are
+   2px black with a hard 2px shadow; separators inside a frame are one light
+   line (--divider); no soft shadows.
+   --------------------------------------------------------------------------- */
+@layer components {
+  .ui-card {
+    border: 2px solid #000;
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 2px 2px 0 var(--hard-shadow-color);
+  }
+
+  /* Raised button: sinks into its own shadow on hover/press. */
+  .nb-btn {
+    @apply inline-flex shrink-0 select-none items-center justify-center gap-1.5 rounded-lg border-2 border-black px-4 text-sm font-bold text-black;
+    height: 40px;
+    box-shadow: 2px 2px 0 var(--hard-shadow-color);
+    transition:
+      transform 120ms var(--ease-out-soft),
+      box-shadow 120ms var(--ease-out-soft),
+      background-color 120ms ease;
+  }
+  .nb-btn:hover:not(:disabled),
+  .nb-btn:active:not(:disabled) {
+    transform: translate(2px, 2px);
+    box-shadow: 0 0 0 var(--hard-shadow-color);
+  }
+  .nb-btn:focus-visible {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+  }
+  .nb-btn:disabled {
+    @apply cursor-not-allowed bg-gray-300;
+    box-shadow: none;
+  }
+  .nb-btn-sm {
+    @apply gap-1.5 rounded-lg px-3 text-xs;
+    height: 32px;
+    box-shadow: 1px 1px 0 var(--hard-shadow-color);
+  }
+  .nb-btn-sm:hover:not(:disabled),
+  .nb-btn-sm:active:not(:disabled) {
+    transform: translate(1px, 1px);
+  }
+
+  .nb-ghost {
+    @apply inline-flex shrink-0 select-none items-center gap-1.5 rounded-md px-2 text-xs font-semibold text-gray-600 transition-colors;
+    height: 32px;
+  }
+  .nb-ghost:hover:not(:disabled) {
+    @apply bg-black/5 text-black;
+  }
+  .nb-ghost:disabled {
+    @apply cursor-not-allowed opacity-40;
+  }
+  .nb-ghost:focus-visible,
+  .nb-icon-btn:focus-visible,
+  .nb-chip:focus-visible {
+    outline: 2px solid #3b82f6;
+    outline-offset: 1px;
+  }
+
+  .nb-icon-btn {
+    @apply inline-grid h-8 w-8 shrink-0 place-items-center rounded-md text-gray-600;
+    transition: background-color 120ms ease, color 120ms ease, transform 120ms var(--ease-out-soft);
+  }
+  .nb-icon-btn:hover:not(:disabled) {
+    @apply bg-gray-100 text-black;
+  }
+  .nb-icon-btn:active:not(:disabled) {
+    transform: scale(.92);
+  }
+  .nb-icon-btn:disabled {
+    @apply cursor-not-allowed opacity-35;
+  }
+
+  /* Pill toggle, same outline as the page tabs in the header. */
+  .nb-chip {
+    @apply inline-flex shrink-0 select-none items-center gap-1 rounded-full border-2 border-black bg-white px-2.5 text-xs font-semibold text-black;
+    height: 28px;
+    transition: background-color 120ms ease, transform 120ms var(--ease-out-soft);
+  }
+  .nb-chip:hover:not(:disabled) {
+    @apply bg-gray-50;
+  }
+  .nb-chip:active:not(:disabled) {
+    transform: scale(.95);
+  }
+  .nb-chip[aria-pressed='true'] {
+    @apply bg-yellow-400;
+  }
+  .nb-chip:disabled {
+    @apply cursor-not-allowed border-gray-300 text-gray-400;
+  }
+
+  .nb-check {
+    appearance: none;
+    display: inline-grid;
+    place-content: center;
+    flex: none;
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    border: 2px solid #000;
+    border-radius: 4px;
+    background: #fff;
+    cursor: pointer;
+    transition: background-color 120ms ease, transform 120ms var(--ease-out-soft);
+  }
+  .nb-check::after {
+    content: '';
+    width: 8px;
+    height: 4px;
+    border: solid #000;
+    border-width: 0 0 2px 2px;
+    transform: translateY(-1px) rotate(-45deg) scale(0);
+    transition: transform 160ms var(--ease-land);
+  }
+  .nb-check:checked,
+  .nb-check[aria-pressed='true'] {
+    background: #facc15;
+  }
+  .nb-check:checked::after,
+  .nb-check[aria-pressed='true']::after {
+    transform: translateY(-1px) rotate(-45deg) scale(1);
+  }
+  .nb-check:active {
+    transform: scale(.88);
+  }
+  .nb-check:focus-visible {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+  }
+
+  /* Text field: the app's default input (1px grey, blue focus). */
+  .nb-field {
+    @apply h-9 w-full bg-white px-3 text-sm placeholder:text-gray-400;
+  }
+
+  /* Two-way switch: black outline, yellow for the chosen side. */
+  .ui-segmented {
+    @apply inline-flex items-center gap-0.5 rounded-lg border-2 border-black bg-white p-0.5;
+  }
+  .ui-segmented > button,
+  .ui-segmented > a {
+    @apply inline-flex h-6 items-center gap-1.5 rounded-md px-2 text-xs font-semibold text-gray-600;
+    transition: color 140ms ease, background-color 140ms ease;
+  }
+  .ui-segmented > button:hover,
+  .ui-segmented > a:hover {
+    @apply text-black;
+  }
+  .ui-segmented > [aria-pressed='true'],
+  .ui-segmented > [aria-current='page'] {
+    @apply bg-yellow-400 text-black;
+  }
+  .ui-segmented > button:focus-visible,
+  .ui-segmented > a:focus-visible {
+    outline: 2px solid #3b82f6;
+    outline-offset: -2px;
+  }
+
+  .ui-count {
+    @apply inline-grid h-5 min-w-5 place-items-center rounded-full bg-black px-1.5 text-[11px] font-bold tabular-nums text-white;
+  }
+
+  /* Flexible gap between a title and its page number. */
+  .toc-leader {
+    flex: 1 1 auto;
+    min-width: 12px;
+    align-self: stretch;
+  }
+
+  .paper-dots {
+    background-color: var(--paper);
+    background-image: radial-gradient(rgb(0 0 0 / .09) 1px, transparent 1.25px);
+    background-size: 14px 14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nb-btn,
+  .nb-icon-btn,
+  .nb-chip,
+  .nb-check,
+  .nb-check::after,
+  .ui-segmented > * {
+    transition: none;
+  }
+}

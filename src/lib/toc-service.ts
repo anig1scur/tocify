@@ -36,6 +36,7 @@ interface AiTocOptions {
   visionPrompt?: string;
   pagesPerRequest?: number;
   recognitionIgnoreRegions?: RecognitionIgnoreRegion[];
+  signal?: AbortSignal;
   onProgress?: (current: number, total: number) => void;
 }
 
@@ -50,7 +51,7 @@ function t(key: string, values?: Record<string, string | number>): string {
 }
 
 export async function generateToc(
-  { pdfInstance, ranges, startPage, endPage, apiKey, provider, customBaseUrl, doubaoEndpointIdText, doubaoEndpointIdVision, modelOverrides, visionPrompt, pagesPerRequest, recognitionIgnoreRegions = [], onProgress }: AiTocOptions
+  { pdfInstance, ranges, startPage, endPage, apiKey, provider, customBaseUrl, doubaoEndpointIdText, doubaoEndpointIdVision, modelOverrides, visionPrompt, pagesPerRequest, recognitionIgnoreRegions = [], onProgress, signal }: AiTocOptions
 ): Promise<GenerateTocResult> {
 
   if (requiresUserApiKey(apiKey)) {
@@ -60,7 +61,7 @@ export async function generateToc(
   }
 
   const fetchChunk = (images: string[]) => processTocWithDiagnosticsDirect({
-    images, apiKey: apiKey!, provider, customBaseUrl, doubaoEndpointIdText,
+    signal, images, apiKey: apiKey!, provider, customBaseUrl, doubaoEndpointIdText,
     doubaoEndpointIdVision, modelOverrides, visionPrompt,
   });
 
@@ -88,7 +89,8 @@ export async function generateToc(
   for (const range of finalRanges) {
     if (range.end < range.start) continue;
     for (let pageNum = range.start; pageNum <= range.end; pageNum++) {
-      const image = await service.getPageAsImage(pdfInstance, pageNum, 1.5, 2048, recognitionIgnoreRegions);
+      signal?.throwIfAborted();
+      const image = await service.getPageAsImage(pdfInstance, pageNum, 1.5, 2048, recognitionIgnoreRegions, signal);
       currentTotalSize += image.length;
       if (currentTotalSize > MAX_TOTAL_IMAGE_SIZE) {
         throw new Error(t('error.payload_too_large'));
@@ -124,10 +126,12 @@ export async function generateToc(
     try {
       result = await fetchChunk(images);
     } catch (_firstErr) {
+      signal?.throwIfAborted();
       // Retry once
       try {
         result = await fetchChunk(images);
       } catch (retryErr: any) {
+        signal?.throwIfAborted();
         chunkFailures.push({
           pages,
           error: retryErr.message || t('error.ai_failed'),
@@ -155,6 +159,7 @@ export async function generateToc(
   }
   await Promise.all(Array.from({length: Math.min(MAX_CONCURRENT_TOC_REQUESTS, totalChunks)}, runWorker));
 
+  signal?.throwIfAborted();
   chunkFailures.sort((a, b) => a.pages[0] - b.pages[0]);
   chunkWarnings.sort((a, b) => a.pages[0] - b.pages[0]);
 

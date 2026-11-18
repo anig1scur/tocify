@@ -52,73 +52,77 @@ export const tocConfig = writable<TocConfig>({
 
 export const autoSaveEnabled = writable(true);
 
-if (browser) {
-  let saveTimer: ReturnType<typeof setTimeout>;
-  const saveSession = () => {
-    if (!get(autoSaveEnabled)) return;
+let saveTimer: ReturnType<typeof setTimeout> | undefined;
+let pendingDraft: {fingerprint: string; value: string | null} | null = null;
 
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => {
-      const fingerprint = get(curFileFingerprint);
-      const items = get(tocItems);
+export function cancelTocDraftSave() {
+  clearTimeout(saveTimer);
+  saveTimer = undefined;
+  pendingDraft = null;
+}
 
-      if (fingerprint) {
-        if (items.length > 0) {
-          const config = get(tocConfig);
-          const session: TocSession = {
-            items,
-            pageOffset: config.pageOffset,
-            updatedAt: Date.now(),
-          };
-          try {
-            localStorage.setItem(`toc_draft_${ fingerprint }`, JSON.stringify(session));
-          } catch (e: any) {
-            if (e.name === 'QuotaExceededError' || e.code === 22 || e.code === 1014) {
-              // Storage full, try to clear old drafts
-              try {
-                const drafts: { key: string; date: number }[] = [];
-                for (let i = 0;i < localStorage.length;i++) {
-                  const key = localStorage.key(i);
-                  if (key && key.startsWith('toc_draft_') && key !== `toc_draft_${ fingerprint }`) {
-                    try {
-                      const val = JSON.parse(localStorage.getItem(key) || '{}');
-                      drafts.push({ key, date: val.updatedAt || 0 });
-                    } catch {
-                      drafts.push({ key, date: 0 });
-                    }
-                  }
-                }
+export function flushTocDraft() {
+  clearTimeout(saveTimer);
+  saveTimer = undefined;
+  const draft = pendingDraft;
+  pendingDraft = null;
+  if (!browser || !draft) return;
 
-                // Sort by oldest first
-                drafts.sort((a, b) => a.date - b.date);
-
-                // Delete oldest until we have space or no more drafts
-                while (drafts.length > 0) {
-                  const toDelete = drafts.shift();
-                  if (toDelete) localStorage.removeItem(toDelete.key);
-
-                  try {
-                    localStorage.setItem(`toc_draft_${ fingerprint }`, JSON.stringify(session));
-                    // If success, break loop
-                    return;
-                  } catch (retryErr) {
-                    // Still full, continue deleting
-                  }
-                }
-              } catch (cleanupErr) {
-                console.error('Failed to cleanup storage:', cleanupErr);
-              }
-            }
-            console.error('Failed to save session:', e);
-          }
-        } else {
-          // Clear storage if items are empty
-          localStorage.removeItem(`toc_draft_${ fingerprint }`);
+  const key = `toc_draft_${draft.fingerprint}`;
+  try {
+    if (draft.value === null) localStorage.removeItem(key);
+    else localStorage.setItem(key, draft.value);
+  } catch (error: any) {
+    if (draft.value !== null && (error.name === 'QuotaExceededError' || error.code === 22 || error.code === 1014)) {
+      const drafts: {key: string; date: number}[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const otherKey = localStorage.key(i);
+        if (!otherKey?.startsWith('toc_draft_') || otherKey === key) continue;
+        try {
+          drafts.push({key: otherKey, date: JSON.parse(localStorage.getItem(otherKey) || '{}').updatedAt || 0});
+        } catch {
+          drafts.push({key: otherKey, date: 0});
         }
       }
-    }, 1000); // 1s debounce
+      drafts.sort((a, b) => a.date - b.date);
+      for (const oldDraft of drafts) {
+        localStorage.removeItem(oldDraft.key);
+        try {
+          localStorage.setItem(key, draft.value);
+          return;
+        } catch { /* Try the next oldest draft. */ }
+      }
+    }
+    console.error('Failed to save session:', error);
+  }
+}
+
+if (browser) {
+  const saveSession = () => {
+    if (!get(autoSaveEnabled)) return;
+    const fingerprint = get(curFileFingerprint);
+    if (!fingerprint) return;
+    // Capture the book and its contents together, before another file can become active.
+    if (pendingDraft && pendingDraft.fingerprint !== fingerprint) flushTocDraft();
+    const items = get(tocItems);
+    const session: TocSession = {
+      items,
+      pageOffset: get(tocConfig).pageOffset,
+      updatedAt: Date.now(),
+    };
+    pendingDraft = {fingerprint, value: items.length ? JSON.stringify(session) : null};
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(flushTocDraft, 1000);
   };
 
   tocItems.subscribe(saveSession);
   tocConfig.subscribe(saveSession);
+  autoSaveEnabled.subscribe((enabled) => {
+    if (enabled) saveSession();
+    else cancelTocDraftSave();
+  });
+  window.addEventListener('pagehide', flushTocDraft);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flushTocDraft();
+  });
 }

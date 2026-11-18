@@ -16,6 +16,8 @@
     "insert_at_page": "Insert At Page #",
     "title_y_start": "Title Vertical Position",
     "page_offset": "Page Number Offset",
+    "decrease_page_offset": "Decrease page offset",
+    "increase_page_offset": "Increase page offset",
     "offset_hint": "(Physical Num #) - (Labeled Num #)",
     "first_level": "First Level",
     "other_levels": "Other Levels",
@@ -96,7 +98,7 @@
     "segment_range_n": "Segment {n}"
   },
   "recognition_ignore": {
-    "title": "Ignore Areas",
+    "title": "Drag to Erase",
     "open": "Edit ignore areas",
     "close": "Close",
     "instruction": "Drag to erase content before recognition",
@@ -107,7 +109,10 @@
     "region_n": "Area {n}",
     "empty_hint": "Drag to erase",
     "clear_page": "Clear current page areas",
-    "done": "Done"
+    "clear_all_pages": "Clear all page areas",
+    "done": "Done",
+    "prev_page": "Previous page",
+    "next_page": "Next page"
   },
   "toc": {
     "prompt_intro": "The 'AI Format' button is used when the book lacks a scanned table of contents. Paste the unformatted text into the box, and it will intelligently convert it to the target format.\n\nAlternatively, you can use the following prompt to generate the formatted text yourself:\n\n1 Food Categories I Love 1\n2 Fruits 2\n2.1 Strawberry 3\n\nReformat the table of contents below into the target format and remove unnecessary comments \n\n${YOUR_TOCS_COPY_FROM_ANYWHERE}",
@@ -133,7 +138,9 @@
     "clear_search": "Clear search",
     "select_item": "Select item",
     "add_child": "Add child",
-    "delete_item": "Delete item"
+    "delete_item": "Delete item",
+    "page_number": "Page",
+    "view_text": "Text"
   },
   "btn": {
     "generate_toc_ai": "Generate ToC from Pages",
@@ -184,6 +191,7 @@
     "collapse": "Collapse",
     "no_children": "No child chapters",
     "selected_count": "{count} selected",
+    "selected_summary": "{count} selected · {pages} pages",
     "mode_merge": "Merge into one PDF",
     "mode_separate": "Download separately",
     "page_range": "Pages {start}-{end}",

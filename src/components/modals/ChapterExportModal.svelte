@@ -1,9 +1,12 @@
 <script lang="ts">
-  import {fade, fly} from 'svelte/transition';
-  import {X, ChevronRight, ChevronDown, ChevronsDownUp, ChevronsUpDown, Download, Search} from 'lucide-svelte';
+  import {slide} from 'svelte/transition';
+  import {cubicOut} from 'svelte/easing';
+  import {ChevronRight, ChevronsDownUp, ChevronsUpDown, Download, Search, X, FileStack} from 'lucide-svelte';
   import {t} from 'svelte-i18n';
   import {createEventDispatcher} from 'svelte';
   import type {ExportableChapter} from '$lib/pdf/chapter-export';
+  import {MOTION} from '$lib/utils/motion';
+  import Modal from './Modal.svelte';
 
   export let showChapterExportModal = false;
   export let chapters: ExportableChapter[] = [];
@@ -19,7 +22,9 @@
   let wasOpen = false;
 
   $: selectedCount = selectedChapterIds.length;
+  $: selectedIdSet = new Set(selectedChapterIds);
   $: hasExpandableChapters = chapters.some((chapter) => chapter.hasChildren);
+  $: hasLevel2 = chapters.some((chapter) => chapter.level === 2);
   $: allExpanded = hasExpandableChapters && chapters
     .filter((chapter) => chapter.hasChildren)
     .every((chapter) => expandedIds.has(chapter.id));
@@ -38,21 +43,22 @@
     }
     wasOpen = showChapterExportModal;
   }
+  $: normalizedQuery = searchQuery.trim().toLowerCase();
   $: matchingIds = new Set(
     chapters
-      .filter((c) => c.title.toLowerCase().includes(searchQuery.toLowerCase()))
+      .filter((c) => c.title.toLowerCase().includes(normalizedQuery))
       .map((c) => c.id),
   );
   $: idsToShow = new Set<string>();
   $: {
-    if (searchQuery) {
+    if (normalizedQuery) {
       const newIdsToShow = new Set<string>();
       matchingIds.forEach((id) => {
         newIdsToShow.add(id);
         let current = chapters.find((c) => c.id === id);
         while (current?.parentId) {
           newIdsToShow.add(current.parentId);
-          current = chapters.find((c) => c.id === current.parentId);
+          current = chapters.find((c) => c.id === current?.parentId);
         }
       });
       idsToShow = newIdsToShow;
@@ -63,18 +69,39 @@
     expandedIds;
     showSelectedOnly;
     visibleChapters = chapters.filter((chapter) => {
-      if (showSelectedOnly && !selectedChapterIds.includes(chapter.id)) {
+      if (showSelectedOnly && !selectedIdSet.has(chapter.id)) {
         return false;
       }
-      if (searchQuery) {
+      if (normalizedQuery) {
         return idsToShow.has(chapter.id);
       }
       return showSelectedOnly ? true : isChapterVisible(chapter);
     });
   }
 
+  // Presets light up when the current selection is exactly that preset.
+  $: level1Ids = chapters.filter((chapter) => chapter.level === 1).map((chapter) => chapter.id);
+  $: level2Ids = chapters.filter((chapter) => chapter.level === 2).map((chapter) => chapter.id);
+  $: isAllSelected = chapters.length > 0 && selectedCount === chapters.length;
+  $: isLevel1Selected = level1Ids.length > 0 && !isAllSelected && sameIds(selectedIdSet, level1Ids);
+  $: isLevel2Selected = level2Ids.length > 0 && sameIds(selectedIdSet, level2Ids);
+
+  // Pages covered by the selection, counting overlapping parent/child ranges once.
+  $: selectedPageCount = (() => {
+    const pages = new Set<number>();
+    for (const chapter of chapters) {
+      if (!selectedIdSet.has(chapter.id)) continue;
+      for (let page = chapter.startPage; page <= chapter.endPage; page++) pages.add(page);
+    }
+    return pages.size;
+  })();
+
+  function sameIds(selection: Set<string>, ids: string[]) {
+    return selection.size === ids.length && ids.every((id) => selection.has(id));
+  }
+
   function toggleSelection(chapterId: string) {
-    if (selectedChapterIds.includes(chapterId)) {
+    if (selectedIdSet.has(chapterId)) {
       selectedChapterIds = selectedChapterIds.filter((id) => id !== chapterId);
     } else {
       selectedChapterIds = [...selectedChapterIds, chapterId];
@@ -90,22 +117,11 @@
   }
 
   function selectLevel1Only() {
-    selectedChapterIds = chapters.filter((chapter) => chapter.level === 1).map((chapter) => chapter.id);
+    selectedChapterIds = [...level1Ids];
   }
 
   function selectLevel2Only() {
-    selectedChapterIds = chapters.filter((chapter) => chapter.level === 2).map((chapter) => chapter.id);
-  }
-
-  function applySelectionAction(event: Event) {
-    const control = event.currentTarget as HTMLSelectElement;
-    switch (control.value) {
-      case 'all': selectAll(); break;
-      case 'clear': clearSelection(); break;
-      case 'level1': selectLevel1Only(); break;
-      case 'level2': selectLevel2Only(); break;
-    }
-    control.value = '';
+    selectedChapterIds = [...level2Ids];
   }
 
   function toggleExpanded(chapterId: string) {
@@ -138,169 +154,237 @@
 
     return true;
   }
+
+  function isExpanded(chapter: ExportableChapter) {
+    return Boolean(normalizedQuery) || expandedIds.has(chapter.id);
+  }
 </script>
 
-{#if showChapterExportModal}
-  <div
-    class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-md p-3 sm:p-4"
-    transition:fade={{duration: 150}}
-    on:click={() => (showChapterExportModal = false)}
-  >
-    <div
-      class="chapter-export-dialog flex h-[70vh] w-full max-w-2xl max-h-[90dvh] flex-col rounded-lg border-2 border-gray-300 bg-white p-4 sm:p-5"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="chapter-export-title"
-      tabindex="-1"
-      transition:fly={{y: 20, duration: 200}}
-      on:click|stopPropagation
-    >
-      <div class="mb-3 flex items-center justify-between gap-3">
-        <h2 id="chapter-export-title" class="text-lg sm:text-xl font-bold">{$t('chapter_export.title')}</h2>
+<Modal
+  bind:open={showChapterExportModal}
+  title={$t('chapter_export.title')}
+  closeLabel={$t('chapter_export.close')}
+  accent="green"
+  size="md"
+  heightClass="h-[min(84dvh,700px)]"
+>
+  <svelte:fragment slot="icon"><FileStack size={18} strokeWidth={2.25} /></svelte:fragment>
+
+  <div class="flex shrink-0 flex-col gap-3 px-4 pt-4 pb-3 sm:px-5">
+    <div class="relative">
+      <Search size={16} aria-hidden="true" class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+      <input
+        type="text"
+        bind:value={searchQuery}
+        aria-label={$t('chapter_export.search_placeholder')}
+        placeholder={$t('chapter_export.search_placeholder')}
+        class="nb-field pl-9 pr-9"
+      />
+      {#if searchQuery}
         <button
           type="button"
-          on:click={() => (showChapterExportModal = false)}
-          class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded text-gray-500 hover:bg-gray-100 hover:text-black"
-          aria-label={$t('chapter_export.close')}
+          class="nb-icon-btn absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2"
+          on:click={() => (searchQuery = '')}
+          aria-label={$t('toc.clear_search')}
+          title={$t('toc.clear_search')}
         >
-          <X size={20} />
+          <X size={14} />
         </button>
-      </div>
+      {/if}
+    </div>
 
-      <div class="relative mb-2">
-        <Search size={16} aria-hidden="true" class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-        <input
-          type="text"
-          bind:value={searchQuery}
-          aria-label={$t('chapter_export.search_placeholder')}
-          placeholder={$t('chapter_export.search_placeholder')}
-          class="h-9 w-full bg-white pl-9 pr-9 text-sm placeholder:text-gray-400"
-        />
-        {#if searchQuery}
-          <button
-            type="button"
-            class="absolute right-1 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded text-gray-400 hover:text-black"
-            on:click={() => (searchQuery = '')}
-            aria-label={$t('toc.clear_search')}
-          >
-            <X size={16} />
+    <div class="flex flex-wrap items-center gap-1.5" role="group" aria-label={$t('chapter_export.selection_actions')}>
+      <button type="button" class="nb-chip" aria-pressed={isAllSelected} on:click={selectAll} disabled={chapters.length === 0}>
+        {$t('chapter_export.select_all')}
+      </button>
+      {#if hasExpandableChapters}
+        <button type="button" class="nb-chip" aria-pressed={isLevel1Selected} on:click={selectLevel1Only}>
+          {$t('chapter_export.select_level_1')}
+        </button>
+        {#if hasLevel2}
+          <button type="button" class="nb-chip" aria-pressed={isLevel2Selected} on:click={selectLevel2Only}>
+            {$t('chapter_export.select_level_2')}
           </button>
         {/if}
-      </div>
+      {/if}
+      <button type="button" class="nb-chip" aria-pressed={showSelectedOnly} on:click={() => (showSelectedOnly = !showSelectedOnly)} disabled={selectedCount === 0 && !showSelectedOnly}>
+        {$t('chapter_export.show_selected_only')}
+      </button>
 
-      <div class="mb-3 flex flex-wrap items-center gap-2">
-        <select
-          class="form-select max-w-full"
-          aria-label={$t('chapter_export.selection_actions')}
-          on:change={applySelectionAction}
-          disabled={chapters.length === 0}
-        >
-          <option value="" selected disabled>{$t('chapter_export.selection_actions')}</option>
-          <option value="all">{$t('chapter_export.select_all')}</option>
-          <option value="clear">{$t('chapter_export.clear_selection')}</option>
-          {#if hasExpandableChapters}
-            <option value="level1">{$t('chapter_export.select_level_1')}</option>
-            <option value="level2">{$t('chapter_export.select_level_2')}</option>
-          {/if}
-        </select>
+      <div class="ml-auto flex items-center gap-0.5">
+        <button type="button" class="nb-ghost" on:click={clearSelection} disabled={selectedCount === 0}>
+          {$t('chapter_export.clear_selection')}
+        </button>
         {#if hasExpandableChapters}
           <button
             type="button"
-            on:click={() => allExpanded ? collapseAll() : expandAll()}
-            class="inline-flex h-8 items-center gap-1.5 rounded px-2 text-xs text-gray-600 hover:bg-gray-100 hover:text-black"
+            class="nb-icon-btn"
+            on:click={() => (allExpanded ? collapseAll() : expandAll())}
+            title={allExpanded ? $t('chapter_export.collapse_all') : $t('chapter_export.expand_all')}
+            aria-label={allExpanded ? $t('chapter_export.collapse_all') : $t('chapter_export.expand_all')}
           >
             {#if allExpanded}
-              <ChevronsDownUp size={14} />
-              {$t('chapter_export.collapse_all')}
+              <ChevronsDownUp size={16} />
             {:else}
-              <ChevronsUpDown size={14} />
-              {$t('chapter_export.expand_all')}
+              <ChevronsUpDown size={16} />
             {/if}
           </button>
         {/if}
-        <label class="ml-auto inline-flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer">
-          <input type="checkbox" bind:checked={showSelectedOnly} class="h-3.5 w-3.5 accent-black" />
-          {$t('chapter_export.show_selected_only')}
-        </label>
-      </div>
-
-      <div class="chapter-export-list min-h-0 flex-1 overflow-y-auto rounded-md border border-black p-1">
-        {#if chapters.length === 0}
-          <div class="px-3 py-8 text-center text-sm text-gray-500">
-            {$t('chapter_export.empty')}
-          </div>
-        {:else if visibleChapters.length === 0}
-          <div class="px-3 py-8 text-center text-sm text-gray-500">
-            {$t('chapter_export.no_results')}
-          </div>
-        {:else}
-          {#each visibleChapters as chapter (chapter.id)}
-            <div
-              class="chapter-export-row flex items-center gap-1 rounded px-2 py-2 hover:bg-gray-50"
-              style:padding-left={8 + (chapter.level - 1) * 16 + 'px'}
-            >
-              {#if hasExpandableChapters}
-                <button
-                  type="button"
-                  class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-gray-500 hover:bg-gray-100"
-                  on:click={() => chapter.hasChildren && toggleExpanded(chapter.id)}
-                  aria-label={chapter.hasChildren
-                    ? (expandedIds.has(chapter.id) ? $t('chapter_export.collapse') : $t('chapter_export.expand'))
-                    : $t('chapter_export.no_children')}
-                  disabled={!chapter.hasChildren}
-                >
-                  {#if chapter.hasChildren}
-                    {#if expandedIds.has(chapter.id)}
-                      <ChevronDown size={14} />
-                    {:else}
-                      <ChevronRight size={14} />
-                    {/if}
-                  {/if}
-                </button>
-              {/if}
-              <label class="flex min-w-0 flex-1 items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={selectedChapterIds.includes(chapter.id)}
-                  on:change={() => toggleSelection(chapter.id)}
-                  class="h-4 w-4 shrink-0 accent-black"
-                />
-                <span class="min-w-0 flex-1 truncate text-sm text-black" title={chapter.title}>
-                  {chapter.title}
-                </span>
-                <span class="shrink-0 whitespace-nowrap text-xs text-gray-500">
-                  {$t('chapter_export.page_range', {values: {start: chapter.startPage, end: chapter.endPage}})}
-                </span>
-              </label>
-            </div>
-          {/each}
-        {/if}
-      </div>
-
-      <div class="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <span class="text-xs text-gray-600" aria-live="polite">
-          {$t('chapter_export.selected_count', {values: {count: selectedCount}})}
-        </span>
-        <div class="flex min-w-0 items-center gap-2">
-          <select
-            class="form-select h-9 min-w-0 flex-1 sm:flex-none"
-            bind:value={exportMode}
-            aria-label={$t('chapter_export.export_mode')}
-          >
-            <option value="merge">{$t('chapter_export.mode_merge')}</option>
-            <option value="separate">{$t('chapter_export.mode_separate')}</option>
-          </select>
-          <button
-            type="button"
-            on:click={() => dispatch('confirm')}
-            disabled={selectedCount === 0}
-            class="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded border-2 border-black bg-green-500 px-3 text-sm font-bold text-black shadow-[1px_1px_0px_var(--hard-shadow-color)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] disabled:bg-gray-300 disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0"
-          >
-            <Download size={14} />
-            {$t('chapter_export.export')}
-          </button>
-        </div>
       </div>
     </div>
   </div>
-{/if}
+
+  <div class="chapter-export-list min-h-0 flex-1 overflow-y-auto border-t border-[color:var(--divider)] px-2 py-2 sm:px-3">
+    {#if chapters.length === 0}
+      <p class="px-3 py-12 text-center text-sm text-gray-500">{$t('chapter_export.empty')}</p>
+    {:else if visibleChapters.length === 0}
+      <p class="px-3 py-12 text-center text-sm text-gray-500">{$t('chapter_export.no_results')}</p>
+    {:else}
+      {#each visibleChapters as chapter (chapter.id)}
+        {@const selected = selectedIdSet.has(chapter.id)}
+        <div
+          class="chapter-export-row flex h-9 items-center rounded-md pr-2 transition-colors duration-100 {selected ? 'bg-yellow-100' : 'hover:bg-black/[0.04]'}"
+          transition:slide={{duration: MOTION.base, easing: cubicOut}}
+        >
+          {#each Array(chapter.level - 1) as _}
+            <span class="tree-guide" aria-hidden="true"></span>
+          {/each}
+          {#if hasExpandableChapters}
+            <button
+              type="button"
+              class="grid h-7 w-6 shrink-0 place-items-center rounded text-gray-400 hover:text-gray-900 disabled:pointer-events-none"
+              on:click={() => chapter.hasChildren && toggleExpanded(chapter.id)}
+              aria-label={chapter.hasChildren
+                ? (isExpanded(chapter) ? $t('chapter_export.collapse') : $t('chapter_export.expand'))
+                : $t('chapter_export.no_children')}
+              aria-expanded={chapter.hasChildren ? isExpanded(chapter) : undefined}
+              disabled={!chapter.hasChildren}
+              tabindex={chapter.hasChildren ? 0 : -1}
+            >
+              {#if chapter.hasChildren}
+                <ChevronRight size={14} strokeWidth={2.25} class="transition-transform duration-150 {isExpanded(chapter) ? 'rotate-90' : ''}" />
+              {/if}
+            </button>
+          {:else}
+            <span class="w-2 shrink-0"></span>
+          {/if}
+          <label class="flex h-full min-w-0 flex-1 cursor-pointer items-center gap-2.5">
+            <input
+              type="checkbox"
+              checked={selected}
+              on:change={() => toggleSelection(chapter.id)}
+              class="nb-check"
+            />
+            <span
+              class="min-w-0 truncate text-sm {chapter.level === 1 ? 'font-medium text-black' : 'text-gray-700'}"
+              title={chapter.title}
+            >
+              {chapter.title}
+            </span>
+            <span class="toc-leader" aria-hidden="true"></span>
+            <span class="shrink-0 whitespace-nowrap text-xs tabular-nums text-gray-500">
+              {$t('chapter_export.page_range', {values: {start: chapter.startPage, end: chapter.endPage}})}
+            </span>
+          </label>
+        </div>
+      {/each}
+    {/if}
+  </div>
+
+  <svelte:fragment slot="footer">
+    <span class="mr-auto text-xs font-medium tabular-nums text-gray-600" aria-live="polite">
+      {#if selectedCount > 0}
+        {$t('chapter_export.selected_summary', {values: {count: selectedCount, pages: selectedPageCount}})}
+      {:else}
+        {$t('chapter_export.selected_count', {values: {count: 0}})}
+      {/if}
+    </span>
+
+    <div class="mode-switch" role="radiogroup" aria-label={$t('chapter_export.export_mode')}>
+      <span class="mode-thumb" class:is-second={exportMode === 'separate'} aria-hidden="true"></span>
+      <button type="button" role="radio" aria-checked={exportMode === 'merge'} on:click={() => (exportMode = 'merge')}>
+        {$t('chapter_export.mode_merge')}
+      </button>
+      <button type="button" role="radio" aria-checked={exportMode === 'separate'} on:click={() => (exportMode = 'separate')}>
+        {$t('chapter_export.mode_separate')}
+      </button>
+    </div>
+
+    <button
+      type="button"
+      on:click={() => dispatch('confirm')}
+      disabled={selectedCount === 0}
+      class="nb-btn bg-green-500"
+    >
+      <Download size={15} strokeWidth={2.25} />
+      {$t('chapter_export.export')}
+    </button>
+  </svelte:fragment>
+</Modal>
+
+<style>
+  .tree-guide {
+    flex: none;
+    width: 20px;
+  }
+
+  .mode-switch {
+    position: relative;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    height: 36px;
+    padding: 2px;
+    border: 2px solid #000;
+    border-radius: 8px;
+    background: #fff;
+  }
+
+  .mode-switch button {
+    position: relative;
+    z-index: 1;
+    padding: 0 12px;
+    border-radius: 5px;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    color: #4b5563;
+    transition: color 160ms ease;
+  }
+
+  .mode-switch button[aria-checked='true'] {
+    color: #000;
+  }
+
+  .mode-switch button:focus-visible {
+    outline: 2px solid #3b82f6;
+    outline-offset: -2px;
+  }
+
+  .mode-thumb {
+    position: absolute;
+    top: 2px;
+    bottom: 2px;
+    left: 2px;
+    width: calc(50% - 2px);
+    border-radius: 5px;
+    background: #facc15;
+    transition: transform 220ms var(--ease-land);
+  }
+
+  .mode-thumb.is-second {
+    transform: translateX(100%);
+  }
+
+  @media (max-width: 480px) {
+    .mode-switch {
+      width: 100%;
+      order: 3;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .mode-thumb {
+      transition: none;
+    }
+  }
+</style>

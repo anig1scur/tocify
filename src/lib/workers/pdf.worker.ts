@@ -73,44 +73,45 @@ async function detectTocPages(pdfBytes: ArrayBuffer): Promise<number[]> {
   });
 
   const pdf = await loadingTask.promise;
-  const maxScanPages = Math.min(20, pdf.numPages);
-  const tocKeywords = ['contents', 'table of contents', '目录', '目次'];
-  const detectedPages: number[] = [];
+  try {
+    const maxScanPages = Math.min(20, pdf.numPages);
+    const tocKeywords = ['contents', 'table of contents', '目录', '目次'];
+    const detectedPages: number[] = [];
 
-  // Parallelize page fetching for speed
-  const pagePromises = [];
-  for (let i = 1;i <= maxScanPages;i++) {
-    pagePromises.push(pdf.getPage(i).then(async page => {
-      const content = await page.getTextContent();
-      const text = content.items
-        .map((item: any) => item.str)
-        .join(' ')
-        .toLowerCase();
+    // Parallelize page fetching for speed
+    const pagePromises = [];
+    for (let i = 1;i <= maxScanPages;i++) {
+      pagePromises.push(pdf.getPage(i).then(async page => {
+        const content = await page.getTextContent();
+        const text = content.items
+          .map((item: any) => item.str)
+          .join(' ')
+          .toLowerCase();
 
-      const hasKeyword = tocKeywords.some(keyword => text.includes(keyword));
-      let patternMatches = 0;
-      const lines = content.items.map((item: any) => item.str.trim()).filter((s: string) => s.length > 0);
+        const hasKeyword = tocKeywords.some(keyword => text.includes(keyword));
+        let patternMatches = 0;
+        const lines = content.items.map((item: any) => item.str.trim()).filter((s: string) => s.length > 0);
 
-      for (const line of lines) {
-        if (/.*\s+(\.{3,}|_{3,}|-{3,})\s*\d+$/.test(line) || /.*\s+\d+$/.test(line)) {
-          patternMatches++;
+        for (const line of lines) {
+          if (/.*\s+(\.{3,}|_{3,}|-{3,})\s*\d+$/.test(line) || /.*\s+\d+$/.test(line)) {
+            patternMatches++;
+          }
         }
-      }
 
-      if (hasKeyword || patternMatches >= 5) {
-        return i;
-      }
-      return null;
-    }));
+        if (hasKeyword || patternMatches >= 5) {
+          return i;
+        }
+        return null;
+      }));
+    }
+
+    const results = await Promise.all(pagePromises);
+    const validPages = results.filter((p): p is number => p !== null).sort((a, b) => a - b);
+
+    return validPages;
+  } finally {
+    await pdf.destroy();
   }
-
-  const results = await Promise.all(pagePromises);
-  const validPages = results.filter((p): p is number => p !== null).sort((a, b) => a - b);
-
-  // Cleanup
-  await pdf.destroy();
-
-  return validPages;
 }
 
 interface TocRenderContext {

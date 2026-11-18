@@ -1,10 +1,10 @@
 <script lang="ts">
   import {createEventDispatcher} from 'svelte';
-  import {fade, fly} from 'svelte/transition';
-  import {X} from 'lucide-svelte';
+  import {Minus, Plus, Check} from 'lucide-svelte';
   import {t} from 'svelte-i18n';
   import type {TocItem} from '$lib/pdf/service';
   import Tooltip from '../Tooltip.svelte';
+  import Modal from './Modal.svelte';
 
   export let showOffsetModal: boolean;
   export let firstTocItem: TocItem | null;
@@ -19,110 +19,88 @@
       dispatch('update:offsetPreviewPageNum', offsetPreviewPageNum);
     }
   }
+
+  $: open = Boolean(showOffsetModal && firstTocItem);
 </script>
 
-{#if showOffsetModal && firstTocItem}
-  <div
-    class="fixed inset-0 bg-lime-400 flex items-center justify-center z-50 p-4"
-    transition:fade={{duration: 150}}
-    on:click={() => (showOffsetModal = false)}
-  >
-    <div
-      class="bg-white rounded-lg p-6 w-[95%] md:w-[85%] max-w-5xl max-h-[90vh] overflow-y-auto border-4 border-black shadow-[8px_8px_0px_var(--hard-shadow-color)]"
-      transition:fly={{y: 20, duration: 200}}
-      on:click|stopPropagation
-    >
-      <div class="flex justify-between items-start mb-4">
-        <h2 class="text-xl md:text-2xl font-bold">{$t('offset.title')}</h2>
-        <button
-          on:click={() => (showOffsetModal = false)}
-          class="p-1 rounded-full text-black hover:bg-black hover:text-white transition-colors"
-          aria-label="Close modal"
-        >
-          <X size={24} />
-        </button>
-      </div>
-      <div class="flex flex-col md:flex-row gap-2 md:gap-6 justify-between">
-        <div class="w-full md:w-[40%] flex flex-col text-base md:text-xl">
-          <div class="my-4 text-gray-700">
-            {$t('offset.found_prefix')}
-            <strong class="text-black text-2xl md:text-3xl block my-2">{firstTocItem?.title}</strong>
-            {$t('offset.found_on_prefix')}
-            <div class="my-2" />
-            <div class="flex items-center gap-4">
-              <strong class="text-black text-2xl md:text-3xl">
-                {$t('offset.page_n', {
-                  values: {n: firstTocItem?.to},
-                })}
-              </strong>
-              <Tooltip
-                text={$t('offset.skip_tooltip')}
-                position="right"
-                width="w-64"
-              >
-                <span
-                  on:click={() => dispatch('skip')}
-                  class="bg-gray-50 rounded-lg text-sm border border-gray-300 px-2 py-1 cursor-pointer text-gray-500 hover:text-gray-600 transition-colors"
-                  role="button"
-                  tabindex="0"
-                  on:keydown={(e) => e.key === 'Enter' && dispatch('skip')}
-                >
-                  {$t('btn.skip_this_item')}
-                </span>
-              </Tooltip>
-            </div>
-          </div>
-          <p class="mt-4 mb-2 text-gray-700 text-sm">{$t('offset.instruction')}</p>
-
-          <div class="flex gap-4 items-center mb-4">
-            <label
-              for="physical_page_select"
-              class="font-semibold">{$t('offset.physical_page_label')}</label
-            >
-            <div class="flex items-center gap-2">
-              <button
-                class="btn p-2 h-10 w-10 font-bold bg-white text-black border-2 border-black rounded-lg shadow-[2px_2px_0px_var(--hard-shadow-color)] hover:shadow-none hover:translate-x-[3px] hover:translate-y-[3px] transition-all disabled:bg-gray-200 disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0"
-                on:click={() => updatePage(offsetPreviewPageNum - 1)}
-                disabled={offsetPreviewPageNum <= 1}
-              >
-                -
-              </button>
-              <input
-                type="number"
-                id="physical_page_select"
-                bind:value={offsetPreviewPageNum}
-                on:input={(e) => updatePage(parseInt(e.currentTarget.value, 10))}
-                min={1}
-                max={totalPages}
-                class="border-2 border-black rounded px-2 py-1 w-20 h-10 text-center font-bold text-2xl [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-              />
-              <button
-                class="btn p-2 h-10 w-10 font-bold bg-white text-black border-2 border-black rounded-lg shadow-[2px_2px_0px_var(--hard-shadow-color)] hover:shadow-none hover:translate-x-[3px] hover:translate-y-[3px] transition-all disabled:bg-gray-200 disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0"
-                on:click={() => updatePage(offsetPreviewPageNum + 1)}
-                disabled={offsetPreviewPageNum >= totalPages}
-              >
-                +
-              </button>
-            </div>
-          </div>
-          <div class="flex flex-col gap-2 mt-auto mb-1">
-            <button
-              on:click={() => dispatch('confirm')}
-              class="btn font-bold bg-blue-400 text-black border-2 border-black rounded-lg px-4 py-2 shadow-[2px_2px_0px_var(--hard-shadow-color)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all w-full"
-            >
-              {$t('btn.yes_this_page')}
+<Modal
+  {open}
+  title={$t('offset.title')}
+  closeLabel="Close"
+  backdrop="lime"
+  size="xl"
+  on:close={() => (showOffsetModal = false)}
+>
+  <div class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4 sm:p-6 md:flex-row md:gap-8">
+    <div class="flex w-full flex-col text-base md:w-[42%] md:text-lg">
+      <div class="text-gray-700">
+        {$t('offset.found_prefix')}
+        <strong class="my-2 block text-2xl text-black md:text-3xl">{firstTocItem?.title}</strong>
+        {$t('offset.found_on_prefix')}
+        <div class="mt-2 flex flex-wrap items-center gap-3">
+          <strong class="text-2xl text-black md:text-3xl">
+            {$t('offset.page_n', {values: {n: firstTocItem?.to}})}
+          </strong>
+          <Tooltip text={$t('offset.skip_tooltip')} position="right" width="w-64">
+            <button type="button" class="rounded-lg border border-gray-300 bg-gray-50 px-2 py-1 text-sm text-gray-500 transition-colors hover:text-gray-700" on:click={() => dispatch('skip')}>
+              {$t('btn.skip_this_item')}
             </button>
-          </div>
+          </Tooltip>
         </div>
-        <div class="w-full md:w-[50%]">
-          <div class="border-2 border-black rounded-lg overflow-hidden bg-gray-50 h-[70vh] flex items-center justify-center">
-            <canvas
-              id="offset-preview-canvas"
-              class="max-w-full max-h-full object-contain block"
-            ></canvas>
-          </div>
+      </div>
+
+      <p class="mb-3 mt-6 text-sm text-gray-700">{$t('offset.instruction')}</p>
+
+      <div class="mb-6 flex items-center gap-4">
+        <label for="physical_page_select" class="text-sm font-semibold">{$t('offset.physical_page_label')}</label>
+        <div class="flex items-center gap-2">
+          <button
+            type="button"
+            class="nb-btn w-10 bg-white px-0"
+            on:click={() => updatePage(offsetPreviewPageNum - 1)}
+            disabled={offsetPreviewPageNum <= 1}
+            aria-label="-1"
+          >
+            <Minus size={16} strokeWidth={2.25} />
+          </button>
+          <input
+            type="number"
+            id="physical_page_select"
+            bind:value={offsetPreviewPageNum}
+            on:input={(e) => updatePage(parseInt(e.currentTarget.value, 10))}
+            min={1}
+            max={totalPages}
+            class="h-10 w-20 rounded border-2 border-black px-2 py-1 text-center text-2xl font-bold [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+          />
+          <button
+            type="button"
+            class="nb-btn w-10 bg-white px-0"
+            on:click={() => updatePage(offsetPreviewPageNum + 1)}
+            disabled={offsetPreviewPageNum >= totalPages}
+            aria-label="+1"
+          >
+            <Plus size={16} strokeWidth={2.25} />
+          </button>
         </div>
+      </div>
+
+      <button
+        type="button"
+        on:click={() => dispatch('confirm')}
+        class="nb-btn mt-auto h-11 w-full bg-blue-400 text-base"
+      >
+        <Check size={18} strokeWidth={2.5} />
+        {$t('btn.yes_this_page')}
+      </button>
+    </div>
+
+    <div class="w-full md:w-[58%]">
+      <div class="flex h-[60vh] items-center justify-center overflow-hidden rounded-lg border-2 border-black bg-gray-50 md:h-[68vh]">
+        <canvas
+          id="offset-preview-canvas"
+          class="block max-h-full max-w-full object-contain"
+        ></canvas>
       </div>
     </div>
   </div>
-{/if}
+</Modal>

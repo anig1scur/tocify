@@ -268,7 +268,7 @@
 
         <div class="flex flex-col md:flex-row md:justify-end gap-3 md:gap-2 pt-4 relative z-10 mx-3 md:mr-3 md:mx-0">
           <button
-            class="btn flex gap-2 items-center justify-center font-bold bg-white text-black border-2 border-black rounded-lg px-4 py-2 shadow-[2px_2px_0px_var(--hard-shadow-color)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all disabled:bg-gray-300 disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0 w-full md:w-auto"
+            class="btn flex gap-2 items-center justify-center font-bold bg-white text-black border-2 border-black rounded-lg px-4 py-2 shadow-[2px_2px_0px_var(--hard-shadow-color)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all disabled:bg-gray-300 disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0 w-full md:w-auto"
             on:click={openFilePicker}
             title={$t('tooltip.upload_new')}
           >
@@ -276,7 +276,7 @@
             {$t('btn.upload_new')}
           </button>
           <button
-            class="btn flex gap-2 items-center justify-center font-bold bg-green-500 text-black border-2 border-black rounded-lg px-4 py-2 shadow-[2px_2px_0px_var(--hard-shadow-color)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0 w-full md:w-auto {(!pdfFile || isFileLoading) ? 'disabled:bg-gray-300 disabled:cursor-not-allowed' : 'disabled:bg-green-500 disabled:cursor-wait'}"
+            class="btn flex gap-2 items-center justify-center font-bold bg-green-500 text-black border-2 border-black rounded-lg px-4 py-2 shadow-[2px_2px_0px_var(--hard-shadow-color)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0 w-full md:w-auto {(!pdfFile || isFileLoading) ? 'disabled:bg-gray-300 disabled:cursor-not-allowed' : 'disabled:bg-green-500 disabled:cursor-wait'}"
             on:click={generateSearchablePdf}
             disabled={!pdfFile || isFileLoading || isBuilding}
             aria-busy={isBuilding}

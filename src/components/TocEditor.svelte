@@ -10,9 +10,9 @@
     ArrowUp,
     ArrowDown,
     Hash,
-    ListChecks,
     X,
     Search,
+    Plus,
   } from 'lucide-svelte';
   import {t} from 'svelte-i18n';
   import {processTocWithDiagnosticsDirect} from '$lib/llm/client';
@@ -24,6 +24,11 @@
   import {dndzone, SHADOW_ITEM_MARKER_PROPERTY_NAME} from 'svelte-dnd-action';
   import {flip} from 'svelte/animate';
   import {fly} from 'svelte/transition';
+  import {settle} from '$lib/utils/motion';
+
+  function focusOnMount(node: HTMLInputElement) {
+    node.focus();
+  }
 
   export let currentPage = 1;
   export let isPreview = false;
@@ -44,6 +49,7 @@
   let text = ``;
   let isUpdatingFromEditor = false;
   let isProcessing = false;
+  let aiFormatController: AbortController | null = null;
   let aiFormatError = '';
   let debounceTimer: ReturnType<typeof setTimeout> | undefined = undefined;
   let batchOffsetInput = '';
@@ -57,6 +63,8 @@
   let hasSelectionDragMoved = false;
   let selectionBeforeDrag = new Set<string>();
   let tocSearchQuery = '';
+  // The outline text and the tree are two views of the same ToC.
+  let view: 'tree' | 'text' = 'tree';
 
   let historyStack: TocEntry[][] = [];
   let futureStack: TocEntry[][] = [];
@@ -103,7 +111,9 @@
   }
 
   function handleKeydown(e: KeyboardEvent) {
-    if (e.isComposing || isEditableKeyboardTarget(e.target)) return;
+    if (e.isComposing || e.defaultPrevented || isEditableKeyboardTarget(e.target)) return;
+    // Dialogs own the keyboard while open (e.g. Backspace deletes an erase area there).
+    if (e.target instanceof Element && e.target.closest('[role="dialog"]')) return;
 
     let handled = false;
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
@@ -159,6 +169,7 @@
   });
 
   onDestroy(() => {
+    aiFormatController?.abort();
     unsubscribe();
     clearTimeout(textGenTimer);
     clearTimeout(debounceTimer);
@@ -528,7 +539,11 @@
   }
 
   async function handleAiFormat() {
-    if (!text.trim()) return;
+    if (!text.trim() || isProcessing) return;
+    const controller = new AbortController();
+    aiFormatController = controller;
+    const fingerprint = $curFileFingerprint;
+    const isCurrent = () => !controller.signal.aborted && fingerprint === $curFileFingerprint;
     aiFormatError = '';
 
     try {
@@ -543,6 +558,7 @@
 
       isProcessing = true;
       const aiResult = await processTocWithDiagnosticsDirect({
+        signal: controller.signal,
         text,
         apiKey: apiConfig.apiKey,
         provider: apiConfig.provider,
@@ -552,14 +568,19 @@
         modelOverrides: apiConfig.modelOverrides,
       });
 
+      if (!isCurrent()) return;
       if (aiResult.items.length === 0) {
         throw new Error('AI could not parse any ToC structure.');
       }
       dispatch('aiFormatResponse', { items: buildTree(aiResult.items), incomplete: aiResult.incomplete });
     } catch (error) {
+      if (!isCurrent()) return;
       aiFormatError = error instanceof Error ? error.message : $t('error.ai_failed');
     } finally {
-      isProcessing = false;
+      if (aiFormatController === controller) {
+        aiFormatController = null;
+        isProcessing = false;
+      }
     }
   }
 
@@ -609,6 +630,7 @@
   }
 
   function handleInput(e: Event) {
+    clearTimeout(textGenTimer);
     isUpdatingFromEditor = true;
     text = (e.target as HTMLTextAreaElement).value;
 
@@ -850,250 +872,284 @@
   bind:innerWidth
 />
 
-<div class="flex flex-col gap-4 mt-3">
-  <div class="h-48 relative group">
-    <textarea
-      placeholder={$t('toc.outline_placeholder')}
-      bind:value={text}
-      on:input={handleInput}
-      class="toc-editor-field w-full h-full border-2 border-black rounded-lg p-2 text-sm myfocus leading-6 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none pr-10"
-    ></textarea>
-
-    {#if hasInvalidLines}
-      <div class="absolute bottom-3 right-3">
-        <Tooltip
-          isTextCopiable
-          width="md:w-[350px] w-[250px]"
-          text={promptTooltipText}
-          position={innerWidth < 1024 ? '-200 -500' : '100 -600'}
-        >
-          <button
-            on:click={handleAiFormat}
-            disabled={isProcessing || !text.trim()}
-            class="flex items-center gap-1.5 bg-gradient-to-br from-blue-300 to-pink-600 text-white px-3 py-1.5 rounded-md shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:scale-105 active:scale-95"
-          >
-            {#if isProcessing}
-              <Loader2
-                size={16}
-                class="animate-spin"
-              />
-              <span class="text-xs font-bold">Processing...</span>
-            {:else}
-              <Sparkles size={16} />
-              <span class="text-xs font-bold">AI Format</span>
-            {/if}
-          </button>
-        </Tooltip>
-      </div>
-    {/if}
-  </div>
-
+<div class="mt-3 flex flex-col gap-3">
   {#if aiFormatError}
     <p role="alert" class="text-xs text-red-700 break-words">{aiFormatError}</p>
   {/if}
 
-  <div class="md:-ml-12 -ml-6 group/toc-list pt-2 relative">
-    {#if $tocItems.length > 0}
-      <div
-        class="flex items-center gap-1 sticky top-12 z-20 opacity-0 group-hover/toc-list:opacity-100 transition-all duration-300 translate-y-1 group-hover/toc-list:translate-y-0 pointer-events-none"
-      >
-        {#if firstItemWithChildrenId}
-          <div class="-ml-2.5 -mb-8 pointer-events-auto bg-white/50 backdrop-blur-sm rounded-md shadow-sm">
+  <div class="toc-tree ui-card relative">
+    <div class="toc-tree-header sticky top-0 z-30 flex min-h-[46px] items-center gap-2 rounded-t-[6px] border-b border-[color:var(--divider)] bg-white px-2.5 py-2">
+      {#if selectedCount >= 1 && view === 'tree'}
+        <div class="flex min-w-0 flex-1 flex-wrap items-center gap-1.5" in:settle>
+          <span class="mr-1 rounded-md bg-yellow-100 px-2 py-1 text-xs font-bold tabular-nums text-black" title={$t('toc.batch_operations')}>
+            {$t('toc.selected_count', {values: {count: selectedCount}})}
+          </span>
+          <button
+            type="button"
+            on:click={() => adjustSelectedLevels(-1)}
+            title={$t('toc.promote_selected_hint')}
+            class="nb-btn nb-btn-sm bg-blue-300"
+          >
+            <ArrowUp size={13} strokeWidth={2.25} />
+            {$t('toc.promote_selected')}
+          </button>
+          <button
+            type="button"
+            on:click={() => adjustSelectedLevels(1)}
+            title={$t('toc.demote_selected_hint')}
+            class="nb-btn nb-btn-sm bg-lime-300"
+          >
+            <ArrowDown size={13} strokeWidth={2.25} />
+            {$t('toc.demote_selected')}
+          </button>
+          {#if showBatchOffsetEditor}
+            <div class="flex items-center gap-1.5" in:settle={{y: 0}}>
+              <input
+                type="number"
+                bind:value={batchOffsetInput}
+                placeholder={$t('toc.offset_placeholder')}
+                on:keydown={(e) => {
+                  if (e.key === 'Enter') applyBatchOffset();
+                  if (e.key === 'Escape') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    showBatchOffsetEditor = false;
+                  }
+                }}
+                use:focusOnMount
+                aria-label={$t('toc.offset_selected_hint')}
+                class="nb-field h-7 w-16 px-2 text-xs"
+              />
+              <button
+                type="button"
+                on:click={applyBatchOffset}
+                title={$t('toc.apply_offset_hint')}
+                class="nb-btn nb-btn-sm bg-yellow-400"
+              >
+                {$t('toc.apply_offset')}
+              </button>
+            </div>
+          {:else}
+            <button
+              type="button"
+              on:click={() => {
+                showBatchOffsetEditor = true;
+                batchOffsetInput = '';
+              }}
+              title={$t('toc.offset_selected_hint')}
+              class="nb-btn nb-btn-sm bg-yellow-400"
+            >
+              <Hash size={13} strokeWidth={2.25} />
+              {$t('toc.offset_selected')}
+            </button>
+          {/if}
+        </div>
+        <button
+          type="button"
+          on:click={clearSelection}
+          class="nb-icon-btn self-start"
+          aria-label={$t('toc.clear_selection')}
+          title={$t('toc.clear_selection')}
+        >
+          <X size={16} />
+        </button>
+      {:else}
+        <div class="flex min-w-0 flex-1 items-center gap-2" in:settle>
+          <div class="ui-segmented shrink-0" role="tablist" aria-label={$t('header.toc')}>
+            <button type="button" role="tab" aria-selected={view === 'tree'} aria-pressed={view === 'tree'} on:click={() => (view = 'tree')}>
+              {$t('header.toc')}
+              {#if flatTocItems.length > 0}
+                <span class="tabular-nums opacity-60">{flatTocItems.length}</span>
+              {/if}
+            </button>
+            <button type="button" role="tab" aria-selected={view === 'text'} aria-pressed={view === 'text'} on:click={() => (view = 'text')}>
+              {$t('toc.view_text')}
+            </button>
+          </div>
+          {#if showTocSearch && view === 'tree'}
+            <div class="relative ml-auto min-w-0 max-w-[240px] flex-1">
+              <Search size={14} aria-hidden="true" class="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                bind:value={tocSearchQuery}
+                aria-label={$t('toc.search_placeholder') || 'Search ToC...'}
+                placeholder={$t('toc.search_placeholder') || 'Search ToC...'}
+                class="nb-field h-8 pl-8 pr-7 text-xs"
+              />
+              {#if tocSearchQuery}
+                <button
+                  type="button"
+                  on:click={() => (tocSearchQuery = '')}
+                  class="absolute right-0.5 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded text-gray-500 hover:text-black"
+                  aria-label={$t('toc.clear_search') || 'Clear search'}
+                  title={$t('toc.clear_search') || 'Clear search'}
+                >
+                  <X size={13} />
+                </button>
+              {/if}
+            </div>
+          {/if}
+        </div>
+        {#if firstItemWithChildrenId && view === 'tree'}
+          <button
+            type="button"
+            on:click={() => (hasAnyExpanded ? collapseAll() : expandAll())}
+            class="nb-icon-btn"
+            title={hasAnyExpanded ? $t('toc.collapse_all') : $t('toc.expand_all')}
+            aria-label={hasAnyExpanded ? $t('toc.collapse_all') : $t('toc.expand_all')}
+          >
             {#if hasAnyExpanded}
-              <button
-                on:click={collapseAll}
-                class="p-1 rounded-md text-gray-500 hover:text-gray-700 transition-colors"
-                title={$t('toc.collapse_all')}
-              >
-                <ChevronsDownUp size={17} font-weight={600} />
-              </button>
+              <ChevronsDownUp size={16} />
             {:else}
-              <button
-                on:click={expandAll}
-                class="p-1 rounded-md text-gray-500 hover:text-gray-700 transition-colors"
-                title={$t('toc.expand_all')}
-              >
-                <ChevronsUpDown size={17} font-weight={600} />
-              </button>
+              <ChevronsUpDown size={16} />
             {/if}
+          </button>
+        {/if}
+      {/if}
+    </div>
+
+    {#if showNavHint}
+      <div class="pointer-events-none absolute right-2 top-14 z-40">
+        <div
+          transition:fly={{y: -6, duration: 200}}
+          class="rounded-lg bg-black/50 px-2 py-1 text-xs text-white backdrop-blur-sm"
+        >
+          {$t('toc.nav_hint')}
+        </div>
+      </div>
+    {/if}
+
+    {#if view === 'text'}
+      <div class="relative">
+        <textarea
+          placeholder={$t('toc.outline_placeholder')}
+          bind:value={text}
+          on:input={handleInput}
+          spellcheck="false"
+          aria-label={$t('toc.view_text')}
+          class="toc-text block h-80 w-full resize-y bg-transparent px-4 py-3 pb-12 text-sm leading-6 text-black placeholder:text-gray-400"
+        ></textarea>
+        {#if hasInvalidLines}
+          <div class="absolute bottom-3 right-3">
+            <Tooltip
+              isTextCopiable
+              width="md:w-[350px] w-[250px]"
+              text={promptTooltipText}
+              position={innerWidth < 1024 ? '-200 -500' : '100 -600'}
+            >
+              <button
+                type="button"
+                on:click={handleAiFormat}
+                disabled={isProcessing || !text.trim()}
+                class="flex items-center gap-1.5 bg-gradient-to-br from-blue-300 to-pink-600 text-white px-3 py-1.5 rounded-md shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:scale-105 active:scale-95"
+              >
+                {#if isProcessing}
+                  <Loader2 size={16} class="animate-spin" />
+                  <span class="text-xs font-bold">Processing...</span>
+                {:else}
+                  <Sparkles size={16} />
+                  <span class="text-xs font-bold">AI Format</span>
+                {/if}
+              </button>
+            </Tooltip>
           </div>
         {/if}
       </div>
-
-      {#if selectedCount >= 1 || showTocSearch}
-        <div class="sticky top-12 z-30 mb-3 ml-12 pointer-events-none">
-          <div class="toc-floating-tools pointer-events-auto flex flex-col gap-1 {selectedCount >= 1 ? 'rounded-lg border-2 border-black/95 bg-white/70 backdrop-blur-sm' : ''}">
-            {#if selectedCount >= 1}
-              <div class="relative flex flex-wrap items-center gap-2 pl-3 pr-10 pt-2 {showTocSearch ? 'pb-1' : 'pb-2'}">
-                <span class="inline-flex items-center gap-2 text-xs font-semibold text-gray-700">
-                  <span class="inline-flex shrink-0" title={$t('toc.batch_operations')}>
-                    <ListChecks size={16} aria-hidden="true" />
-                    <span class="sr-only">{$t('toc.batch_operations')}</span>
-                  </span>
-                  {$t('toc.selected_count', {values: {count: selectedCount}})}
-                </span>
-                <button
-                  type="button"
-                  on:click={clearSelection}
-                  class="absolute right-1 top-1 inline-flex h-7 w-7 items-center justify-center rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
-                  aria-label={$t('toc.clear_selection')}
-                  title={$t('toc.clear_selection')}
-                >
-                  <X size={14} />
-                </button>
-                <div class="flex flex-wrap items-center gap-2">
-                  <button
-                    on:click={() => adjustSelectedLevels(-1)}
-                    title={$t('toc.promote_selected_hint')}
-                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-blue-400 text-black border-2 border-black rounded-lg shadow-[1px_1px_0px_var(--hard-shadow-color)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
-                  >
-                    <ArrowUp size={14} />
-                    {$t('toc.promote_selected')}
-                  </button>
-                  <button
-                    on:click={() => adjustSelectedLevels(1)}
-                    title={$t('toc.demote_selected_hint')}
-                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-lime-400 text-black border-2 border-black rounded-lg shadow-[1px_1px_0px_var(--hard-shadow-color)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
-                  >
-                    <ArrowDown size={14} />
-                    {$t('toc.demote_selected')}
-                  </button>
-
-                  {#if showBatchOffsetEditor}
-                    <div class="flex items-center gap-2">
-                      <input
-                        type="number"
-                        bind:value={batchOffsetInput}
-                        placeholder={$t('toc.offset_placeholder')}
-                        on:keydown={(e) => e.key === 'Enter' && applyBatchOffset()}
-                        class="w-20 border-2 border-black rounded px-2 py-1.5 text-xs myfocus focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                      <button
-                        on:click={applyBatchOffset}
-                        title={$t('toc.apply_offset_hint')}
-                        class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-yellow-400 text-black border-2 border-black rounded-lg shadow-[1px_1px_0px_var(--hard-shadow-color)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
-                      >
-                        <Hash size={14} />
-                        {$t('toc.apply_offset')}
-                      </button>
-                    </div>
-                  {:else}
-                    <button
-                      on:click={() => {
-                        showBatchOffsetEditor = true;
-                        batchOffsetInput = '';
-                      }}
-                      title={$t('toc.offset_selected_hint')}
-                      class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-yellow-400 text-black border-2 border-black rounded-lg shadow-[1px_1px_0px_var(--hard-shadow-color)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
-                    >
-                      <Hash size={14} />
-                      {$t('toc.offset_selected')}
-                    </button>
-                  {/if}
-                </div>
-              </div>
-            {/if}
-
-            {#if showTocSearch}
-              <div class={selectedCount >= 1 ? 'px-2 pt-2 pb-2' : 'pt-2'}>
-                <div class="relative rounded {selectedCount >= 1 ? '' : 'bg-white/70 backdrop-blur-sm'}">
-                  <Search size={15} aria-hidden="true" class="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
-                  <input
-                    type="text"
-                    bind:value={tocSearchQuery}
-                    aria-label={$t('toc.search_placeholder') || 'Search ToC...'}
-                    placeholder={$t('toc.search_placeholder') || 'Search ToC...'}
-                    class="h-8 w-full min-w-0 bg-transparent pl-8 pr-8 text-sm placeholder:text-gray-400"
-                  />
-                  {#if tocSearchQuery}
-                    <button
-                      type="button"
-                      on:click={() => (tocSearchQuery = '')}
-                      class="absolute right-0.5 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded text-gray-500 hover:text-black"
-                      aria-label={$t('toc.clear_search') || 'Clear search'}
-                      title={$t('toc.clear_search') || 'Clear search'}
-                    >
-                      <X size={14} />
-                    </button>
-                  {/if}
-                </div>
-              </div>
-            {/if}
-          </div>
-        </div>
-      {/if}
-
-      {#if showNavHint}
-        <div class="absolute right-0 top-0 z-50 h-6 flex justify-center pointer-events-none">
-          <div
-            transition:fly={{y: -10, duration: 300}}
-            class="bg-black/50 backdrop-blur-sm text-white text-xs px-2 py-1 rounded-lg pointer-events-none"
-          >
-            {$t('toc.nav_hint')}
-          </div>
-        </div>
-      {/if}
-
-      <section
-        use:dndzone={{
-          items: displayedTocItems,
-          flipDurationMs,
-          dragDisabled: $dragDisabled || Boolean(normalizedTocSearch),
-          dropTargetStyle: {outline: '2px dashed #000', borderRadius: '8px'},
-        }}
-        on:consider={handleDndConsider}
-        on:finalize={handleDndFinalize}
-        class="min-h-[20px]"
-      >
-        {#each displayedTocItems as item, i (`${item.id}${item[SHADOW_ITEM_MARKER_PROPERTY_NAME] ? `_${item[SHADOW_ITEM_MARKER_PROPERTY_NAME]}` : ''}`)}
-          <div animate:flip={{duration: flipDurationMs}}>
-            <TocItem
-              {item}
-              {flipDurationMs}
-              onUpdate={updateTocItem}
-              onDelete={deleteTocItem}
-              onDragStart={handleDragStart}
-              onDragEnd={handleDragEnd}
-              onSelect={handleSelectItem}
-              onSelectionDragStart={handleSelectionDragStart}
-              {currentPage}
-              {isPreview}
-              {pageOffset}
-              {insertAtPage}
-              {tocPageCount}
-              {selectedIds}
-              searchQuery={tocSearchQuery}
-              on:showNavHint={handleShowNavHint}
-              on:hoveritem
-              on:jumpToPage={(e: CustomEvent<{to: number}>) => {
-                dispatch('jumpToPage', e.detail);
-              }}
-              index={i + 1}
-            />
-          </div>
-        {/each}
-      </section>
+    {:else if $tocItems.length > 0}
+      <div class="toc-tree-body py-2 pr-1.5" style="--toc-indent: 20px; --toc-gutter: 56px; padding-left: var(--toc-gutter);">
+        <section
+          use:dndzone={{
+            items: displayedTocItems,
+            flipDurationMs,
+            dragDisabled: $dragDisabled || Boolean(normalizedTocSearch),
+            dropTargetStyle: {outline: '2px dashed #000', outlineOffset: '2px', borderRadius: '8px'},
+          }}
+          on:consider={handleDndConsider}
+          on:finalize={handleDndFinalize}
+          class="min-h-[20px]"
+        >
+          {#each displayedTocItems as item, i (`${item.id}${item[SHADOW_ITEM_MARKER_PROPERTY_NAME] ? `_${item[SHADOW_ITEM_MARKER_PROPERTY_NAME]}` : ''}`)}
+            <div animate:flip={{duration: flipDurationMs}}>
+              <TocItem
+                {item}
+                {flipDurationMs}
+                onUpdate={updateTocItem}
+                onDelete={deleteTocItem}
+                onDragStart={handleDragStart}
+                onDragEnd={handleDragEnd}
+                onSelect={handleSelectItem}
+                onSelectionDragStart={handleSelectionDragStart}
+                {currentPage}
+                {isPreview}
+                {pageOffset}
+                {insertAtPage}
+                {tocPageCount}
+                {selectedIds}
+                searchQuery={tocSearchQuery}
+                on:showNavHint={handleShowNavHint}
+                on:hoveritem
+                on:jumpToPage={(e: CustomEvent<{to: number}>) => {
+                  dispatch('jumpToPage', e.detail);
+                }}
+                index={i + 1}
+              />
+            </div>
+          {/each}
+        </section>
+        {#if normalizedTocSearch && displayedTocItems.length === 0}
+          <p class="py-6 pr-6 text-center text-xs text-gray-500">{$t('chapter_export.no_results')}</p>
+        {/if}
+      </div>
+    {:else}
+      <!-- Empty: the original three steps, then one real action. -->
+      <div class="flex flex-col items-center px-6 pb-9 pt-9" in:settle>
+        <p class="whitespace-pre-line text-sm leading-7 text-gray-500">{$t('toc.outline_placeholder')}</p>
+        <button
+          type="button"
+          on:click={addTocItem}
+          class="nb-btn mt-6 bg-yellow-400"
+        >
+          <Plus size={16} strokeWidth={2.25} />
+          {$t('btn.add_chapter')}
+        </button>
+      </div>
     {/if}
 
-    <div class="flex items-center gap-2 ml-12 mt-3 mb-4">
+    {#if view === 'tree' && $tocItems.length > 0}
+    <div class="flex items-center gap-2 rounded-b-[6px] border-t border-[color:var(--divider)] px-2.5 py-2.5">
       <button
+        type="button"
         on:click={addTocItem}
-        class="btn font-bold bg-yellow-400 text-black border-2 border-black rounded-lg px-4 py-2 shadow-[2px_2px_0px_var(--hard-shadow-color)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all"
+        class="nb-btn bg-yellow-400"
       >
+        <Plus size={16} strokeWidth={2.25} />
         {$t('btn.add_chapter')}
       </button>
       <button
+        type="button"
         on:click={() => addMultipleTocItems(5)}
-        class="btn font-bold bg-gray-100 text-black border-2 border-black rounded-lg px-3 py-2 shadow-[2px_2px_0px_var(--hard-shadow-color)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all text-sm"
+        class="nb-btn bg-white px-3"
       >
         +5
       </button>
       <button
+        type="button"
         on:click={() => addMultipleTocItems(10)}
-        class="btn font-bold bg-gray-100 text-black border-2 border-black rounded-lg px-3 py-2 shadow-[2px_2px_0px_var(--hard-shadow-color)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all text-sm"
+        class="nb-btn bg-white px-3"
       >
         +10
       </button>
     </div>
+    {/if}
   </div>
 </div>
+
+<style>
+  textarea.toc-text,
+  textarea.toc-text:focus {
+    border: 0;
+    border-radius: 0 0 6px 6px;
+    outline: none;
+    box-shadow: none;
+  }
+</style>

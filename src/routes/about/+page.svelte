@@ -12,7 +12,7 @@
     ready = true;
   });
 
-  const cardClass = "relative bg-white border-2 border-black rounded-xl p-6 shadow-[3px_3px_0px_0px_var(--hard-shadow-color)] hover:shadow-none hover:translate-x-[3px] hover:translate-y-[3px] transition-all duration-200";
+  const cardClass = "relative bg-white border-2 border-black rounded-xl p-6 shadow-[3px_3px_0px_0px_var(--hard-shadow-color)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all duration-200";
 </script>
 
 <SeoJsonLd title={$t('seo.why_title')} description={$t('seo.why_desc')} />

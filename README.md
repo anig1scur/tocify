@@ -17,6 +17,8 @@ Default models are Gemini `gemini-3.5-flash-lite`, Qwen `qwen3.8-flash`, Zhipu t
 
 `pnpm test:llm` verifies missing-key rejection and model routing with mocked responses, without API usage. For real API tests, copy `.env.example` to `.env.local` and fill in the desired `TOCIFY_TEST_*` keys. These variables are only read by the test script and are never used to fund website requests.
 
+`pnpm test:lifecycle` checks export failures, rapid document switches, draft saving, Worker cleanup, and OCR resource release without using model APIs. PDF instances and preview caches are released when leaving a workspace; returning reloads the original file while preserving edits in the current tab. Local OCR engines are released after 60 seconds of inactivity, or after a background run finishes while the OCR workspace is closed.
+
 ```sh
 pnpm test:llm:live --provider gemini
 pnpm test:llm:live --provider deepseek --image /absolute/path/to/toc.png

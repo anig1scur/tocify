@@ -78,6 +78,7 @@ export function createDefaultVisionPromptTemplate(): VisionPromptTemplate {
 }
 
 export interface DirectApiConfig {
+  signal?: AbortSignal;
   provider?: string;
   apiKey: string;
   customBaseUrl?: string;
@@ -521,12 +522,14 @@ async function fetchGeminiJson(
   apiKey: string,
   body: Record<string, unknown>,
   fallbackMessage: string,
+  signal?: AbortSignal,
 ): Promise<JsonModelResponse> {
   const requestApiKey = normalizeApiKeyForRequest(apiKey);
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${ encodeURIComponent(model) }:generateContent`,
     {
       method: 'POST',
+      signal,
       headers: {
         'Content-Type': 'application/json',
         'x-goog-api-key': requestApiKey,
@@ -552,10 +555,12 @@ async function fetchOpenAiCompatJson(
   apiKey: string,
   body: Record<string, unknown>,
   fallbackMessage: string,
+  signal?: AbortSignal,
 ): Promise<JsonModelResponse> {
   const requestApiKey = normalizeApiKeyForRequest(apiKey);
   const response = await fetch(`${ baseUrl }/chat/completions`, {
     method: 'POST',
+    signal,
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${ requestApiKey }`,
@@ -637,6 +642,7 @@ async function requestTextJson(config: DirectApiConfig, systemPrompt: string, us
         }],
       },
       `${ providerLabel(provider) } request failed.`,
+      config.signal,
     );
   }
 
@@ -655,6 +661,7 @@ async function requestTextJson(config: DirectApiConfig, systemPrompt: string, us
     config.apiKey,
     textBody,
     `${ providerLabel(provider) } request failed.`,
+      config.signal,
   );
 }
 
@@ -691,6 +698,7 @@ async function requestVisionJson(config: DirectApiConfig, systemPrompt: string, 
         }],
       },
       `${ providerLabel(provider) } request failed.`,
+      config.signal,
     );
   }
 
@@ -718,6 +726,7 @@ async function requestVisionJson(config: DirectApiConfig, systemPrompt: string, 
     config.apiKey,
     visionBody,
     `${ providerLabel(provider) } request failed.`,
+      config.signal,
   );
 }
 

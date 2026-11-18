@@ -1,8 +1,11 @@
 <script lang="ts">
   import {createEventDispatcher, onDestroy, tick} from 'svelte';
-  import {fade, fly} from 'svelte/transition';
+  import {slide} from 'svelte/transition';
+  import {cubicOut} from 'svelte/easing';
   import {t} from 'svelte-i18n';
-  import {Copy, Eraser, Trash2, X, RotateCcw} from 'lucide-svelte';
+  import {ChevronLeft, ChevronRight, Copy, Eraser, Trash2, X, RotateCcw} from 'lucide-svelte';
+  import Modal from './modals/Modal.svelte';
+  import {MOTION} from '$lib/utils/motion';
   import type {RecognitionIgnoreRegion} from '$lib/pdf/recognition-ignore';
   import {normalizeRegion} from '$lib/pdf/recognition-ignore';
 
@@ -46,6 +49,8 @@
     for (const value of thumbCache.values()) {
       if ('close' in value) {
         value.close();
+      } else {
+        value.width = value.height = 1;
       }
     }
     thumbCache.clear();
@@ -86,6 +91,12 @@
   $: currentPageRegions = ignoreRegions.filter((region) => region.pageNum === currentPage);
   $: displayedRegions = currentPageRegions.map((region) => editedRegion && editedRegion.id === region.id ? editedRegion : region);
   $: activeRegionId = hoveredRegionId || focusedRegionId;
+  $: selectedPageSet = new Set(selectedPageNumbers);
+  $: regionCountByPage = ignoreRegions.reduce((counts, region) => {
+    counts.set(region.pageNum, (counts.get(region.pageNum) || 0) + 1);
+    return counts;
+  }, new Map<number, number>());
+  $: currentPageIndex = allPageNumbers.indexOf(currentPage);
   $: if (allPageNumbers.length > 0 && !allPageNumbers.includes(currentPage)) {
     currentPage = allPageNumbers[0];
   }
@@ -326,6 +337,9 @@
     hoveredRegionId = '';
     isOpen = false;
     renderToken++;
+    closeThumbCache();
+    if (sourceCanvas) sourceCanvas.width = sourceCanvas.height = 1;
+    sourceCanvas = null;
   }
 
   function changePage(pageNum: number) {
@@ -336,6 +350,32 @@
     sourceCanvas = null;
     renderToken++;
     currentPage = pageNum;
+  }
+
+  function stepPage(delta: number) {
+    const nextPage = allPageNumbers[currentPageIndex + delta];
+    if (!nextPage) return;
+    changePage(nextPage);
+    tick().then(() => {
+      canvasWrap?.closest('[role="dialog"]')?.querySelector('[aria-current="page"]')?.scrollIntoView({block: 'nearest', inline: 'nearest'});
+    });
+  }
+
+  function handleWindowKeydown(e: KeyboardEvent) {
+    if (!isOpen || e.defaultPrevented || e.isComposing || e.metaKey || e.ctrlKey || e.altKey) return;
+    const target = e.target instanceof HTMLElement ? e.target : null;
+    if (target?.closest('input, textarea, select, [contenteditable]')) return;
+
+    if ((e.key === 'Delete' || e.key === 'Backspace') && focusedRegionId) {
+      e.preventDefault();
+      deleteRegion(focusedRegionId);
+    } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+      e.preventDefault();
+      stepPage(-1);
+    } else if (e.key === 'ArrowRight' || e.key === 'PageDown') {
+      e.preventDefault();
+      stepPage(1);
+    }
   }
 
   function clearHover(id: string) {
@@ -349,9 +389,17 @@
   }
 
   function clearCurrentPage() {
+    resetInteraction();
     focusedRegionId = '';
     hoveredRegionId = '';
     updateRegions(ignoreRegions.filter((region) => region.pageNum !== currentPage));
+  }
+
+  function clearAllPages() {
+    resetInteraction();
+    focusedRegionId = '';
+    hoveredRegionId = '';
+    updateRegions([]);
   }
 
   function applyCurrentAreasToAllPages() {
@@ -524,207 +572,313 @@
   }
 </script>
 
-{#if isOpen}
-  <div
-    class="fixed inset-0 bg-black/40 backdrop-blur-md flex items-center justify-center z-50 p-3 sm:p-4"
-    transition:fade={{duration: 150}}
-    on:click|self={closeEditor}
-    role="presentation"
-  >
-    <div
-      class="bg-white rounded-lg p-4 md:p-5 w-full max-w-5xl h-[90vh] max-h-[90dvh] overflow-hidden border border-gray-200 flex flex-col"
-      transition:fly={{y: 20, duration: 200}}
-      role="dialog"
-      aria-modal="true"
-      aria-label={$t('recognition_ignore.title')}
-    >
-      <div class="flex justify-between items-start gap-3 mb-4">
-        <div class="min-w-0">
-          <div class="flex items-center gap-2">
-            <Eraser size={20} class="shrink-0 text-black" aria-hidden="true" />
-            <h2 class="text-base md:text-xl font-bold">{$t('recognition_ignore.instruction')}</h2>
-          </div>
-        </div>
-        <button
-          type="button"
-          on:click={closeEditor}
-          class="p-1 rounded text-gray-500 hover:bg-gray-100 hover:text-black"
-          title={$t('recognition_ignore.close')}
-          aria-label={$t('recognition_ignore.close')}
-        >
-          <X size={20} />
-        </button>
-      </div>
 
-      <div class="min-h-0 flex-1 grid grid-rows-[auto_minmax(0,1fr)_auto] md:grid-rows-1 md:grid-cols-[104px_minmax(0,1fr)_208px] gap-3">
-        <aside class="recognition-page-list min-h-0 overflow-auto">
-          <div class="flex md:flex-col gap-2">
-            {#each allPageNumbers as page (page)}
+<svelte:window on:keydown={handleWindowKeydown} />
+
+<Modal
+  open={isOpen}
+  title={$t('recognition_ignore.title')}
+  subtitle={$t('recognition_ignore.instruction')}
+  closeLabel={$t('recognition_ignore.close')}
+  accent="yellow"
+  size="xl"
+  tall
+  on:close={closeEditor}
+>
+  <svelte:fragment slot="icon"><Eraser size={18} strokeWidth={2.25} /></svelte:fragment>
+
+  <div class="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)_auto] gap-3 p-3 sm:p-4 md:grid-cols-[112px_minmax(0,1fr)_240px] md:grid-rows-1">
+    <aside class="recognition-page-list min-h-0 overflow-y-auto overflow-x-hidden py-1" aria-label={$t('recognition_ignore.title')}>
+      <div class="flex gap-3 md:flex-col">
+        {#each allPageNumbers as page (page)}
+          {@const regionCount = regionCountByPage.get(page) || 0}
+          <button
+            type="button"
+            class="page-thumb group shrink-0 text-center"
+            class:is-current={page === currentPage}
+            on:click={() => changePage(page)}
+            aria-label={$t('offset.page_n', {values: {n: page}})}
+            aria-current={page === currentPage ? 'page' : undefined}
+          >
+            <span class="page-thumb-frame relative block">
+              <canvas class="mx-auto block bg-white" use:pageThumb={page}></canvas>
+              {#if regionCount > 0}
+                <span class="region-badge" aria-hidden="true">{regionCount}</span>
+              {/if}
+            </span>
+            <span class="mt-1 flex items-center justify-center gap-1 text-[11px] leading-4 tabular-nums {page === currentPage ? 'font-bold text-black' : 'text-gray-500'}">
+              {#if selectedPageSet.has(page)}
+                <span class="h-1.5 w-1.5 rounded-full bg-blue-500" aria-hidden="true"></span>
+              {/if}
+              {page}
+            </span>
+          </button>
+        {/each}
+      </div>
+    </aside>
+
+    <div class="paper-dots relative min-h-0 min-w-0 overflow-hidden rounded-lg px-4 pt-4 pb-14">
+      <div
+        class="flex h-full w-full items-center justify-center"
+        bind:this={canvasWrap}
+        bind:clientWidth={canvasWrapWidth}
+        bind:clientHeight={canvasWrapHeight}
+        on:pointermove={handlePointerMove}
+        on:pointerup={finishInteraction}
+        on:pointercancel={(e) => interaction?.pointerId === e.pointerId && resetInteraction()}
+        on:lostpointercapture={(e) => interaction?.pointerId === e.pointerId && resetInteraction()}
+        role="presentation"
+      >
+        <div class="recognition-page relative max-w-full" class:is-loading={!sourceCanvas}>
+          <canvas
+            bind:this={canvasElement}
+            class="block max-w-full cursor-crosshair touch-none bg-white"
+            on:pointerdown={handlePointerDown}
+          ></canvas>
+          {#each displayedRegions as region, index (region.id)}
+            <div
+              class="recognition-area pointer-events-none absolute"
+              class:is-active={activeRegionId === region.id}
+              data-region-id={region.id}
+              data-active={activeRegionId === region.id}
+              style:left={region.x * 100 + '%'}
+              style:top={region.y * 100 + '%'}
+              style:width={region.width * 100 + '%'}
+              style:height={region.height * 100 + '%'}
+              on:mouseenter={() => (hoveredRegionId = region.id)}
+              on:mouseleave={() => clearHover(region.id)}
+              role="presentation"
+            >
+              <div
+                class="area-drag-target pointer-events-auto absolute inset-0 cursor-move touch-none"
+                role="button"
+                tabindex="0"
+                aria-label={$t('recognition_ignore.region_n', {values: {n: index + 1}})}
+                title={$t('recognition_ignore.move_region')}
+                on:pointerdown={(e) => startRegionInteraction(e, region, 'move')}
+                on:focus={() => (focusedRegionId = region.id)}
+                on:keydown={(e) => handleRegionKeydown(e, region, 'move')}
+              ></div>
+              <span class="area-tag" aria-hidden="true">{index + 1}</span>
               <button
                 type="button"
-                class="shrink-0 rounded-md border p-1.5 text-center transition-colors {page === currentPage ? 'border-blue-400 bg-blue-50' : 'border-transparent bg-white hover:bg-gray-50'}"
-                on:click={() => changePage(page)}
-                aria-label={$t('offset.page_n', {values: {n: page}})}
-                aria-current={page === currentPage ? 'page' : undefined}
+                class="area-delete pointer-events-auto"
+                on:pointerdown|stopPropagation
+                on:click={() => deleteRegion(region.id)}
+                title={$t('settings.remove')}
+                aria-label={$t('settings.remove') + ' · ' + $t('recognition_ignore.region_n', {values: {n: index + 1}})}
               >
-                <canvas class="mx-auto block rounded-sm bg-white" use:pageThumb={page}></canvas>
-                <div class="mt-1 text-center text-xs text-gray-600">
-                  {$t('offset.page_n', {values: {n: page}})}
-                </div>
+                <X size={11} strokeWidth={2.5} />
               </button>
-            {/each}
-          </div>
-        </aside>
-
-        <div class="min-h-0 min-w-0 overflow-hidden rounded-md bg-gray-50 p-3 md:p-4">
-          <div
-            class="w-full h-full flex items-center justify-center"
-            bind:this={canvasWrap}
-            bind:clientWidth={canvasWrapWidth}
-            bind:clientHeight={canvasWrapHeight}
-            on:pointermove={handlePointerMove}
-            on:pointerup={finishInteraction}
-            on:pointercancel={(e) => interaction?.pointerId === e.pointerId && resetInteraction()}
-            on:lostpointercapture={(e) => interaction?.pointerId === e.pointerId && resetInteraction()}
-            role="presentation"
-          >
-            <div class="recognition-page relative max-w-full" class:invisible={!sourceCanvas}>
-              <canvas
-                bind:this={canvasElement}
-                class="block max-w-full bg-white cursor-crosshair touch-none"
-                on:pointerdown={handlePointerDown}
-              ></canvas>
-              {#each displayedRegions as region, index (region.id)}
-                <div
-                  class="recognition-area absolute pointer-events-none"
-                  class:is-active={activeRegionId === region.id}
-                  data-region-id={region.id}
-                  data-active={activeRegionId === region.id}
-                  style:left={region.x * 100 + '%'}
-                  style:top={region.y * 100 + '%'}
-                  style:width={region.width * 100 + '%'}
-                  style:height={region.height * 100 + '%'}
-                  on:mouseenter={() => (hoveredRegionId = region.id)}
-                  on:mouseleave={() => clearHover(region.id)}
-                  role="presentation"
-                >
-                  <div
-                    class="area-drag-target absolute inset-0 pointer-events-auto cursor-move touch-none"
-                    role="button"
-                    tabindex="0"
-                    aria-label={$t('recognition_ignore.region_n', {values: {n: index + 1}})}
-                    title={$t('recognition_ignore.move_region')}
-                    on:pointerdown={(e) => startRegionInteraction(e, region, 'move')}
-                    on:focus={() => (focusedRegionId = region.id)}
-                    on:keydown={(e) => handleRegionKeydown(e, region, 'move')}
-                  ></div>
-                  <span class="area-label absolute left-0 bottom-full mb-1 rounded bg-blue-500 px-1.5 py-0.5 text-[10px] leading-4 text-white whitespace-nowrap">
-                    {$t('recognition_ignore.region_n', {values: {n: index + 1}})}
-                  </span>
-                  <button
-                    type="button"
-                    class="area-resize-handle absolute -right-2.5 -bottom-2.5 inline-flex h-5 w-5 items-center justify-center pointer-events-auto cursor-nwse-resize touch-none"
-                    aria-label={$t('recognition_ignore.resize_region') + ' · ' + $t('recognition_ignore.region_n', {values: {n: index + 1}})}
-                    title={$t('recognition_ignore.resize_region')}
-                    on:pointerdown={(e) => startRegionInteraction(e, region, 'resize')}
-                    on:focus={() => (focusedRegionId = region.id)}
-                    on:keydown={(e) => handleRegionKeydown(e, region, 'resize')}
-                  >
-                    <span class="h-2.5 w-2.5 rounded-sm border border-blue-500 bg-white"></span>
-                  </button>
-                </div>
-              {/each}
+              <button
+                type="button"
+                class="area-resize-handle pointer-events-auto absolute -bottom-2 -right-2 inline-flex h-4 w-4 cursor-nwse-resize touch-none items-center justify-center"
+                aria-label={$t('recognition_ignore.resize_region') + ' · ' + $t('recognition_ignore.region_n', {values: {n: index + 1}})}
+                title={$t('recognition_ignore.resize_region')}
+                on:pointerdown={(e) => startRegionInteraction(e, region, 'resize')}
+                on:focus={() => (focusedRegionId = region.id)}
+                on:keydown={(e) => handleRegionKeydown(e, region, 'resize')}
+              >
+                <span class="h-2.5 w-2.5 rounded-[2px] border-2 border-black bg-white"></span>
+              </button>
             </div>
-          </div>
+          {/each}
         </div>
-
-        <aside class="flex min-h-0 max-h-36 md:max-h-none flex-col">
-          <div class="flex items-center justify-between gap-2 mb-2">
-            <h3 class="font-bold text-sm">{$t('recognition_ignore.current_page_regions')}</h3>
-            <button
-              type="button"
-              on:click={clearCurrentPage}
-              class="p-1 rounded text-gray-500 hover:bg-gray-100 hover:text-black disabled:opacity-40"
-              title={$t('recognition_ignore.clear_page')}
-              aria-label={$t('recognition_ignore.clear_page')}
-              disabled={currentPageRegions.length === 0}
-            >
-              <RotateCcw size={15} />
-            </button>
-          </div>
-          <div class="min-h-0 overflow-auto">
-            {#if currentPageRegions.length === 0}
-              <div class="px-3 pt-12 pb-4 text-center">
-                <p class="text-xs text-gray-500">{$t('recognition_ignore.empty_hint')}</p>
-              </div>
-            {:else}
-              <div class="flex flex-col gap-1">
-                {#each currentPageRegions as region, index (region.id)}
-                  <div
-                    class="recognition-area-row flex items-center gap-2 rounded transition-colors {activeRegionId === region.id ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-50'}"
-                    data-region-id={region.id}
-                    on:mouseenter={() => (hoveredRegionId = region.id)}
-                    on:mouseleave={() => clearHover(region.id)}
-                    role="presentation"
-                  >
-                    <button
-                      type="button"
-                      class="flex min-w-0 flex-1 items-center gap-2 px-2 py-2 text-left text-sm"
-                      on:click={() => focusRegion(region)}
-                      on:focus={() => (hoveredRegionId = region.id)}
-                      on:blur={() => clearHover(region.id)}
-                      aria-pressed={focusedRegionId === region.id}
-                    >
-                      <span class="h-2 w-2 shrink-0 rounded-sm border border-current" aria-hidden="true"></span>
-                      {$t('recognition_ignore.region_n', {values: {n: index + 1}})}
-                    </button>
-                    <button
-                      type="button"
-                      on:click={() => deleteRegion(region.id)}
-                      class="mr-1 p-1 rounded text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-                      title={$t('settings.remove')}
-                      aria-label={$t('settings.remove') + ' · ' + $t('recognition_ignore.region_n', {values: {n: index + 1}})}
-                    >
-                      <Trash2 size={15} />
-                    </button>
-                  </div>
-                {/each}
-              </div>
-            {/if}
-          </div>
-          {#if allPageNumbers.length > 1 && currentPageRegions.length > 0}
-            <button
-              type="button"
-              class="mt-2 inline-flex shrink-0 self-start items-center gap-1.5 rounded px-2 py-1.5 text-xs text-gray-600 hover:bg-gray-100 hover:text-black"
-              on:click={applyCurrentAreasToAllPages}
-            >
-              <Copy size={14} />
-              {$t('recognition_ignore.apply_all_pages')}
-            </button>
-          {/if}
-        </aside>
       </div>
 
-      <div class="flex justify-end mt-3">
+      {#if allPageNumbers.length > 1}
+        <div class="page-nav absolute bottom-2.5 left-1/2 flex -translate-x-1/2 items-center gap-0.5 text-gray-600">
+          <button
+            type="button"
+            class="nb-icon-btn h-7 w-7 disabled:opacity-25"
+            on:click={() => stepPage(-1)}
+            disabled={currentPageIndex <= 0}
+            aria-label={$t('recognition_ignore.prev_page')}
+            title={$t('recognition_ignore.prev_page')}
+          >
+            <ChevronLeft size={16} />
+          </button>
+          <span class="min-w-[4.5rem] text-center text-xs tabular-nums">
+            {currentPage} / {allPageNumbers.length}
+          </span>
+          <button
+            type="button"
+            class="nb-icon-btn h-7 w-7 disabled:opacity-25"
+            on:click={() => stepPage(1)}
+            disabled={currentPageIndex >= allPageNumbers.length - 1}
+            aria-label={$t('recognition_ignore.next_page')}
+            title={$t('recognition_ignore.next_page')}
+          >
+            <ChevronRight size={16} />
+          </button>
+        </div>
+      {/if}
+    </div>
+
+    <aside class="flex max-h-40 min-h-0 flex-col overflow-hidden bg-white md:max-h-none">
+      <div class="flex h-9 shrink-0 items-center justify-between gap-2 pl-1">
+        <h3 class="flex min-w-0 items-center gap-2 text-sm font-bold">
+          <span class="truncate">{$t('recognition_ignore.current_page_regions')}</span>
+          <span class="ui-count">{currentPageRegions.length}</span>
+        </h3>
         <button
           type="button"
-          class="inline-flex items-center justify-center px-4 py-1.5 text-sm font-bold bg-green-500 text-black border border-black/20 rounded"
-          on:click={closeEditor}
+          on:click={clearCurrentPage}
+          class="nb-icon-btn"
+          title={$t('recognition_ignore.clear_page')}
+          aria-label={$t('recognition_ignore.clear_page')}
+          disabled={currentPageRegions.length === 0}
         >
-          {$t('recognition_ignore.done')}
+          <RotateCcw size={15} />
         </button>
       </div>
-    </div>
+      <div class="min-h-0 flex-1 overflow-auto pt-1">
+        {#if currentPageRegions.length === 0}
+          <div class="flex flex-col items-center gap-2 rounded-lg border-2 border-dashed border-gray-200 px-3 py-6 text-center text-gray-400">
+            <Eraser size={22} strokeWidth={1.75} aria-hidden="true" />
+            <p class="text-xs leading-5">{$t('recognition_ignore.empty_hint')}</p>
+          </div>
+        {:else}
+          <div class="flex flex-col gap-0.5">
+            {#each currentPageRegions as region, index (region.id)}
+              <div
+                class="recognition-area-row group flex h-9 items-center gap-1 rounded-md transition-colors duration-100 {activeRegionId === region.id ? 'bg-yellow-100 text-black' : 'text-gray-700 hover:bg-black/[0.04]'}"
+                data-region-id={region.id}
+                on:mouseenter={() => (hoveredRegionId = region.id)}
+                on:mouseleave={() => clearHover(region.id)}
+                role="presentation"
+                transition:slide={{duration: MOTION.base, easing: cubicOut}}
+              >
+                <button
+                  type="button"
+                  class="flex h-full min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-left text-sm"
+                  on:click={() => focusRegion(region)}
+                  on:focus={() => (hoveredRegionId = region.id)}
+                  on:blur={() => clearHover(region.id)}
+                  aria-pressed={focusedRegionId === region.id}
+                >
+                  <span class="grid h-5 w-5 shrink-0 place-items-center rounded bg-black text-[10px] font-bold text-white" aria-hidden="true">{index + 1}</span>
+                  <span class="truncate">{$t('recognition_ignore.region_n', {values: {n: index + 1}})}</span>
+                </button>
+                <button
+                  type="button"
+                  on:click={() => deleteRegion(region.id)}
+                  class="nb-icon-btn h-7 w-7 opacity-60 group-hover:opacity-100 focus-visible:opacity-100"
+                  title={$t('settings.remove')}
+                  aria-label={$t('settings.remove') + ' · ' + $t('recognition_ignore.region_n', {values: {n: index + 1}})}
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            {/each}
+          </div>
+        {/if}
+      </div>
+    </aside>
   </div>
-{/if}
+
+  <svelte:fragment slot="footer">
+    <button
+      type="button"
+      class="nb-ghost mr-auto hover:!bg-red-50 hover:!text-red-600"
+      on:click={clearAllPages}
+      title={$t('recognition_ignore.clear_all_pages')}
+      aria-label={$t('recognition_ignore.clear_all_pages')}
+      disabled={ignoreRegions.length === 0}
+    >
+      <Trash2 size={14} />
+      <span class="hidden sm:inline">{$t('recognition_ignore.clear_all_pages')}</span>
+    </button>
+    {#if allPageNumbers.length > 1}
+      <button
+        type="button"
+        class="nb-btn bg-white"
+        on:click={applyCurrentAreasToAllPages}
+        disabled={currentPageRegions.length === 0}
+      >
+        <Copy size={14} />
+        {$t('recognition_ignore.apply_all_pages')}
+      </button>
+    {/if}
+    <button
+      type="button"
+      class="nb-btn bg-green-500 px-5"
+      on:click={closeEditor}
+    >
+      {$t('recognition_ignore.done')}
+    </button>
+  </svelte:fragment>
+</Modal>
 
 <style>
+  .page-thumb-frame {
+    width: 92px;
+    margin: 0 auto;
+    border: 2px solid #e5e7eb;
+    border-radius: 6px;
+    transition: border-color 120ms ease;
+  }
+
+  .page-thumb-frame canvas {
+    width: 100% !important;
+    height: auto !important;
+    border-radius: 4px;
+  }
+
+  .page-thumb:hover .page-thumb-frame {
+    border-color: #9ca3af;
+  }
+
+  .page-thumb.is-current .page-thumb-frame {
+    border-color: #000;
+  }
+
+  .page-thumb:focus-visible {
+    outline: none;
+  }
+
+  .page-thumb:focus-visible .page-thumb-frame {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+  }
+
+  .region-badge {
+    position: absolute;
+    top: -7px;
+    right: -7px;
+    display: grid;
+    place-items: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 4px;
+    border: 2px solid #000;
+    border-radius: 999px;
+    background: #facc15;
+    color: #000;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1;
+    animation: badge-pop 220ms var(--ease-land);
+  }
+
+  .recognition-page {
+    box-shadow: 0 0 0 1px #e5e7eb;
+    transition: opacity 180ms ease;
+  }
+
+  .recognition-page.is-loading {
+    opacity: 0;
+  }
+
   .area-drag-target {
-    border: 1px dashed #60a5fa;
+    border: 1.5px dashed #3b82f6;
+    background: rgb(59 130 246 / .04);
+    transition: border-color 120ms ease, background-color 120ms ease;
   }
 
   .is-active .area-drag-target {
-    border: 2px solid #3b82f6;
+    border: 2px solid #2563eb;
+    background: rgb(59 130 246 / .08);
   }
 
   .area-drag-target:focus-visible {
@@ -732,14 +886,68 @@
     outline-offset: 2px;
   }
 
-  .area-label,
-  .area-resize-handle {
-    opacity: 0;
+  .area-tag {
+    position: absolute;
+    left: -1px;
+    bottom: calc(100% + 3px);
+    display: grid;
+    place-items: center;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 3px;
+    border-radius: 3px;
+    background: #000;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1;
   }
 
-  .is-active .area-label,
+  .area-delete {
+    position: absolute;
+    right: -1px;
+    bottom: calc(100% + 3px);
+    display: grid;
+    place-items: center;
+    width: 18px;
+    height: 18px;
+    border: 2px solid #000;
+    border-radius: 4px;
+    background: #fff;
+    color: #000;
+  }
+
+  .area-delete:hover {
+    background: #fee2e2;
+  }
+
+  .area-delete,
+  .area-resize-handle {
+    opacity: 0;
+    transform: scale(.7);
+    transition: opacity 120ms ease, transform 160ms var(--ease-land);
+  }
+
+  .is-active .area-delete,
   .is-active .area-resize-handle,
+  .area-delete:focus-visible,
   .area-resize-handle:focus-visible {
     opacity: 1;
+    transform: scale(1);
+  }
+
+  @keyframes badge-pop {
+    from {
+      transform: scale(.4);
+    }
+    to {
+      transform: scale(1);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .region-badge {
+      animation: none;
+    }
   }
 </style>

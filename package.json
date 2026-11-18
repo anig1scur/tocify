@@ -11,6 +11,7 @@
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"test:llm": "node scripts/test-llm.mjs",
+		"test:lifecycle": "node scripts/test-lifecycle.mjs",
 		"test:llm:live": "node scripts/test-llm-live.mjs"
 	},
 	"devDependencies": {

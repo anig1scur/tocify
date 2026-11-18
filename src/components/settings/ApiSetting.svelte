@@ -28,6 +28,7 @@
   let showApiKey = false;
   let showApiKeyNotice = false;
   let apiKeyNoticeVersion = 0;
+  let isVisionPromptExpanded = false;
   let visionTemplateName = '';
   let showVisionTemplateMenu = false;
   const providerLinks = {
@@ -348,8 +349,8 @@
 
 </script>
 
-<div class="api-settings border-black border-2 rounded-lg p-2 my-4 shadow-[2px_2px_0px_var(--hard-shadow-color)] bg-white">
-  <div class="flex justify-between items-center">
+<div class="api-settings px-3.5">
+  <div class="flex min-h-[44px] cursor-pointer select-none items-center justify-between" on:click={() => (isExpanded = !isExpanded)} role="presentation">
     <div class="flex items-center gap-2">
       <h2>
         {$t('settings.api_settings_title') || 'API Settings'}
@@ -359,7 +360,7 @@
       type="button"
       class="w-6 h-6 flex items-center justify-center transition-transform duration-200"
       class:rotate-180={isExpanded}
-      on:click={() => (isExpanded = !isExpanded)}
+      on:click|stopPropagation={() => (isExpanded = !isExpanded)}
       aria-label="Toggle API Settings"
       aria-expanded={isExpanded}
       aria-controls="api-settings-options"
@@ -381,7 +382,7 @@
   {#if isExpanded}
     <div
       id="api-settings-options"
-      class="mt-1"
+      class="pb-3"
       transition:slide={{duration: 200}}
     >
       <div class="flex flex-col">
@@ -747,86 +748,105 @@
 
         <div class="api-settings-option api-settings-prompt">
           <div class="mb-1 flex items-center justify-between gap-2">
-            <label
-              class="block font-bold text-sm"
-              for="vision_prompt">{$t('settings.vision_prompt_label')}</label
-            >
             <button
               type="button"
-              class="inline-flex h-7 w-7 items-center justify-center rounded text-gray-500 hover:bg-gray-100 hover:text-black"
-              on:click={resetVisionPromptTemplate}
-              aria-label={$t('settings.vision_prompt_reset')}
-              title={$t('settings.vision_prompt_reset')}
+              class="flex flex-1 items-center justify-between gap-2 text-left font-bold text-sm"
+              aria-expanded={isVisionPromptExpanded}
+              aria-controls="vision-prompt-options"
+              on:click={() => {
+                isVisionPromptExpanded = !isVisionPromptExpanded;
+                showVisionTemplateMenu = false;
+              }}
             >
-              <RotateCcw size={13} />
+              {$t('settings.vision_prompt_label')}
+              <ChevronDown
+                size={16}
+                class="transition-transform duration-200 {isVisionPromptExpanded ? 'rotate-180' : ''}"
+              />
             </button>
+            {#if isVisionPromptExpanded}
+              <button
+                type="button"
+                class="inline-flex h-7 w-7 items-center justify-center rounded text-gray-500 hover:bg-gray-100 hover:text-black"
+                on:click={resetVisionPromptTemplate}
+                aria-label={$t('settings.vision_prompt_reset')}
+                title={$t('settings.vision_prompt_reset')}
+              >
+                <RotateCcw size={13} />
+              </button>
+            {/if}
           </div>
 
-          <div class="mb-2">
-            <div class="flex items-center gap-1">
-              <div class="relative min-w-0 flex-1">
-                <input
-                  type="text"
-                  value={visionTemplateName}
-                  on:input={handleVisionTemplateNameInput}
-                  autocomplete="off"
-                  class="w-full border border-gray-300 rounded px-2 py-1 pr-8 text-sm outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-gray-400"
-                  placeholder={$t('settings.vision_prompt_template_name_placeholder')}
-                  aria-label={$t('settings.vision_prompt_template_select')}
-                />
-                <button
-                  type="button"
-                  class="absolute right-1 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded text-gray-500 hover:bg-gray-100 hover:text-black"
-                  on:click={() => (showVisionTemplateMenu = !showVisionTemplateMenu)}
-                  aria-label={$t('settings.vision_prompt_template_select')}
-                  title={$t('settings.vision_prompt_template_select')}
-                >
-                  <ChevronDown size={14} />
-                </button>
+          {#if isVisionPromptExpanded}
+            <div id="vision-prompt-options" transition:slide={{duration: 200}}>
+              <div class="mb-2">
+                <div class="flex items-center gap-1">
+                  <div class="relative min-w-0 flex-1">
+                    <input
+                      type="text"
+                      value={visionTemplateName}
+                      on:input={handleVisionTemplateNameInput}
+                      autocomplete="off"
+                      class="w-full border border-gray-300 rounded px-2 py-1 pr-8 text-sm outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-gray-400"
+                      placeholder={$t('settings.vision_prompt_template_name_placeholder')}
+                      aria-label={$t('settings.vision_prompt_template_select')}
+                    />
+                    <button
+                      type="button"
+                      class="absolute right-1 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded text-gray-500 hover:bg-gray-100 hover:text-black"
+                      on:click={() => (showVisionTemplateMenu = !showVisionTemplateMenu)}
+                      aria-label={$t('settings.vision_prompt_template_select')}
+                      title={$t('settings.vision_prompt_template_select')}
+                    >
+                      <ChevronDown size={14} />
+                    </button>
 
-                {#if showVisionTemplateMenu}
-                  <div class="absolute left-0 right-0 top-full z-50 mt-1 max-h-48 overflow-auto rounded-md border border-gray-300 bg-white shadow-lg">
-                    {#each config.visionPromptTemplates as template}
-                      <button
-                        type="button"
-                        class="block w-full truncate px-2 py-1.5 text-left text-sm hover:bg-gray-100 {template.id === config.visionPromptTemplateId ? 'bg-blue-50 font-semibold' : ''}"
-                        on:click={() => selectVisionTemplate(template)}
-                      >
-                        {getVisionTemplateDisplayName(template)}
-                      </button>
-                    {/each}
+                    {#if showVisionTemplateMenu}
+                      <div class="absolute left-0 right-0 top-full z-50 mt-1 max-h-48 overflow-auto rounded-md border border-gray-300 bg-white shadow-lg">
+                        {#each config.visionPromptTemplates as template}
+                          <button
+                            type="button"
+                            class="block w-full truncate px-2 py-1.5 text-left text-sm hover:bg-gray-100 {template.id === config.visionPromptTemplateId ? 'bg-blue-50 font-semibold' : ''}"
+                            on:click={() => selectVisionTemplate(template)}
+                          >
+                            {getVisionTemplateDisplayName(template)}
+                          </button>
+                        {/each}
+                      </div>
+                    {/if}
                   </div>
-                {/if}
+                  <button
+                    type="button"
+                    class="inline-flex h-8 w-8 items-center justify-center rounded border border-gray-300 bg-white hover:bg-gray-50"
+                    on:click={createVisionPromptTemplate}
+                    aria-label={$t('settings.vision_prompt_save_as_template')}
+                    title={$t('settings.vision_prompt_save_as_template')}
+                  >
+                    <Plus size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    class="inline-flex h-8 w-8 items-center justify-center rounded border border-gray-300 bg-white text-gray-500 hover:bg-gray-50 hover:text-black {canDeleteVisionTemplate ? '' : 'opacity-40'}"
+                    on:click={deleteActiveVisionPromptTemplate}
+                    aria-label={$t('settings.vision_prompt_delete_template')}
+                    title={$t('settings.vision_prompt_delete_template')}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
               </div>
-              <button
-                type="button"
-                class="inline-flex h-8 w-8 items-center justify-center rounded border border-gray-300 bg-white hover:bg-gray-50"
-                on:click={createVisionPromptTemplate}
-                aria-label={$t('settings.vision_prompt_save_as_template')}
-                title={$t('settings.vision_prompt_save_as_template')}
-              >
-                <Plus size={14} />
-              </button>
-              <button
-                type="button"
-                class="inline-flex h-8 w-8 items-center justify-center rounded border border-gray-300 bg-white text-gray-500 hover:bg-gray-50 hover:text-black {canDeleteVisionTemplate ? '' : 'opacity-40'}"
-                on:click={deleteActiveVisionPromptTemplate}
-                aria-label={$t('settings.vision_prompt_delete_template')}
-                title={$t('settings.vision_prompt_delete_template')}
-              >
-                <Trash2 size={14} />
-              </button>
-            </div>
-          </div>
 
-          <textarea
-            id="vision_prompt"
-            bind:value={config.visionPrompt}
-            on:input={handleVisionPromptInput}
-            rows="10"
-            class="w-full border border-gray-300 rounded px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-blue-500 resize-y placeholder:text-gray-400"
-            placeholder={$t('settings.vision_prompt_placeholder')}
-          ></textarea>
+              <textarea
+                id="vision_prompt"
+                aria-label={$t('settings.vision_prompt_label')}
+                bind:value={config.visionPrompt}
+                on:input={handleVisionPromptInput}
+                rows="10"
+                class="w-full border border-gray-300 rounded px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-blue-500 resize-y placeholder:text-gray-400"
+                placeholder={$t('settings.vision_prompt_placeholder')}
+              ></textarea>
+            </div>
+          {/if}
         </div>
 
         <button
