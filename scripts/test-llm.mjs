@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createServer } from 'vite';
+import { createServer, normalizePath } from 'vite';
 
 const vite = await createServer({
   server: { middlewareMode: true }, appType: 'custom', logLevel: 'error',
   plugins: [{
     name: 'mock-pdf-rendering', enforce: 'pre',
     transform(code, id) {
-      if (id === `${process.cwd()}/src/stores.ts`) {
+      if (id === normalizePath(`${process.cwd()}/src/stores.ts`)) {
         return `import {writable} from 'svelte/store';
           export const pdfService = writable({getPageAsImage: async (_, page) =>
             'data:image/png;base64,' + Buffer.from(String(page)).toString('base64')});`;
