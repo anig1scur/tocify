@@ -276,7 +276,6 @@ function serviceFixture(fetch = async () => ({ok: true, arrayBuffer: async () =>
   }
   const fixture = evaluate(read('src/lib/pdf/service.ts'), {
     browser: true, Worker, fetch, PDFDocument: {}, fontkit: {}, isLegacyBrowser: () => false,
-    FONT_ASSET_BASE: 'https://static.aeriszhu.com/',
     pdfjsLib: {GlobalWorkerOptions: {}, PDFWorker: class {destroy() {}}},
     A4_WIDTH: 595, BASE_FONT_SIZE_L1: 14, BASE_FONT_SIZE_OTHER: 12,
   });

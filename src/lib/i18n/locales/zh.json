@@ -213,6 +213,7 @@
     "end_page": "结束页",
     "model_size": "模型",
     "model_size_hint": "OCR 会在你的浏览器中本地运行。PP-OCRv6 Small 对密集文字和扫描件更准确，但加载和识别更慢。PP-OCRv6 Tiny 更快、更轻量。",
+    "model_download_hint": "所选模型首次下载时需要联网。",
     "model_small": "PP-OCRv6 Small",
     "model_tiny": "PP-OCRv6 Tiny",
     "watermark_cleanup": "水印清理",

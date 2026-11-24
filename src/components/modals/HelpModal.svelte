@@ -1,5 +1,6 @@
 <script lang="ts">
   import {Send, Copy, Check} from 'lucide-svelte';
+  import {IS_LOCAL} from '$lib/local';
   import Modal from './Modal.svelte';
 
   export let showHelpModal: boolean;
@@ -44,7 +45,7 @@
 
   <div class="min-h-0 overflow-y-auto p-4 sm:p-5">
     <video
-      src={'/videos/demo.mp4'}
+      src={IS_LOCAL ? 'https://pdf.aeriszhu.com/videos/demo.mp4' : '/videos/demo.mp4'}
       controls
       loop
       autoplay

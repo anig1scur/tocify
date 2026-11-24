@@ -2,17 +2,10 @@ import {sveltekit} from '@sveltejs/kit/vite';
 import {SvelteKitPWA} from '@vite-pwa/sveltekit';
 import {defineConfig} from 'vite';
 
+const localBuild = process.env.VITE_TOCIFY_LOCAL === '1';
+
 export default defineConfig({
   plugins: [
-    ...(process.env.VITE_TOCIFY_LOCAL === '1' ? [{
-      name: 'tocify-local-font',
-      enforce: 'pre' as const,
-      transform(source: string, id: string) {
-        if (id.endsWith('/src/app.css')) {
-          return source.replace('https://static.aeriszhu.com/huiwen-mincho.ttf', '/local-assets/fonts/huiwen-mincho.ttf');
-        }
-      },
-    }] : []),
     sveltekit(),
     SvelteKitPWA({
       registerType: 'prompt',
@@ -24,7 +17,19 @@ export default defineConfig({
           'client/**/*.{js,css,ico,png,svg,webp,webmanifest,mjs}',
           'prerendered/**/*.{html,json}'
         ],
-        maximumFileSizeToCacheInBytes: 12 * 1024 * 1024
+        maximumFileSizeToCacheInBytes: 12 * 1024 * 1024,
+        runtimeCaching: localBuild ? [
+          {
+            urlPattern: /^https:\/\/pdf\.aeriszhu\.com\/models\/paddleocr\/PP-OCRv6_(?:tiny|small)_(?:det|rec)_onnx_infer\.tar$/,
+            handler: 'CacheFirst',
+            options: { cacheName: 'tocify-ocr-models-v1', cacheableResponse: { statuses: [200] } },
+          },
+          {
+            urlPattern: /^https:\/\/static\.aeriszhu\.com\/(?:huiwen-mincho\.ttf|SourceHan(?:Sans|Serif)SC-Regular\.woff2)$/,
+            handler: 'CacheFirst',
+            options: { cacheName: 'tocify-fonts-v1', cacheableResponse: { statuses: [200] } },
+          },
+        ] : [],
       }
     })
   ],

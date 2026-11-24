@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
+import { access, readdir } from 'node:fs/promises';
 import { setTimeout } from 'node:timers/promises';
 
 const [, , runtime = process.execPath, entry = 'scripts/local/server.mjs'] = process.argv;
@@ -40,14 +41,24 @@ try {
   ]);
   const paths = [
     '/', '/ocr', '/about', '/manifest.webmanifest', '/sw.js', '/pdf.worker.min.mjs',
-    '/models/paddleocr/PP-OCRv6_tiny_det_onnx_infer.tar',
     '/local-assets/ort/ort-wasm-simd-threaded.wasm',
-    '/local-assets/fonts/SourceHanSansSC-Regular.woff2',
     '/local-assets/cmaps/UniGB-UCS2-H.bcmap',
   ];
+  const emittedAssets = await readdir('build/local/client/_app/immutable/assets');
+  const jsep = emittedAssets.filter((file) => /^ort-wasm-simd-threaded\.jsep\..+\.wasm$/.test(file));
+  assert.equal(jsep.length, 1, 'Exactly one JSEP WASM file must be bundled.');
+  paths.push('/_app/immutable/assets/' + jsep[0]);
   for (const path of paths) {
     const response = await fetch(origin + path, { method: 'HEAD' });
     assert.equal(response.status, 200, path);
+  }
+  for (const path of [
+    '/models/paddleocr',
+    '/local-assets/fonts',
+    '/local-assets/ort/ort-wasm-simd-threaded.jsep.wasm',
+    '/videos/demo.mp4',
+  ]) {
+    await assert.rejects(access('build/local/client' + path), { code: 'ENOENT' }, path);
   }
 
   const post = (endpoint, input, requestOrigin = origin) => fetch(origin + '/api/' + endpoint, {

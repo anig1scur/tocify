@@ -1,5 +1,6 @@
 <script lang="ts">
   import {modKey} from '$lib/utils/shortcuts';
+  import { IS_LOCAL } from '$lib/local';
   import { t } from 'svelte-i18n';
   import { Loader2, X } from 'lucide-svelte';
 
@@ -111,7 +112,7 @@
       <label class="block min-w-0">
         <span class={fieldLabelClass}>
           <span class={fieldLabelTextClass}>{$t('ocr_lab.model_size')}</span>
-          <Tooltip text={$t('ocr_lab.model_size_hint')} width="w-64" position="right">
+          <Tooltip text={$t('ocr_lab.model_size_hint') + (IS_LOCAL ? ' ' + $t('ocr_lab.model_download_hint') : '')} width="w-64" position="right">
             <span class="mb-0.5 inline-flex h-3 w-3 items-center justify-center rounded-full border border-gray-300 text-[8px] normal-case leading-none text-gray-500">i</span>
           </Tooltip>
         </span>

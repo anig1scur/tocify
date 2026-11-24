@@ -83,6 +83,9 @@ importers:
       autoprefixer:
         specifier: ^10.4.20
         version: 10.4.20(postcss@8.5.1)
+      onnxruntime-web:
+        specifier: 1.26.0
+        version: 1.26.0
       pdfjs-dist:
         specifier: ^4.10.38
         version: 4.10.38

@@ -1,5 +1,6 @@
 import type { OcrModelSize, OcrResolutionQuality, OcrWasmPaths } from './types';
 import { IS_LOCAL } from '$lib/local';
+import jsepWasmUrl from 'onnxruntime-web/ort-wasm-simd-threaded.jsep.wasm?url';
 
 export const OCR_MIN_WORKER_POOL_SIZE = 1;
 export const OCR_WORKER_POOL_SIZE_DEFAULT = 2;
@@ -17,7 +18,7 @@ export const OCR_BOX_EXTENSION_DEFAULT = 2.0;
 export const OCR_BOX_EXTENSION_MIN = 1.0;
 export const OCR_BOX_EXTENSION_MAX = 3.0;
 export const OCR_BOX_EXTENSION_STEP = 0.1;
-export const OCR_ENGINE_CREATE_TIMEOUT_MS = 45_000;
+export const OCR_ENGINE_CREATE_TIMEOUT_MS = IS_LOCAL ? 120_000 : 45_000;
 export const OCR_PAGE_PREDICT_TIMEOUT_MS = 120_000;
 
 export const OCR_RESOLUTION_QUALITY_SIZES: Record<OcrResolutionQuality, number> = {
@@ -26,6 +27,8 @@ export const OCR_RESOLUTION_QUALITY_SIZES: Record<OcrResolutionQuality, number> 
   high: 2000,
   ultra: 2400,
 };
+
+const MODEL_BASE_URL = IS_LOCAL ? 'https://pdf.aeriszhu.com/models/paddleocr/' : '/models/paddleocr/';
 
 export const OCR_MODEL_CONFIGS: Record<OcrModelSize, {
   textDetectionModelName: string;
@@ -36,21 +39,21 @@ export const OCR_MODEL_CONFIGS: Record<OcrModelSize, {
   small: {
     textDetectionModelName: 'PP-OCRv6_small_det',
     textDetectionModelAsset: {
-      url: '/models/paddleocr/PP-OCRv6_small_det_onnx_infer.tar',
+      url: MODEL_BASE_URL + 'PP-OCRv6_small_det_onnx_infer.tar',
     },
     textRecognitionModelName: 'PP-OCRv6_small_rec',
     textRecognitionModelAsset: {
-      url: '/models/paddleocr/PP-OCRv6_small_rec_onnx_infer.tar',
+      url: MODEL_BASE_URL + 'PP-OCRv6_small_rec_onnx_infer.tar',
     },
   },
   tiny: {
     textDetectionModelName: 'PP-OCRv6_tiny_det',
     textDetectionModelAsset: {
-      url: '/models/paddleocr/PP-OCRv6_tiny_det_onnx_infer.tar',
+      url: MODEL_BASE_URL + 'PP-OCRv6_tiny_det_onnx_infer.tar',
     },
     textRecognitionModelName: 'PP-OCRv6_tiny_rec',
     textRecognitionModelAsset: {
-      url: '/models/paddleocr/PP-OCRv6_tiny_rec_onnx_infer.tar',
+      url: MODEL_BASE_URL + 'PP-OCRv6_tiny_rec_onnx_infer.tar',
     },
   },
 };
@@ -71,7 +74,7 @@ const ORT_BASE_URL = IS_LOCAL ? '/local-assets/ort/' : 'https://registry.npmmirr
 
 export const ORT_JSEP_WASM_PATHS: OcrWasmPaths = {
   mjs: `${ORT_BASE_URL}ort-wasm-simd-threaded.jsep.mjs`,
-  wasm: `${ORT_BASE_URL}ort-wasm-simd-threaded.jsep.wasm`,
+  wasm: IS_LOCAL ? jsepWasmUrl : `${ORT_BASE_URL}ort-wasm-simd-threaded.jsep.wasm`,
 };
 
 export const ORT_PLAIN_WASM_PATHS: OcrWasmPaths = {

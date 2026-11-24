@@ -216,6 +216,7 @@
     "end_page": "End Page",
     "model_size": "Model",
     "model_size_hint": "OCR runs locally in your browser. PP-OCRv6 Small is more accurate for dense text and scans but takes longer to load and run. PP-OCRv6 Tiny is faster and lighter.",
+    "model_download_hint": "The selected model needs an internet connection the first time it downloads.",
     "model_small": "PP-OCRv6 Small",
     "model_tiny": "PP-OCRv6 Tiny",
     "watermark_cleanup": "Watermark Cleanup",

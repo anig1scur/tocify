@@ -9,7 +9,9 @@ To use AI features, add your provider API key in **API Settings**. PDF editing a
 
 ## Tocify Local
 
-Download the matching ZIP from [GitHub Releases](https://github.com/anig1scur/tocify/releases). Extract it and open `Start Tocify.command` on macOS or `Start Tocify.cmd` on Windows. The bundled server opens the app at `http://127.0.0.1:3210`. Close the launcher window to stop it. PDF editing and OCR run locally. For AI requests to built-in providers, the server on your computer sends the selected content and your key directly to the provider.
+Download the matching ZIP from [GitHub Releases](https://github.com/anig1scur/tocify/releases). Extract it and open `Start Tocify.command` on macOS or `Start Tocify.cmd` on Windows. The bundled server opens the app at `http://127.0.0.1:3210`. Close the launcher window to stop it.
+
+PDF editing and OCR run locally. The selected OCR model and fonts download when needed and can be reused offline while they remain cached in the browser. The help video streams online. For AI requests to built-in providers, the server on your computer sends the selected content and your key directly to the provider.
 
 ## Usage
 

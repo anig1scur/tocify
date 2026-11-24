@@ -1,13 +1,6 @@
 Node.js includes its distribution license and third-party notices in runtime/LICENSE.
 PDF.js includes a license notice with its CMaps in build/local/client/local-assets/cmaps.
 
-Huiwen Mincho is identified as Public Domain in the distributed font metadata.
-https://fonts.zeoseven.com/items/256/
-
-Source Han Sans and Source Han Serif by Adobe are available under the SIL Open Font License 1.1.
-https://github.com/adobe-fonts/source-han-sans/blob/master/LICENSE.txt
-https://github.com/adobe-fonts/source-han-serif/blob/master/LICENSE.txt
-
 ONNX Runtime Web
 
 MIT License
