@@ -1314,7 +1314,7 @@
 
   /** Page-level shortcuts; the ToC tree, preview and dialogs handle their own keys first. */
   function handleGlobalKeydown(e: KeyboardEvent) {
-    if (e.defaultPrevented || e.isComposing || e.repeat || isDialogOpen()) return;
+    if (!e.key || e.defaultPrevented || e.isComposing || e.repeat || isDialogOpen()) return;
     const key = e.key.toLowerCase();
     const mod = hasMod(e);
 

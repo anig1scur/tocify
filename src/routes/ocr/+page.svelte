@@ -1179,7 +1179,7 @@
   }
 
   function handleOcrKeyboardShortcut(event: KeyboardEvent) {
-    if (event.isComposing || event.defaultPrevented || isDialogOpen()) return;
+    if (!event.key || event.isComposing || event.defaultPrevented || isDialogOpen()) return;
     const key = event.key.toLowerCase();
     const mod = hasMod(event);
     let handled = false;
