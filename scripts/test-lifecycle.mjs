@@ -123,6 +123,7 @@ await test('a slow first upload cannot replace the next selected book', async ()
   const gate = deferred();
   const fingerprint = writable(''), items = writable([]);
   const fixture = evaluate(functions(instanceScript(main), ['loadPdfFile']), {
+    IS_LOCAL: false,
     pdfLoadSequence: 0, pdfUpdateSequence: 0, isViewActive: true, isFileLoading: false,
     pdfState: {currentPage: 1}, isPreviewMode: false,
     debouncedUpdatePDF: {cancel() {}}, flushTocDraft() {}, autoSaveEnabled: writable(true),
@@ -194,7 +195,7 @@ await test('late text-AI results cannot be applied to the next book', async () =
   const fixture = evaluate(functions(instanceScript(read('src/components/TocEditor.svelte')), ['handleAiFormat']), {
     text: 'raw table of contents', isProcessing: false, aiFormatController: null, aiFormatError: '',
     $curFileFingerprint: 'A', apiConfig: {apiKey: 'test'}, TextEncoder,
-    requiresUserApiKey: () => false, processTocWithDiagnosticsDirect: () => gate.promise,
+    requiresUserApiKey: () => false, recognizeToc: () => gate.promise,
     buildTree: (value) => value, dispatch: (...args) => responses.push(args), $t: (key) => key,
   });
   const formatting = fixture.run('handleAiFormat()');
@@ -275,6 +276,7 @@ function serviceFixture(fetch = async () => ({ok: true, arrayBuffer: async () =>
   }
   const fixture = evaluate(read('src/lib/pdf/service.ts'), {
     browser: true, Worker, fetch, PDFDocument: {}, fontkit: {}, isLegacyBrowser: () => false,
+    FONT_ASSET_BASE: 'https://static.aeriszhu.com/',
     pdfjsLib: {GlobalWorkerOptions: {}, PDFWorker: class {destroy() {}}},
     A4_WIDTH: 595, BASE_FONT_SIZE_L1: 14, BASE_FONT_SIZE_OTHER: 12,
   });

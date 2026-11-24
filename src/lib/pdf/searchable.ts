@@ -18,8 +18,9 @@ import {
   type PDFPage,
 } from 'pdf-lib';
 import fontkit from 'pdf-fontkit';
+import { FONT_ASSET_BASE } from '$lib/local';
 
-const SEARCHABLE_FONT_URL = 'https://static.aeriszhu.com/SourceHanSansSC-Regular.woff2';
+const SEARCHABLE_FONT_URL = FONT_ASSET_BASE + 'SourceHanSansSC-Regular.woff2';
 const INVISIBLE_TEXT_COLOR = rgb(0, 0, 0);
 const MIN_TEXT_HORIZONTAL_SCALE = 25;
 const MAX_TEXT_HORIZONTAL_SCALE = 400;

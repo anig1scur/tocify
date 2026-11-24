@@ -15,7 +15,7 @@
     Plus,
   } from 'lucide-svelte';
   import {t} from 'svelte-i18n';
-  import {processTocWithDiagnosticsDirect} from '$lib/llm/client';
+  import {recognizeToc} from '$lib/llm/client';
   import TocItem from './TocItem.svelte';
   import Tooltip from './Tooltip.svelte';
   import {tocItems, maxPage, autoSaveEnabled, dragDisabled, curFileFingerprint} from '../stores';
@@ -745,7 +745,7 @@
       }
 
       isProcessing = true;
-      const aiResult = await processTocWithDiagnosticsDirect({
+      const aiResult = await recognizeToc({
         signal: controller.signal,
         text,
         apiKey: apiConfig.apiKey,

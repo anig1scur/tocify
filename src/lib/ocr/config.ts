@@ -1,4 +1,5 @@
 import type { OcrModelSize, OcrResolutionQuality, OcrWasmPaths } from './types';
+import { IS_LOCAL } from '$lib/local';
 
 export const OCR_MIN_WORKER_POOL_SIZE = 1;
 export const OCR_WORKER_POOL_SIZE_DEFAULT = 2;
@@ -66,14 +67,14 @@ export const PREVIEW_MIN_SCALE = 0.5;
 export const PREVIEW_MAX_SCALE = 8;
 export const PREVIEW_DEFAULT_SCALE = 1.0;
 
-const ORT_CDN_BASE_URL = 'https://registry.npmmirror.com/onnxruntime-web/1.26.0/files/dist/';
+const ORT_BASE_URL = IS_LOCAL ? '/local-assets/ort/' : 'https://registry.npmmirror.com/onnxruntime-web/1.26.0/files/dist/';
 
 export const ORT_JSEP_WASM_PATHS: OcrWasmPaths = {
-  mjs: `${ORT_CDN_BASE_URL}ort-wasm-simd-threaded.jsep.mjs`,
-  wasm: `${ORT_CDN_BASE_URL}ort-wasm-simd-threaded.jsep.wasm`,
+  mjs: `${ORT_BASE_URL}ort-wasm-simd-threaded.jsep.mjs`,
+  wasm: `${ORT_BASE_URL}ort-wasm-simd-threaded.jsep.wasm`,
 };
 
 export const ORT_PLAIN_WASM_PATHS: OcrWasmPaths = {
-  mjs: `${ORT_CDN_BASE_URL}ort-wasm-simd-threaded.mjs`,
-  wasm: `${ORT_CDN_BASE_URL}ort-wasm-simd-threaded.wasm`,
+  mjs: `${ORT_BASE_URL}ort-wasm-simd-threaded.mjs`,
+  wasm: `${ORT_BASE_URL}ort-wasm-simd-threaded.wasm`,
 };

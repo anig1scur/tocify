@@ -1,0 +1,44 @@
+name: Build Tocify Local
+
+on:
+  push:
+    branches: [codex/tocify-local-v2]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: ${{ matrix.platform }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-arm64
+            runner: macos-15
+          - platform: macos-x64
+            runner: macos-15-intel
+          - platform: windows-x64
+            runner: windows-2025
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.18.3
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22.23.5'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test:llm
+      - run: pnpm test:lifecycle
+      - run: pnpm build:local
+      - run: pnpm package:local
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Tocify-Local-${{ matrix.platform }}
+          path: build/local-release/*.zip
+          if-no-files-found: error
+          compression-level: 0

@@ -1,5 +1,7 @@
 import { LIMIT_CONFIG } from '$lib/server/request-limits';
-import { processTocOnServer } from '$lib/llm/server';
+import { processTocWithDiagnosticsOnServer } from '$lib/llm/server';
+import { MAX_PAGES_PER_REQUEST } from '$lib/llm/batching';
+import { IS_LOCAL } from '$lib/local';
 import { error, json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 
@@ -10,7 +12,7 @@ export const POST: RequestHandler = async ({ request }) => {
     'http://localhost:5173', 'http://127.0.0.1:5173'
   ];
 
-  if (origin && !allowedOrigins.includes(origin)) {
+  if (origin && !(IS_LOCAL ? origin === new URL(request.url).origin : allowedOrigins.includes(origin))) {
     return new Response('Forbidden', { status: 403 });
   }
 
@@ -32,11 +34,12 @@ export const POST: RequestHandler = async ({ request }) => {
       throw error(400, 'Invalid request. Must provide either "images" array or "text" string.');
     }
 
-    if (images && Array.isArray(images) && images.length > LIMIT_CONFIG.MAX_IMAGES) {
-      throw error(400, `Too many pages. Maximum allowed is ${ LIMIT_CONFIG.MAX_IMAGES }.`);
+    const maxImages = IS_LOCAL ? MAX_PAGES_PER_REQUEST : LIMIT_CONFIG.MAX_IMAGES;
+    if (images && Array.isArray(images) && images.length > maxImages) {
+      throw error(400, `Too many pages. Maximum allowed is ${maxImages}.`);
     }
 
-    if (text && typeof text === 'string') {
+    if (!IS_LOCAL && text && typeof text === 'string') {
       const byteLength = new TextEncoder().encode(text).length;
       const maxBytes = LIMIT_CONFIG.MAX_TEXT_SIZE_KB * 1024;
 
@@ -45,7 +48,7 @@ export const POST: RequestHandler = async ({ request }) => {
       }
     }
 
-    const tocData = await processTocOnServer({
+    const tocData = await processTocWithDiagnosticsOnServer({
       images,
       text,
       apiKey,
@@ -55,11 +58,12 @@ export const POST: RequestHandler = async ({ request }) => {
       doubaoEndpointIdVision,
       modelOverrides,
       visionPrompt,
+      signal: request.signal,
     });
 
-    return json(tocData);
+    return json(IS_LOCAL ? tocData : tocData.items);
   } catch (err: any) {
-    console.error('API Error:', err);
+    if (!IS_LOCAL) console.error('API Error:', err);
     throw error(
       err.status || 500,
       err.message || err.body?.message || 'Failed to process ToC, please contact support.',

@@ -1,0 +1,22 @@
+Tocify Local
+
+1. Extract the entire ZIP.
+2. Double-click Start Tocify.command (macOS) or Start Tocify.cmd (Windows).
+3. Tocify opens in your browser at http://127.0.0.1:3210.
+4. Leave the launcher window open while you use Tocify. Close it to stop.
+
+PDF editing and OCR work locally. AI recognition needs Internet access and
+your own API key. For built-in providers the server on this computer sends
+the key and selected content directly to the provider. Keep the same browser
+profile and local address to reuse your settings and drafts.
+
+Tocify 本地版
+
+1. 解压整个 ZIP。
+2. macOS 双击 Start Tocify.command，Windows 双击 Start Tocify.cmd。
+3. 浏览器会打开 http://127.0.0.1:3210。
+4. 使用时保留启动窗口，关闭窗口即可停止服务。
+
+PDF 编辑和 OCR 在本机运行。AI 识别需要联网和自备 API Key。
+选择内置供应商时，本机服务会把 Key 和选定的内容直接发给供应商。
+使用同一浏览器配置和本地地址，可以继续使用已有设置和草稿。

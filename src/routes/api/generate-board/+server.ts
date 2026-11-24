@@ -1,4 +1,5 @@
 import { generateBoardOnServer } from '$lib/llm/server';
+import { IS_LOCAL } from '$lib/local';
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 
@@ -17,11 +18,12 @@ export const POST: RequestHandler = async ({ request }) => {
       customBaseUrl,
       doubaoEndpointIdText,
       modelOverrides,
+      signal: request.signal,
     });
 
     return json(graph);
   } catch (error: any) {
-    console.error(error);
+    if (!IS_LOCAL) console.error(error);
     return json({ error: error.message }, { status: error.status || 500 });
   }
 };

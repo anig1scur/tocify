@@ -4,6 +4,15 @@ import {defineConfig} from 'vite';
 
 export default defineConfig({
   plugins: [
+    ...(process.env.VITE_TOCIFY_LOCAL === '1' ? [{
+      name: 'tocify-local-font',
+      enforce: 'pre' as const,
+      transform(source: string, id: string) {
+        if (id.endsWith('/src/app.css')) {
+          return source.replace('https://static.aeriszhu.com/huiwen-mincho.ttf', '/local-assets/fonts/huiwen-mincho.ttf');
+        }
+      },
+    }] : []),
     sveltekit(),
     SvelteKitPWA({
       registerType: 'prompt',

@@ -2,7 +2,7 @@ import type * as PdfjsLibTypes from 'pdfjs-dist';
 import {get} from 'svelte/store';
 import {_} from 'svelte-i18n';
 
-import { processTocWithDiagnosticsDirect } from '$lib/llm/client';
+import { recognizeToc } from '$lib/llm/client';
 import {requiresUserApiKey, type ModelOverrides, type TocRecognitionResult} from '$lib/llm/core';
 import { MAX_CONCURRENT_TOC_REQUESTS, normalizePagesPerRequest } from '$lib/llm/batching';
 import type {RecognitionIgnoreRegion} from '$lib/pdf/recognition-ignore';
@@ -60,7 +60,7 @@ export async function generateToc(
     throw err;
   }
 
-  const fetchChunk = (images: string[]) => processTocWithDiagnosticsDirect({
+  const fetchChunk = (images: string[]) => recognizeToc({
     signal, images, apiKey: apiKey!, provider, customBaseUrl, doubaoEndpointIdText,
     doubaoEndpointIdVision, modelOverrides, visionPrompt,
   });

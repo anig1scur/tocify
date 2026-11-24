@@ -6,6 +6,7 @@ import { type TocConfig } from '../../stores';
 import { A4_WIDTH, BASE_FONT_SIZE_L1, BASE_FONT_SIZE_OTHER } from '../constants';
 import { isLegacyBrowser } from '$lib/utils';
 import type { RecognitionIgnoreRegion } from '$lib/pdf/recognition-ignore';
+import { FONT_ASSET_BASE } from '$lib/local';
 
 export interface TocItem {
   id: string;
@@ -60,16 +61,16 @@ export class PDFService {
 
   static FONT_URLS = {
     huiwen: {
-      regular: 'https://static.aeriszhu.com/huiwen-mincho.ttf',
-      bold: 'https://static.aeriszhu.com/huiwen-mincho.ttf',
+      regular: FONT_ASSET_BASE + 'huiwen-mincho.ttf',
+      bold: FONT_ASSET_BASE + 'huiwen-mincho.ttf',
     },
     hei: {
-      regular: 'https://static.aeriszhu.com/SourceHanSansSC-Regular.woff2',
-      bold: 'https://static.aeriszhu.com/SourceHanSansSC-Regular.woff2',
+      regular: FONT_ASSET_BASE + 'SourceHanSansSC-Regular.woff2',
+      bold: FONT_ASSET_BASE + 'SourceHanSansSC-Regular.woff2',
     },
     song: {
-      regular: 'https://static.aeriszhu.com/SourceHanSerifSC-Regular.woff2',
-      bold: 'https://static.aeriszhu.com/SourceHanSerifSC-Regular.woff2',
+      regular: FONT_ASSET_BASE + 'SourceHanSerifSC-Regular.woff2',
+      bold: FONT_ASSET_BASE + 'SourceHanSerifSC-Regular.woff2',
     }
   };
 

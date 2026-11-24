@@ -43,6 +43,7 @@
   import {setPageLabels} from '$lib/pdf/page-labels';
   import {createEmptyApiConfig} from '$lib/llm/core';
   import {formatPageRanges} from '$lib/llm/batching';
+  import {IS_LOCAL} from '$lib/local';
   import type {RecognitionIgnoreRegion} from '$lib/pdf/recognition-ignore';
   import {createZipBlob, getUniqueZipFilename, type ZipFileEntry} from '$lib/utils/zip';
   import {blurActiveField, hasMod, isBareKey, isDialogOpen, isEditableTarget} from '$lib/utils/shortcuts';
@@ -64,7 +65,7 @@
   import TocRelation from '../components/KnowledgeBoard.svelte';
   import {ChevronRight, ChevronLeft} from 'lucide-svelte';
 
-  injectAnalytics();
+  if (!IS_LOCAL) injectAnalytics();
 
   const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
   const TWO_SECONDS = 2000;
@@ -178,6 +179,7 @@
   );
 
   onMount(async () => {
+    if (IS_LOCAL) return;
     init('A-US-0422911470', {
       appVersion: '1.0.0',
     });
@@ -655,7 +657,7 @@
         const task = pdfjs.getDocument({
           data: tocBytes,
           worker: PDFService.getSharedWorker(),
-          cMapUrl: `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/cmaps/`,
+          cMapUrl: IS_LOCAL ? '/local-assets/cmaps/' : `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/cmaps/`,
           cMapPacked: true,
         });
         pdfLoadingTasks.add(task);
@@ -800,7 +802,7 @@
       const task = pdfjs.getDocument({
         data: bytes,
         worker: PDFService.getSharedWorker(),
-        cMapUrl: `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/cmaps/`,
+          cMapUrl: IS_LOCAL ? '/local-assets/cmaps/' : `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/cmaps/`,
         cMapPacked: true,
       });
       pdfLoadingTasks.add(task);

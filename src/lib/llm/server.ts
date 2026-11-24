@@ -7,7 +7,7 @@ import {
   normalizeApiKeyForRequest,
   normalizeModelOverrides,
   requireProvider,
-  processToc,
+  processTocWithDiagnostics,
   validateCustomProviderConfig,
   type GraphNodeInput,
   type ModelOverrides,
@@ -73,7 +73,7 @@ async function validateCustomProviderOnServer(
   await assertCustomBaseUrlResolvesSafely(customBaseUrl);
 }
 
-export async function processTocOnServer({
+export async function processTocWithDiagnosticsOnServer({
   images,
   text,
   apiKey,
@@ -83,6 +83,7 @@ export async function processTocOnServer({
   doubaoEndpointIdVision,
   modelOverrides,
   visionPrompt,
+  signal,
 }: {
   images?: string[];
   text?: string;
@@ -93,13 +94,14 @@ export async function processTocOnServer({
   doubaoEndpointIdVision?: string;
   modelOverrides?: ModelOverrides;
   visionPrompt?: string;
+  signal?: AbortSignal;
 }) {
   const { provider: resolvedProvider, apiKey: resolvedApiKey } = validateUserConfig(provider, apiKey);
   const normalizedModelOverrides = normalizeModelOverrides(modelOverrides);
 
   await validateCustomProviderOnServer(resolvedProvider, apiKey, customBaseUrl, normalizedModelOverrides);
 
-  return processToc({
+  return processTocWithDiagnostics({
     provider: resolvedProvider,
     apiKey: resolvedApiKey,
     customBaseUrl,
@@ -109,7 +111,12 @@ export async function processTocOnServer({
     doubaoEndpointIdVision,
     visionPrompt,
     modelOverrides: normalizedModelOverrides,
+    signal,
   });
+}
+
+export async function processTocOnServer(config: Parameters<typeof processTocWithDiagnosticsOnServer>[0]) {
+  return (await processTocWithDiagnosticsOnServer(config)).items;
 }
 
 export async function generateBoardOnServer({
@@ -119,6 +126,7 @@ export async function generateBoardOnServer({
   customBaseUrl,
   doubaoEndpointIdText,
   modelOverrides,
+  signal,
 }: {
   tocItems: GraphNodeInput[];
   apiKey?: string;
@@ -126,6 +134,7 @@ export async function generateBoardOnServer({
   customBaseUrl?: string;
   doubaoEndpointIdText?: string;
   modelOverrides?: ModelOverrides;
+  signal?: AbortSignal;
 }) {
   const { provider: resolvedProvider, apiKey: resolvedApiKey } = validateUserConfig(provider, apiKey);
   const normalizedModelOverrides = normalizeModelOverrides(modelOverrides);
@@ -138,5 +147,6 @@ export async function generateBoardOnServer({
     customBaseUrl,
     doubaoEndpointIdText,
     modelOverrides: normalizedModelOverrides,
+    signal,
   });
 }

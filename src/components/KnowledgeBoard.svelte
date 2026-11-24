@@ -2,7 +2,7 @@
   import {tick} from 'svelte';
   import {t} from 'svelte-i18n';
   import rough from 'roughjs';
-  import {generateBoardDirect} from '$lib/llm/client';
+  import {createKnowledgeBoard} from '$lib/llm/client';
   import {createEmptyApiConfig, requiresUserApiKey} from '$lib/llm/core';
   import GraphNode from './GraphNode.svelte';
   import {
@@ -87,7 +87,7 @@
     }));
 
     try {
-      const data = await generateBoardDirect(simplifiedItems, {
+      const data = await createKnowledgeBoard(simplifiedItems, {
         apiKey: apiConfig.apiKey,
         provider: apiConfig.provider,
         customBaseUrl: apiConfig.customBaseUrl,

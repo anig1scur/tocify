@@ -7,6 +7,10 @@ Tocify is a free, open-source web app for editing PDF bookmarks and creating pri
 
 To use AI features, add your provider API key in **API Settings**. PDF editing and local OCR are available without a key.
 
+## Tocify Local
+
+Download the matching ZIP from [GitHub Releases](https://github.com/anig1scur/tocify/releases). Extract it and open `Start Tocify.command` on macOS or `Start Tocify.cmd` on Windows. The bundled server opens the app at `http://127.0.0.1:3210`. Close the launcher window to stop it. PDF editing and OCR run locally. For AI requests to built-in providers, the server on your computer sends the selected content and your key directly to the provider.
+
 ## Usage
 
 <https://github.com/user-attachments/assets/48e09103-f3a8-4d13-afeb-d11b5c8ade44>
@@ -28,5 +32,7 @@ To use AI features, add your provider API key in **API Settings**. PDF editing a
 ## Local development
 
 Run `pnpm install` and `pnpm dev`, then open `http://localhost:5173`.
+
+Use `pnpm build:local` and `pnpm start:local` to run the local-server build from source. On a supported release platform, `pnpm package:local` bundles that build and its Node runtime into a ZIP.
 
 Run `pnpm test:llm` and `pnpm test:lifecycle` for checks that don't use provider API quota. For live model tests, copy [.env.example](.env.example) to `.env.local`, add a test API key, and run `pnpm test:llm:live`.
