@@ -13,6 +13,7 @@ export default defineConfig({
       manifest: false,
       workbox: {
         cleanupOutdatedCaches: true,
+        clientsClaim: localBuild,
         globPatterns: [
           'client/**/*.{js,css,ico,png,svg,webp,webmanifest,mjs}',
           'prerendered/**/*.{html,json}'
